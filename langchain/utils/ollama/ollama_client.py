@@ -9,7 +9,7 @@ from pydantic import Field
 from script.prompt import MENU_STRUCTURE, TITLE_STRUCTURE, KEYWORDS_STRUCTURE
 import re
 class OllamaClient:
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.05):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.5):
         self.api_url = api_url
         self.temperature = temperature
 
@@ -272,7 +272,7 @@ def parse_response(response_text):
 
 class OllamaLLM(BaseLLM):
     client: OllamaClient = Field(..., description="OllamaClient instance")
-    model_name: str = Field(default="solar", description="Model name to use with Ollama")
+    model_name: str = Field(default="bllossom", description="Model name to use with Ollama")
     # model_name: str = Field(default="llama3.2", description="Model name to use with Ollama")
 
     def __init__(self, **data):
@@ -292,6 +292,8 @@ class OllamaLLM(BaseLLM):
         answer = self._call(prompt, stop)
         return answer
 
+    
+    
     def _generate(
         self,
         prompts: List[str],

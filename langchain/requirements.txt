@@ -14,3 +14,4 @@ langchain-milvus
 PyMuPDF
 tiktoken
 langchain_ollama
+langgraph

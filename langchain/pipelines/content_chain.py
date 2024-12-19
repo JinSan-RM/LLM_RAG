@@ -1,6 +1,6 @@
 from langchain.prompts import PromptTemplate
 from modules.translators import KoEnTranslator, EnKoTranslator
-from utils.ollama_client import OllamaClient
+from utils.ollama.ollama_client import OllamaClient
 import re, json
 
 
@@ -15,7 +15,7 @@ class ContentChain:
         
     # 일괄 처리 방식
     # def run(self, input_text, discriminant, model="llama3.2", value_type = "general"):
-    def run(self, input_text, discriminant=False, model="solar", value_type = "general"):
+    def run(self, input_text, discriminant=False, model="bllossom", value_type = "general"):
         """
         Ollama API 기반 텍스트 생성 체인
         Args:
@@ -47,6 +47,10 @@ class ContentChain:
                 final_output = self.en_ko_translator.translate(generated_text)
                 return final_output
         if value_type == 'normal':
+            
+            prompt = f"""
+
+            """
             generated_text = self.ollama_client.generate(model, input_text)
             print("Generated Text:", generated_text)
             return generated_text
@@ -90,7 +94,7 @@ class ContentChain:
                 print(f"Final Translated Output: {final_output} <----final_output")
                 return final_output
             
-            elif model == "solar":
+            elif model == "bllossom":
                 generated_text = self.ollama_client.PDF_Menu(model, input_text)
                 print(f"{generated_text} : generated_text")
                 return generated_text
@@ -295,3 +299,4 @@ class ContentChain:
     #         generated_text = self.text_generator.generate(self.prompt_template.format(text=input_text))
     #         final_output = self.en_ko_translator.translate(generated_text)
     #     return final_output
+

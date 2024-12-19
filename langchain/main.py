@@ -5,12 +5,14 @@
 from config.config import MILVUS_HOST, MILVUS_PORT
 from pipelines.content_chain import ContentChain
 from utils.helpers import languagechecker, insert_data, create_collection, search_data
-from utils.ollama_embedding import get_embedding_from_ollama, OllamaEmbeddings, embedding_from_ollama
-from utils.ollama_client import OllamaClient, OllamaLLM
-from utils.ollama_content import OllamaContentClient
+from utils.ollama.ollama_embedding import get_embedding_from_ollama, OllamaEmbeddings, embedding_from_ollama
+from utils.ollama.ollama_client import OllamaClient, OllamaLLM
+from utils.ollama.ollama_content import OllamaContentClient
 from utils.RAGChain import CustomRAGChain
 from utils.PDF2TXT import PDF2TEXT
 from script.prompt import RAG_TEMPLATE, WEB_MENU_TEMPLATE
+from utils.ollama.ollama_chat import OllamaChatClient
+from pipelines.content_summary import SummaryContentChain
 
 # local lib
 # ------------------------------------------------------------------------ #
@@ -42,7 +44,7 @@ class GenerateRequest(BaseModel):
     input_text: str
     # is_korean: bool
     model: str = "llama3.2"  # Ollama 모델 이름, 기본값은 "default"
-    # model: str = "solar"  # Ollama 모델 이름, 기본값은 "default"
+    # model: str = "bllossom"  # Ollama 모델 이름, 기본값은 "default"
     gen_type: str = "normal"
 # API ENDPOINT 일괄처리 방식
 @app.post("/generate")
@@ -76,7 +78,26 @@ async def generate(request: GenerateRequest):
         # 에러 발생 시 처리
         print(f"Error: {str(e)}")
         return {"error": str(e)}
+    
+    
+#===================================================================================
+# summary test
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+@app.post("/generate_summary")
+async def generate_summary_endpoint(request: GenerateRequest):
+    summary_chain = SummaryContentChain()
+    try:
+        result = await summary_chain.run(request.input_text, model=request.model, value_type=request.gen_type)
+        return {"summary": result}
+    except Exception as e:
+        logger.error(f"Error in endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+#===================================================================================
 @app.post("/api/generate_RAG")
 async def generate_RAG(request: GenerateRequest):
     try:
@@ -177,7 +198,7 @@ async def generate_RAG(request: GenerateRequest):
         
         # LLM 래퍼 객체 생성
         # ollama_llm = OllamaLLM(client=ollama_client, model_name="llama3.2")
-        ollama_llm = OllamaLLM(client=ollama_client, model_name="solar")
+        ollama_llm = OllamaLLM(client=ollama_client, model_name="bllossom")
 
         # CustomRAGChain 생성
         custom_chain = CustomRAGChain(
@@ -571,14 +592,14 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 
         # ContentChain에서 결과 생성
         # result = content_chain.run(all_text, discriminant, model='llama3.2', value_type='menu')
-        result = content_chain.run(all_text, discriminant, model='solar', value_type='menu')
+        result = content_chain.run(all_text, discriminant, model='bllossom', value_type='menu')
         print("process end structure")
         # if result['menu_structure']:
         #     menu_content = []
         #     for menu in result['menu_structure']:
         #         context = None
         #         menu_content_dict = {}
-        #         context = content_chain.contents_run(model='solar', input_text=all_text, menu=menu)
+        #         context = content_chain.contents_run(model='bllossom', input_text=all_text, menu=menu)
         #         menu_content_dict[menu] = context
         #         menu_content.append(menu_content_dict)
         #         print(f"menu_content_dict[menu] : {menu_content_dict[menu]}")
@@ -600,7 +621,7 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 
 class LandPageRequest(BaseModel):
     input_text: str
-    model: str = "solar"
+    model: str = "bllossom"
     
 # 엔드포인트 정의
 @app.post("/generate_land_section")
@@ -628,34 +649,75 @@ async def LLM_land_page_generate(request: LandPageRequest):
                 section_dict[i] = random.choice(section_options)
         landing_structure = dict(sorted(section_dict.items()))
         
+        #==============================================================================================
+        # test code 칸
+        
+         # STEP 1: PDF 내용을 청크로 분할
+        def split_into_chunks(text: str, max_length: int = 3000) -> List[str]:
+            """
+            주어진 텍스트를 max_length 이하의 청크로 분할
+            """
+            paragraphs = text.split('\n')
+            chunks = []
+            current_chunk = ""
+            for para in paragraphs:
+                para = para.strip()
+                if not para:
+                    continue
+                if len(current_chunk) + len(para) + 1 > max_length:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = ""
+                current_chunk += para + "\n"
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            return chunks
+
+        chunks = split_into_chunks(request.input_text, max_length=2500)
+        print(f"Total chunks to send: {len(chunks)}")
+
+        # STEP 2: 각 청크를 Ollama에 전송하여 컨텍스트로 누적
+        for i, chunk in enumerate(chunks, 1):
+            print(f"Sending chunk {i}/{len(chunks)} to Ollama")
+            print_data = await content_client.send_pdf_chunk(model=request.model, total_chunks=len(chunks), current_chunk_number = i, chunk_content=chunk)
+            print(f"print_data: {print_data}")
+            # 응답을 필요로 하지 않으면 무시하거나 로그로 남김
+        #==============================================================================================
+        
         print(f"Generated landing structure: {landing_structure}")
-        # content = await content_client.contents_GEN(input_text=request.input_text)
-        # print(f"Generated content : {content}")
-
-        main_dict = {"text": "", "type": "LANDING", "children": []}
-
         for section_num, section_name in landing_structure.items():
             print(f"Processing section {section_num}: {section_name}")
 
             time.sleep(0.5)
-            content = await content_client.contents_GEN(input_text=request.input_text, section_name=section_name)
-            content = content.replace("<|start_header_id|>", "").replace("<|end_header_id|>", "").replace("<|eot_id|>", "")
-            
+            # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
+            content = await content_client.generate_section(model=request.model, section_name=section_name)
             print(f"content : {content}")
-            data_dict = json.loads(content)
+        # content = await content_client.contents_GEN(input_text=request.input_text)
+        # print(f"Generated content : {content}")
 
-            # 여기서 main_dict["children"] 대신 data_dict["children"]로부터 type 추출
-            tag_list = [child['type'] for child in data_dict["children"] if 'type' in child]
-            tag = "_".join(tag_list)
+        # main_dict = {"text": "", "type": "LANDING", "children": []}
 
-            data_dict["tag"] = tag
-            data_dict["section_name"] = section_name
+        # for section_num, section_name in landing_structure.items():
+        #     print(f"Processing section {section_num}: {section_name}")
 
-            # 이제 main_dict에 data_dict를 append
-            main_dict["children"].append(data_dict)
+        #     time.sleep(0.5)
+        #     content = await content_client.contents_GEN(input_text=request.input_text, section_name=section_name)
+        #     content = content.replace("<|start_header_id|>", "").replace("<|end_header_id|>", "").replace("<|eot_id|>", "")
+            
+        #     print(f"content : {content}")
+        #     data_dict = json.loads(content)
+
+        #     # 여기서 main_dict["children"] 대신 data_dict["children"]로부터 type 추출
+        #     tag_list = [child['type'] for child in data_dict["children"] if 'type' in child]
+        #     tag = "_".join(tag_list)
+
+        #     data_dict["tag"] = tag
+        #     data_dict["section_name"] = section_name
+
+        #     # 이제 main_dict에 data_dict를 append
+        #     main_dict["children"].append(data_dict)
 
 
-        return main_dict
+        return content
 
     except Exception as e:
         print(f"Error processing landing structure: {e}")
@@ -689,7 +751,7 @@ def extract_json_from_response(response_text: str) -> Union[dict, None]:
         return None
 
 # @app.post("/generate_land_section")    
-# async def LLM_land_page_generate(input_text: str = "", model="solar", structure_limit=True):
+# async def LLM_land_page_generate(input_text: str = "", model="bllossom", structure_limit=True):
 #     # Main landing page content generation
 #     content_LLM = OllamaContentClient()
 #     landing_structure = await content_LLM.LLM_land_page_content_Gen(input_text=input_text, model=model, structure_limit=structure_limit)
@@ -717,3 +779,33 @@ def extract_json_from_response(response_text: str) -> Union[dict, None]:
 #     except Exception as e:
 #         print(f"Error processing landing structure: {e}")
 #         raise HTTPException(status_code=500, detail="Error processing landing structure.")
+
+
+@app.post("/chat_landpage_generate")
+async def chat_landpage_generate(request: LandPageRequest):
+    client = OllamaChatClient()
+    section_options = ["Introduce", "Solution", "Features", "Social", "CTA", "Pricing", "About Us", "Team", "blog"]
+    section_cnt = random.randint(6, 9)
+    print(f"Selected section count: {section_cnt}")
+
+    await client.store_chunks(model=request.model, data=request.input_text)
+    
+    # 섹션 고정 및 랜덤 채움
+    section_dict = {1: "Header", 2: "Hero", section_cnt - 1: random.choice(["FAQ", "Map", "Youtube", "Contact", "Support"]), section_cnt: "Footer"}
+    filled_indices = {1, 2, section_cnt - 1, section_cnt}
+    for i in range(3, section_cnt):
+        if i not in filled_indices:
+            section_dict[i] = random.choice(section_options)
+    landing_structure = dict(sorted(section_dict.items()))
+    
+    
+    print(f"Generated landing structure: {landing_structure}")
+    for section_num, section_name in landing_structure.items():
+            print(f"Processing section {section_num}: {section_name}")
+
+            time.sleep(0.5)
+            # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
+            generated_content = await client.generate_section(model=request.model, section_name=section_name)
+            print(f"content : {generated_content}")
+
+    return generated_content
