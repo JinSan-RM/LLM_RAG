@@ -49,9 +49,29 @@ class ContentChain:
         if value_type == 'normal':
             
             prompt = f"""
+            <|start_header_id|>system<|end_header_id|>
+            - 너는 사이트의 섹션 구조를 정해주고, 그 안에 들어갈 내용을 작성해주는 AI 도우미야.
+            - 입력된 데이터를 기준으로 단일 페이지를 갖는 랜딩사이트 콘텐츠를 생성해야 해.
+            - 'children'의 컨텐츠 내용의 수는 너가 생각하기에 섹션에 알맞게 개수를 수정해서 생성해줘.
+            1. assistant처럼 생성해야 하고 형식을 **절대** 벗어나면 안 된다.
+            2. "div, h1, h2, h3, p, ul, li" 태그만 사용해서 섹션의 콘텐츠를 구성해라.
+            3. 섹션 안의 `children` 안의 컨텐츠 개수는 2~10개 사이에서 자유롭게 선택하되, 내용이 반복되지 않도록 다양하게 생성하라.
+            4. 모든 텍스트 내용은 입력 데이터에 맞게 작성하고, 섹션의 목적과 흐름에 맞춰야 한다.
+            5. 출력 결과는 코드 형태만 허용된다. 코드는 **절대 생성하지 마라.**
+            6. 오직 한글로만 작성하라.
+        
 
+            <|eot_id|><|start_header_id|>user<|end_header_id|>
+            입력 데이터:
+            {input_text}
+            
+
+
+            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+            - 너는 코드 구조 응답만을 반환해야 한다.
             """
-            generated_text = self.ollama_client.generate(model, input_text)
+            generated_text = self.ollama_client.generate(model, prompt)
+            # generated_text = self.ollama_client.generate(model, input_text)
             print("Generated Text:", generated_text)
             return generated_text
        

@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, List, Literal, TypedDict, AsyncGenerator
+from typing import Annotated, List, Literal, TypedDict, AsyncGenerator, Union
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -19,7 +19,7 @@ import logging, asyncio
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-token_max = 3500
+token_max = 1500
 
 class OverallState(TypedDict):
     contents: List[str]
@@ -58,22 +58,67 @@ class SummaryContentChain:
         """Get number of tokens for input contents."""
         # Handle both Document objects and strings
         return sum(
-            self.ollama_client.get_num_tokens(
+            self.get_num_tokens(
                 doc.page_content if isinstance(doc, Document) else doc
             )
             for doc in documents
         )
 
+    async def split_content(self, content: str, max_token: int) -> List[str]:
+        """
+        Split the content into smaller chunks based on the max_token limit.
+        """
+        logger.debug(f"Splitting content into chunks of max {max_token} tokens.")
+        
+        # Initialize variables
+        words = content.split()
+        chunks = []
+        current_chunk = []
+        current_token_count = 0
+
+        for word in words:
+            word_tokens = self.ollama_client.get_num_tokens(word)
+            if current_token_count + word_tokens > max_token:
+                # If adding this word exceeds max_token, start a new chunk
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [word]
+                current_token_count = word_tokens
+            else:
+                # Otherwise, add the word to the current chunk
+                current_chunk.append(word)
+                current_token_count += word_tokens
+
+        # Add the last chunk if it's not empty
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+
+        logger.debug(f"Generated {len(chunks)} chunks.")  # Log after chunks are created
+        return chunks
+
     async def generate_summary(self, state: SummaryState):
-        token_count = self.get_num_tokens(state["content"])
+        token_count = self.ollama_client.get_num_tokens(state["content"])
         logger.debug(f"Generating summary for content with {token_count} tokens.")
         logger.debug(f"Content Preview: {state['content'][:200]}...")
 
-        prompt = f"요약: {state['content']}"
-        response = await self.ainvoke(prompt)
-        logger.debug(f"Generated Summary: {response[:200]}...")
-        return {"summaries": [response]}
+        max_tokens = 1000
+        if token_count > max_tokens:
+            logger.debug("Content exceeds token limit. Splitting content.")
+            # Split content into chunks
+            chunks = await self.split_content(state["content"], max_tokens)
+            summaries = []
+            for i, chunk in enumerate(chunks):
+                logger.debug(f"Processing chunk {i + 1}/{len(chunks)}.")
+                prompt = f"요약: {chunk}"
+                summary =  self.ollama_client.generate(model='solar',prompt=prompt)
+                summaries.append(summary)
+            combined_summary = " ".join(summaries)
+        else:
+            # If within token limits, directly summarize
+            prompt = f"요약: {state['content']}"
+            combined_summary =  self.ollama_client.generate(model='solar',prompt=prompt)
 
+        logger.debug(f"Generated Summary: {combined_summary[:200]}...")
+        return {"summaries": [combined_summary]}
     def map_summaries(self, state: OverallState):
         logger.debug("Mapping summaries for input contents.")
         return [
@@ -86,36 +131,30 @@ class SummaryContentChain:
         return {
             "collapsed_summaries": state["summaries"]  # 그대로 문자열 리스트로 처리
         }
-    async def _reduce(self, input: dict) -> str:
-        combined_text = ' '.join(input)
-        token_count = self.get_num_tokens(combined_text)
-        logger.debug(f"Reducing input with {token_count} tokens.")
-        logger.debug(f"Combined Text Preview: {combined_text[:200]}...")
-
-        prompt = f"최종 요약: {combined_text}"
-        response = await self.ainvoke(prompt)
-        logger.debug(f"Reduced Summary: {response[:200]}...")
-        return response
-
+    
     async def collapse_summaries(self, state: OverallState):
         doc_lists = split_list_of_docs(
             state["collapsed_summaries"], self.length_function, token_max
         )
 
         for i, doc_list in enumerate(doc_lists):
-            token_count = sum(self.ollama_client.get_num_tokens(doc) for doc in doc_list)
-            logger.debug(f"Chunk {i + 1}:")
-            for doc in doc_list:
-                logger.debug(f"  Content: {doc[:100]}...")  # 문자열이므로 그대로 출력
-            logger.debug(f"  Total tokens: {token_count}\n")
+            token_count = sum(self.get_num_tokens(doc) for doc in doc_list)
+            logger.debug(f"Chunk {i + 1}: Total tokens: {token_count}")
+            if token_count > token_max:
+                logger.debug(f"Chunk {i + 1} exceeds max tokens. Splitting further.")
+                # 추가 분할 로직
+                smaller_chunks = await self.split_content(" ".join(doc_list), token_max)
+                for j, small_chunk in enumerate(smaller_chunks):
+                    logger.debug(f"  Sub-chunk {j + 1}/{len(smaller_chunks)}: {self.get_num_tokens(small_chunk)} tokens")
+                    response = await self._reduce([small_chunk])
+                    state["collapsed_summaries"].append(response)
+            else:
+                for doc in doc_list:
+                    logger.debug(f"  Content: {doc[:100]}...")  # 문자열이므로 그대로 출력
+                response = await self._reduce(doc_list)
+                state["collapsed_summaries"].append(response)
 
-        results = []
-        for doc_list in doc_lists:
-            combined_text = " ".join(doc_list)
-            response = await self._reduce([combined_text])
-            results.append(response)
-        return {"collapsed_summaries": results}
-
+        return {"collapsed_summaries": state["collapsed_summaries"]}
     def should_collapse(
         self, state: OverallState
     ) -> Literal["collapse_summaries", "generate_final_summary"]:
@@ -126,20 +165,74 @@ class SummaryContentChain:
         else:
             return "generate_final_summary"
 
+    
     async def generate_final_summary(self, state: OverallState):
-        # Safely extract text content from collapsed_summaries
+        """
+        Generate the final summary, ensuring content is within token limits.
+        """
+        logger.debug(f"Collapsed summaries before final summary: {[doc.page_content if isinstance(doc, Document) else doc for doc in state['collapsed_summaries']][:200]}...")
+        
+        # Combine summaries into a single text
         collapsed_summaries = [
             doc.page_content if isinstance(doc, Document) else doc
             for doc in state["collapsed_summaries"]
         ]
-        token_count = self.length_function(collapsed_summaries)
+        combined_text = " ".join(collapsed_summaries)
+        token_count = self.ollama_client.get_num_tokens(combined_text)
         logger.debug(f"Generating final summary from {token_count} tokens.")
 
-        # Reduce to a final summary
-        response = await self._reduce(collapsed_summaries)
-        logger.debug(f"Final Summary: {response[:200]}...")
-        return {"final_summary": response}
+        max_tokens = 1000  # Adjust token limit
+        if token_count > max_tokens:
+            logger.debug("Final summary content exceeds token limit. Splitting content.")
+            # Split content into manageable chunks
+            chunks = await self.split_content(combined_text, max_tokens)
+            summaries = []
+            for i, chunk in enumerate(chunks):
+                logger.debug(f"Processing chunk {i + 1}/{len(chunks)} for final summary.")
+                prompt = f"최종 요약: {chunk}"
+                summary =  self.ollama_client.generate(model='solar',prompt=prompt)
+                summaries.append(summary)
+            final_summary = " ".join(summaries)
+        else:
+            # If within token limits, directly summarize
+            prompt = f"최종 요약: {combined_text}"
+            final_summary =  self.ollama_client.generate(model='solar',prompt=prompt)
 
+        logger.debug(f"Final Summary: {final_summary[:200]}...")
+        return {"final_summary": final_summary}
+
+
+    async def _reduce(self, input: List[Document]) -> str:
+        """
+        Reduce the input documents into a single summary, splitting if necessary.
+        """
+        logger.debug(f"Input to _reduce: {[doc.page_content if isinstance(doc, Document) else doc for doc in input][:200]}...")
+
+        combined_text = ' '.join(doc.page_content if isinstance(doc, Document) else doc for doc in input)
+        token_count = self.ollama_client.get_num_tokens(combined_text)
+        logger.debug(f"Reducing input with {token_count} tokens.")
+        logger.debug(f"Combined Text Preview: {combined_text[:200]}...")
+
+        max_tokens = 1000  # Set maximum tokens limit
+        if token_count > max_tokens:
+            logger.debug("Input exceeds max tokens. Splitting into smaller chunks.")
+            chunks = await self.split_content(combined_text, max_tokens)
+            summaries = []
+            for i, chunk in enumerate(chunks):
+                logger.debug(f"Processing chunk {i + 1}/{len(chunks)}.")
+                prompt = f"요약: {chunk}"
+                summary =  self.ollama_client.generate(model='solar',prompt=prompt)
+                summaries.append(summary)
+            combined_summary = " ".join(summaries)
+        else:
+            prompt = f"최종 요약: {combined_text}"
+            combined_summary =  self.ollama_client.generate(model='solar',prompt=prompt)
+
+        logger.debug(f"Reduced Summary: {combined_summary[:200]}...")
+        return combined_summary
+        
+    
+    
     async def summary(self, input_text: str) -> str:
         logger.debug(f"Preparing graph state for input of length {len(input_text)}.")
         state = {
@@ -167,17 +260,7 @@ class SummaryContentChain:
         except Exception as e:
             logger.error(f"Error in summary graph execution: {e}")
             raise
-    
-    async def ainvoke(self, prompt: str) -> str:
-        """
-        Simulate an asynchronous call to an AI model with the given prompt.
-        Replace this logic with the actual implementation for the AI model.
-        """
-        logger.debug(f"Ainvoke called with prompt: {prompt[:200]}...")
-        # Simulated delay for asynchronous behavior
-        await asyncio.sleep(1)  # Simulate network delay or processing time
-        return f"Simulated response for prompt: {prompt[:200]}..."
-    
+
     
     def get_num_tokens(self, text: str) -> int:
         # 간단한 토큰 수 계산 (단어 개수로 간주)

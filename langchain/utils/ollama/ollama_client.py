@@ -8,12 +8,21 @@ from langchain.schema import LLMResult
 from pydantic import Field
 from script.prompt import MENU_STRUCTURE, TITLE_STRUCTURE, KEYWORDS_STRUCTURE
 import re
+import logging, asyncio
+from utils.ollama.ollama_content import OllamaContentClient
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 class OllamaClient:
     def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.5):
         self.api_url = api_url
         self.temperature = temperature
 
-        
+    def get_num_tokens(self, text: str) -> int:
+        # 간단한 토큰 수 계산 (단어 개수로 간주)
+        return len(text.split())
         
     def generate(self, model: str, prompt: str) -> str:
         """
@@ -25,6 +34,9 @@ class OllamaClient:
         Returns:
             str: Ollama 모델의 생성된 텍스트
         """
+        token_count = self.get_num_tokens(prompt)
+        logger.debug(f"Prompt Token Count: {token_count}")
+        logger.debug(f"Full Prompt Being Sent to API: {prompt[:500]}")  # 첫 500자만 출력
         payload = {
             "model": model,
             "prompt": prompt,
@@ -236,8 +248,10 @@ class OllamaClient:
         except requests.exceptions.RequestException as e:
             print(f"HTTP 요청 실패: {e}")
             raise RuntimeError(f"Ollama API 요청 실패: {e}")
-        
-        
+    
+    
+    
+    
 def parse_response(response_text):
     """
     응답 텍스트에서 JSON 객체를 추출하여 파싱하는 함수
@@ -270,6 +284,8 @@ def parse_response(response_text):
         print(f"JSON 파싱 오류: {e}")
         raise ValueError("응답이 유효한 JSON 형식이 아닙니다.")
 
+    
+    
 class OllamaLLM(BaseLLM):
     client: OllamaClient = Field(..., description="OllamaClient instance")
     model_name: str = Field(default="bllossom", description="Model name to use with Ollama")

@@ -6,3 +6,4 @@ from .milvus_collection import CONTENTS_COLLECTION_MILVUS_STD
 from .PDF2TXT import PDF2TEXT
 from .ollama.ollama_content import OllamaContentClient
 from .ollama.ollama_chat import OllamaChatClient
+from .ollama.ollama_landingpage import OllamaLandingClient
