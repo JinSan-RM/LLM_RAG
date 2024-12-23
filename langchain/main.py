@@ -14,6 +14,7 @@ from script.prompt import RAG_TEMPLATE, WEB_MENU_TEMPLATE
 from utils.ollama.ollama_chat import OllamaChatClient
 from pipelines.content_summary import SummaryContentChain
 from utils.ollama.ollama_landingpage import OllamaLandingClient
+from utils.ollama.ollama_menu import OllamaMenuClient
 
 # local lib
 # ------------------------------------------------------------------------ #
@@ -667,6 +668,10 @@ async def LLM_land_page_generate(request: LandPageRequest):
             
 
         summary = await content_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+        menu_client = OllamaMenuClient(model=request.model)
+        
+        menu_structure = await menu_client.menu_create_logic(summary)
+        print(f"menu_structure : {menu_structure}")
         #==============================================================================================
         print(summary, "<=====summary")
         print(f"Generated landing structure: {landing_structure}")
