@@ -652,9 +652,21 @@ async def LLM_land_page_generate(request: LandPageRequest):
                 section_dict[i] = random.choice(section_options)
         landing_structure = dict(sorted(section_dict.items()))
         
-        
+        if request.model == 'bllossom':
+            model_max_token = 8192
+            final_summary_length = 7500
+            max_tokens_per_chunk = 7500
+        elif request.model == 'solar':
+            model_max_token = 2048
+            final_summary_length = 1500
+            max_tokens_per_chunk = 1500
+        elif request.model == 'llama3.2':
+            model_max_token = 8192
+            final_summary_length = 7500
+            max_tokens_per_chunk = 7500
+            
 
-        summary = await content_client.temp_store_chunks(model=request.model, data=request.input_text)
+        summary = await content_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
         #==============================================================================================
         print(summary, "<=====summary")
         print(f"Generated landing structure: {landing_structure}")
