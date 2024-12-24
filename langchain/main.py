@@ -693,12 +693,14 @@ async def LLM_land_page_generate(request: LandPageRequest):
         
         print(f"summary process time : {end - start}")
         print("menu logic")
+        start = time.time()
         menu_structure = await menu_client.menu_create_logic(summary)
-        return menu_structure
+        end = time.time()
+        print(f"menu_create process time : {end - start}")
+
         #==============================================================================================
-        print(summary, "<=====summary")
         print(f"Generated landing structure: {landing_structure}")
-        for section_num, section_name in landing_structure.items():
+        for section_num, section_name in menu_structure.items():
             print(f"Processing section {section_num}: {section_name}")
 
             time.sleep(0.5)
