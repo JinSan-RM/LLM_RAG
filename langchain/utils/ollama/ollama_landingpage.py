@@ -9,11 +9,9 @@ content_client = OllamaContentClient()
 
 class OllamaLandingClient:
     
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.4, n_ctx = 4096, max_token = 4096, model:str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model:str = ''):
         self.api_url = api_url
         self.temperature = temperature
-        self.n_ctx = n_ctx
-        self.max_token = max_token
         self.model = model
         
     async def send_request(self, prompt: str) -> str:
@@ -27,7 +25,6 @@ class OllamaLandingClient:
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
-            "n_ctx": self.n_ctx,
         }
         
         try:
@@ -138,12 +135,11 @@ class OllamaLandingClient:
         current_chunk_number = 0
         remaining_data = data
         summarized_chunks = []
-        current_summary_target = 500
         accumulated_summary_length = 0
         previous_summary = ""
         
-        while remaining_data and current_summary_target <= final_summary_length:
-            # 지금 현재의 청크 크기를 계산
+        while remaining_data and accumulated_summary_length < final_summary_length:
+            # 현재 청크 크기 계산
             current_chunk_size = max_tokens_per_chunk - (w * current_chunk_number)
             current_chunk_size = max(current_chunk_size, 100)
             print(f"[store_chunks] Current chunk number: {current_chunk_number}, chunk size: {current_chunk_size}")
@@ -160,10 +156,16 @@ class OllamaLandingClient:
             remaining_data = ''.join(chunks[1:])  # 나머지 데이터
             print(f"[store_chunks] Processing chunk {current_chunk_number + 1} with size {len(current_chunk)} characters")
             
-            # 현재 요약 목표에 맞춰 max_tokens 설정
-            desired_summary_length = current_summary_target
-            max_tokens = max_tokens_per_chunk - (w * current_chunk_number)
-            max_tokens = max(max_tokens, 100)
+            # 마지막 요약 길이를 계산
+            remaining_summary_space = final_summary_length - accumulated_summary_length
+            if remaining_summary_space <= 0:
+                print(f"[store_chunks] Remaining summary space is 0. Stopping.")
+                break
+            
+            # 현재 요약 목표 설정
+            desired_summary_length = min(500 + (w * current_chunk_number), remaining_summary_space)
+            max_tokens = min(max_tokens_per_chunk - (w * current_chunk_number), remaining_summary_space)
+            max_tokens = max(max_tokens, 100)  # 최소 100은 보장
             print(f"[store_chunks] Desired summary length: {desired_summary_length}, max_tokens: {max_tokens}")
             
             # 청크 요약 (이전 요약을 포함)
@@ -177,23 +179,13 @@ class OllamaLandingClient:
             print(f"[store_chunks] Accumulated summary length: {accumulated_summary_length}")
             previous_summary = summary  # 현재 요약을 다음 청크에 포함
             
-            # 현재 요약 목표에 도달했는지 확인
-            if accumulated_summary_length >= current_summary_target:
-                print(f"[store_chunks] Reached current summary target: {current_summary_target} characters")
-                # 다음 청크 번호 및 요약 목표 설정
-                current_chunk_number += 1
-                current_summary_target = 500 + (w * current_chunk_number)
-                # 최종 요약 길이를 초과하지 않도록 조정
-                if current_summary_target > final_summary_length:
-                    current_summary_target = final_summary_length
-                print(f"[store_chunks] Updated summary target to: {current_summary_target} characters")
+            current_chunk_number += 1
         
         # 모든 요약된 청크를 합쳐 최종 요약 생성
         print("[store_chunks] Combining all summarized chunks into final summary.")
-        final_summary = self.backpropagation_summary(summarized_chunks, final_summary_length)
+        final_summary = ' '.join(summarized_chunks)  # 이미 초과 방지됨
         print(f"[store_chunks] Final summary length: {len(final_summary)} characters")
         return final_summary
-
         # 1. 데이터 청크로 분할
         chunks = self.split_into_chunks(data, max_tokens_per_chunk)
         summarized_chunks = []

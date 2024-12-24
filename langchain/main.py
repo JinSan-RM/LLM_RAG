@@ -633,6 +633,26 @@ async def LLM_land_page_generate(request: LandPageRequest):
     """
     랜딩 페이지 섹션 생성을 처리하는 API 엔드포인트
     """
+    def clean_data(text):
+        # 고정된 헤더 문자열들
+        headers_to_remove = [
+            "<|start_header_id|>system<|end_header_id|>",
+            "<|start_header_id|>", "<|end_header_id|>",
+            "<|start_header_id|>user<|end_header_id|>",
+            "<|start_header_id|>assistant<|end_header_id|>",
+            "<|eot_id|>"
+        ]
+        
+        
+        # 각 헤더 문자열 제거
+        cleaned_text = text
+        for header in headers_to_remove:
+            cleaned_text = cleaned_text.replace(header, '')
+        
+        pattern = r'<\|.*?\|>'
+        cleaned_text = re.sub(pattern, '', cleaned_text)
+    
+        return cleaned_text
     try:
         print(f"Start process: {request.input_text}")
         print(f"Model: {request.model}")
@@ -655,23 +675,27 @@ async def LLM_land_page_generate(request: LandPageRequest):
         
         if request.model == 'bllossom':
             model_max_token = 8192
-            final_summary_length = 7500
-            max_tokens_per_chunk = 7500
+            final_summary_length = 7000
+            max_tokens_per_chunk = 7000
         elif request.model == 'solar':
             model_max_token = 2048
-            final_summary_length = 1500
-            max_tokens_per_chunk = 1500
+            final_summary_length = 1300
+            max_tokens_per_chunk = 1300
         elif request.model == 'llama3.2':
             model_max_token = 8192
-            final_summary_length = 7500
-            max_tokens_per_chunk = 7500
+            final_summary_length = 7000
+            max_tokens_per_chunk = 7000
             
-
+        start = time.time()
         summary = await content_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
         menu_client = OllamaMenuClient(model=request.model)
+        end = time.time()
         
+        print(f"summary process time : {end - start}")
+        print("menu logic")
         menu_structure = await menu_client.menu_create_logic(summary)
         print(f"menu_structure : {menu_structure}")
+        return menu_structure
         #==============================================================================================
         print(summary, "<=====summary")
         print(f"Generated landing structure: {landing_structure}")
@@ -681,6 +705,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
             time.sleep(0.5)
             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
             content = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name)
+            content = clean_data(content)
             print(f"content : {content}")
         
 
