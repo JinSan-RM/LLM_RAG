@@ -675,16 +675,16 @@ async def LLM_land_page_generate(request: LandPageRequest):
         
         if request.model == 'bllossom':
             model_max_token = 8192
-            final_summary_length = 7000
-            max_tokens_per_chunk = 7000
+            final_summary_length = 6000
+            max_tokens_per_chunk = 6000
         elif request.model == 'solar':
             model_max_token = 2048
-            final_summary_length = 1300
-            max_tokens_per_chunk = 1300
+            final_summary_length = 1000
+            max_tokens_per_chunk = 1000
         elif request.model == 'llama3.2':
             model_max_token = 8192
-            final_summary_length = 7000
-            max_tokens_per_chunk = 7000
+            final_summary_length = 6000
+            max_tokens_per_chunk = 6000
             
         start = time.time()
         summary = await content_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
@@ -694,7 +694,6 @@ async def LLM_land_page_generate(request: LandPageRequest):
         print(f"summary process time : {end - start}")
         print("menu logic")
         menu_structure = await menu_client.menu_create_logic(summary)
-        print(f"menu_structure : {menu_structure}")
         return menu_structure
         #==============================================================================================
         print(summary, "<=====summary")

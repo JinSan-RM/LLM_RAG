@@ -174,6 +174,10 @@ class OllamaLandingClient:
                 print("[store_chunks] Summary failed for current chunk. Skipping to next.")
                 continue
             
+            if len(summary) > remaining_summary_space:
+                summary = summary[:remaining_summary_space]
+                print(f"[store_chunks] Trimmed summary to remaining space: {remaining_summary_space} characters.")
+                
             summarized_chunks.append(summary)
             accumulated_summary_length += len(summary)
             print(f"[store_chunks] Accumulated summary length: {accumulated_summary_length}")

@@ -1,12 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from config.config import OLLAMA_API_URL
 import requests, json, re
+from typing import Dict, Union, List
 
-class WebsiteMenuStructure(BaseModel):
-    menu_structure: dict
+class MenuDict(BaseModel):
+    # 루트 모델 대신, 필드 이름을 하나 둔다
+    menu_dict: Dict[str, str]
+
+class MenuDataDict(BaseModel):
+    menu_structure: Dict[str, str]
+
+class MenuDataList(BaseModel):
+    menu_structure: List[str]
     
+MenuUnion = Union[MenuDict, MenuDataDict, MenuDataList]
+
+# TypeAdapter로 감싸준다
+menu_union_adapter = TypeAdapter(MenuUnion)
+
 class OllamaMenuClient:
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model: str =''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.1, model: str =''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
@@ -64,10 +77,34 @@ class OllamaMenuClient:
         except json.JSONDecodeError as e:
             print(f"JSON 파싱 실패: {e}")
             raise RuntimeError("menu_data의 형식이 올바르지 않습니다.")
+    
+    def parse_menu_data_union(self, data: dict) -> Dict[str, str]:
+        # 0) 만약 data가 비어 있다면, 원하는 기본값 / 빈 dict 등으로 처리
+        if not data:  # 즉, {}나 None, 혹은 빈 상태
+            print("Received an empty dictionary. Returning empty result.")
+            return {}
+
+        # 1) 래핑 로직(필요 시)
+        if "menu_dict" not in data and "menu_structure" not in data:
+            data = {"menu_dict": data}
+            
+        # TypeAdapter.validate_python() 사용
+        parsed = menu_union_adapter.validate_python(data)
+
+        if isinstance(parsed, MenuDict):
+            print("menu dict")
+            return parsed.menu_dict
+        elif isinstance(parsed, MenuDataDict):
+            print("menu data")
+            return parsed.menu_structure
+        elif isinstance(parsed, MenuDataList):
+            return {str(i+1): val for i, val in enumerate(parsed.menu_structure)}
+        else:
+            raise ValueError("Unknown data format")
         
     async def menu_recommend(self, data: str):
-        print(f"data: {len(data)} / {data}")
         data = self.clean_data(data)
+        print(f"data: {len(data)} / {data}")
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
         - 당신은 웹사이트 랜딩 페이지를 구성하는 전문 디자이너입니다.
@@ -82,7 +119,7 @@ class OllamaMenuClient:
         2. **가중치 규칙**:
         - 가중치가 낮을수록 자주 선택되어야 합니다.
         - 가중치가 높은 섹션은 채택 확률이 낮아야 합니다.
-        - 동일한 조합에서 동일한 섹션이 중복되지 않아야 합니다.
+
 
         3. **섹션 목록**:
         아래는 섹션 이름과 가중치입니다:
@@ -107,7 +144,7 @@ class OllamaMenuClient:
 
         4. **출력 형식**:
 
-        - 순서에 따라 구성된 섹션 이름을 나열하세요.
+        - 섹션 이름을 순서대로 나열한 JSON 형식으로 작성하세요.
         - 예시:
                 menu_structure : {{
                     "1": "Navbars",
@@ -127,10 +164,12 @@ class OllamaMenuClient:
         입력 데이터:
         {data}
         <|start_header_id|>assistant<|end_header_id|>
+        - 출력 형식의 예시의 데이터만 출력하세요.
         - 각 조합은 입력 데이터 랜딩페이지지의 목적에 따라 논리적이어야 합니다.
         - 섹션 이름이 중복되지 않도록 주의하세요.
         - 사용자 경험을 고려하여 주요 섹션(Feature, CTA, Contact)은 최소 1회 포함하세요.
         """
+        print(f"prompt len : {len(prompt)} / {prompt}")
         menu_data = await self.send_request(prompt=prompt)
         return menu_data
     
@@ -156,15 +195,32 @@ class OllamaMenuClient:
         return cleaned_text
 
     async def menu_create_logic(self, data: str):
-        # menu_recommend를 실행한 후 결과를 얻기 위해 await 사용
+        """
+        메뉴 데이터를 생성하고 Pydantic 모델을 사용해 처리하는 로직.
+        """
+        # menu_recommend 실행
         menu_data = await self.menu_recommend(data)
         print(f"menu_data : {menu_data}")
+        repeat_count = 0
 
-        # JSON 데이터 파싱
-        try:
-            menu_dict = await self.process_menu_data(menu_data)
-            pydantic_menu_data = WebsiteMenuStructure(menu_structure=menu_dict)
-            print(f"pydantic_menu_data : {pydantic_menu_data}")
-            return pydantic_menu_data
-        except RuntimeError as e:
-            print(f"Error processing landing structure: {e}")
+        while repeat_count < 3:  # 최대 3회 반복
+            try:
+                # JSON 데이터 파싱
+                menu_dict = await self.process_menu_data(menu_data)
+                print(f"menu_dict : {menu_dict}")
+                
+                # Pydantic 모델 생성
+                pydantic_menu_data = self.parse_menu_data_union(menu_dict)
+                print(f"pydantic_menu_data : {pydantic_menu_data}")
+                
+                # 성공적으로 처리된 menu_structure 반환
+                return pydantic_menu_data
+            except Exception as e:  # 모든 예외를 잡고 싶다면
+                print(f"Error processing landing structure: {e}")
+                repeat_count += 1
+                menu_data = await self.menu_recommend(data)
+
+        # 실패 시 처리
+        print("Failed to process menu data after 3 attempts.")
+        return data
+                
