@@ -2,7 +2,7 @@
 /langchain/__pycache__
 /langchain/config/__pycache__
 /langchain/modules/__pycache__
-/langchain/pipelines//__pycache__
+/langchain/pipelines/__pycache__
 /langchain/utils/__pycache__
 /llama_models/ko_en
 /llama_models/en_ko
@@ -28,3 +28,5 @@ kompose.exe
 Langchain.zip
 kubernetes/ollama/deployment.yaml
 kubernetes/ollama/service.yaml
+ollama/EEVE-Korean-Instruct-10.8B-v1.0-Q4_K_M.gguf
+langchain/utils/ollama/__pycache__

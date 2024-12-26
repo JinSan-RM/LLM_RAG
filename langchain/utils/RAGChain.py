@@ -5,7 +5,7 @@ from langchain.vectorstores.base import VectorStoreRetriever
 from langchain.prompts import PromptTemplate
 from typing import List, Optional
 from utils.helpers import languagechecker
-from modules.translators import KoEnTranslator
+# from modules.translators import KoEnTranslator
 from utils.ollama.ollama_embedding import get_embedding_from_ollama
 
 class CustomRAGChain(BaseModel):

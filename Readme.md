@@ -65,3 +65,48 @@ curl -X POST http://localhost:8000/api/insert \
                         }
                 }
             }'
+
+
+
+--------
+
+
+### Milvus DB 생성 전 해야할 것들
+
+**(※ 아래를 주석해놓지 않으면 실행이 안돼서, 통신까지 가지 못함)**
+
+1. utils 디렉토리 > __init__.py 에서 아래 줄 주석
+from .milvus_collection import CONTENTS_COLLECTION_MILVUS_STD
+
+2. utils 디렉토리 > milvus_collection.py 에서 전체 주석
+from pymilvus import connections, Collection, utility
+CONTENTS_COLLECTION_MILVUS_STD = collection = Collection("ko_std_industry_collection")
+
+3. docker compose up 한 후에 postman에서 아래 실행
+(GET) http://localhost:8000/healthcheck
+-> {status : "OK"} 확인
+
+4. postman에서 아래 실행
+(POST) http://localhost:8000/api/db_create  
+Body {
+    "name": "ko_std_industry_collection"
+}
+-> Milvus DB 생성
+
+5. 정상적으로 생성 됐을 경우, 1, 2에서 주석했던 것들을 풀어서 재실행해주면 완료
+
+6. PDF to Menu 실행 코드
+(POST) http://localhost:8001/generate_menu?path=[cdn 주소_1]&path2=[cdn 주소_2]&path3=[cdn 주소_3]
+
+
+--------
+
+### Docker Cash 지우고 build
+
+docker container prune
+
+docker image prune -a
+
+docker volume prune -a
+
+docker compose build --no-cache --progress=plain
