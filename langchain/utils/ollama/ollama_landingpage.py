@@ -74,66 +74,26 @@ class OllamaLandingClient:
         LLM의 응답에서 JSON 형식만 추출 및 정리
         """
         try:
-            # JSON 부분만 추출
-            # json_match = re.search(r"\{(?:[^{}]|(?R))*\}", data, re.DOTALL | re.VERBOSE)
-            json_match = re.search(r"\{.*?\}", data, re.DOTALL)  # 중첩이 아닌 최상위 JSON만 추출
-            if not json_match:
-                raise ValueError("JSON 형식을 찾을 수 없습니다.")
-            
-            json_text = json_match.group()
-            
-            # 문자열 정리 및 이스케이프 처리
-            json_text = re.sub(r'[\u2018\u2019]', "'", json_text)  # 스마트 쿼트
-            json_text = re.sub(r'[\u201C\u201D]', '"', json_text)  # 스마트 더블 쿼트
-            json_text = json_text.replace("'", '"')  # 단일 따옴표를 이중 따옴표로 변환
-            
-            # 줄바꿈과 공백 정리
-            json_text = re.sub(r'\s+', ' ', json_text)
-            json_text = json_text.strip()
-            
-            # 누락된 쉼표 처리
-            # **쉼표 누락 처리 강화**
-            # 1. "}" 뒤에 쉼표 추가, 다음 키가 올 경우
-            json_text = re.sub(r'(\})\s*(?=")', r'\1,', json_text)
-            # 2. 마지막 쉼표 제거
-            json_text = re.sub(r',\s*([\}\]])', r'\1', json_text)
-            
-            # JSON 문자열 검증 및 포맷팅
-            try:
-                parsed = json.loads(json_text)
-                formatted_json = json.dumps(parsed, ensure_ascii=False)
-                json_data = json.loads(formatted_json)
-            except json.JSONDecodeError as e:
-                print(f"JSON 파싱 중간 실패: {e}")
-                print(f"Problematic JSON text: {json_text}")
-                raise
+            # 1. 줄바꿈 및 공백 정리
+            json_text = re.sub(r'\s+', ' ', data).strip()
 
-            # 키 오타 수정
-            def fix_keys(d):
-                if isinstance(d, dict):
-                    return {
-                        'description' if k in ['desc', 'descritption', 'descryption', 'descirtion'] else k: 
-                        fix_keys(v) for k, v in d.items()
-                    }
-                elif isinstance(d, list):
-                    return [fix_keys(item) for item in d]
-                return d
+            # 2. 누락된 쉼표 확인 및 추가
+            # 각 키-값 쌍 뒤에 쉼표가 없는 경우 추가
+            json_text = re.sub(r'(?<=[}"])\s*(?=")', ', ', json_text)
 
-            fixed_json = fix_keys(json_data)
-            print(f"Fixed JSON data: {fixed_json}")
-            return fixed_json
+            # 3. 마지막 쉼표 제거
+            # json_text = re.sub(r',\s*([}\]])', r'\1', json_text)
+
+            # 4. JSON 파싱 확인
+            parsed_json = json.loads(json_text)  # JSON 파싱
+            formatted_json = json.dumps(parsed_json, ensure_ascii=False, indent=4)  # 보기 좋게 포맷팅
+
+            return formatted_json
 
         except json.JSONDecodeError as e:
-            print(f"JSON 파싱 최종 실패: {e}")
-            print(f"Problematic JSON: {json_text}")
+            print(f"JSON 파싱 실패: {e}")
+            print(f"Problematic JSON text: {json_text}")
             raise RuntimeError(f"JSON 파싱 실패: {e}")
-        except ValueError as ve:
-            print(f"Value error: {ve}")
-            raise RuntimeError(f"데이터 형식 오류: {ve}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            raise RuntimeError(f"예상치 못한 오류: {e}")
-
 
     async def generate_section(self, model: str,summary:str, section_name: str):
         """
