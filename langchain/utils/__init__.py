@@ -7,4 +7,5 @@ from .PDF2TXT import PDF2TEXT
 from .ollama.ollama_content import OllamaContentClient
 from .ollama.ollama_chat import OllamaChatClient
 from .ollama.ollama_landingpage import OllamaLandingClient
-from . ollama.ollama_menu import OllamaMenuClient
+from .ollama.ollama_menu import OllamaMenuClient
+from .ollama.ollama_summary import OllamaSummaryClient

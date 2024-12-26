@@ -15,6 +15,7 @@ from utils.ollama.ollama_chat import OllamaChatClient
 from pipelines.content_summary import SummaryContentChain
 from utils.ollama.ollama_landingpage import OllamaLandingClient
 from utils.ollama.ollama_menu import OllamaMenuClient
+from utils.ollama.ollama_summary import OllamaSummaryClient
 
 # local lib
 # ------------------------------------------------------------------------ #
@@ -633,6 +634,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
     """
     랜딩 페이지 섹션 생성을 처리하는 API 엔드포인트
     """
+    start_main = time.time()
     def clean_data(text):
         # 고정된 헤더 문자열들
         headers_to_remove = [
@@ -687,7 +689,9 @@ async def LLM_land_page_generate(request: LandPageRequest):
             max_tokens_per_chunk = 6000
             
         start = time.time()
-        summary = await content_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+        summary_client = OllamaSummaryClient(model=request.model)
+        summary = await summary_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+        
         menu_client = OllamaMenuClient(model=request.model)
         end = time.time()
         
@@ -700,17 +704,23 @@ async def LLM_land_page_generate(request: LandPageRequest):
 
         #==============================================================================================
         print(f"Generated landing structure: {landing_structure}")
+        result_dict = {}
         for section_num, section_name in menu_structure.items():
             print(f"Processing section {section_num}: {section_name}")
 
             time.sleep(0.5)
             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
             content = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name)
-            content = clean_data(content)
+            if isinstance(content, str):
+                content = clean_data(content)
+            
+            result_dict[f'{section_name}'] = content
             print(f"content : {content}")
         
 
-        return content
+        end_main = time.time()
+        t = end_main - start_main
+        return result_dict, t
 
     except Exception as e:
         print(f"Error processing landing structure: {e}")
@@ -738,6 +748,7 @@ async def chat_landpage_generate(request: LandPageRequest):
     
     
     print(f"Generated landing structure: {landing_structure}")
+    
     for section_num, section_name in landing_structure.items():
             print(f"Processing section {section_num}: {section_name}")
 

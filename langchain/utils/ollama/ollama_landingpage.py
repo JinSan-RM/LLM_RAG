@@ -1,11 +1,25 @@
-from utils.ollama.ollama_content import OllamaContentClient
-from utils.ollama.ollama_landingpage_plan import WebsitePlan, WebsitePlanException
 from config.config import OLLAMA_API_URL
-import requests, json
-from typing import List, Dict
+import requests, json, re
+from typing import List, Dict, Optional
+from pydantic import BaseModel
+from langchain.output_parsers import PydanticOutputParser
 
+class BaseSection(BaseModel):
+    section_type: str
 
-content_client = OllamaContentClient()
+class FeatureItem(BaseModel):
+    sub_title: Optional[str] = None
+    strength_title: Optional[str] = None
+    description: Optional[str] = None
+    
+class Section(BaseSection):
+    main_title: Optional[str] = None
+    sub_title: Optional[str] = None
+    strength_title: Optional[str] = None
+    description: Optional[str] = None
+    features: Optional[List[FeatureItem]] = None
+
+parser = PydanticOutputParser(pydantic_object=Section)
 
 class OllamaLandingClient:
     
@@ -48,260 +62,139 @@ class OllamaLandingClient:
             print(f"HTTP 요청 실패: {e}")
             raise RuntimeError(f"Ollama API 요청 실패: {e}")
         
-        
-    def split_into_chunks(self, data: str, max_length: int) -> List[str]:
+    async def process_data(self, data: str) -> dict:
         """
-        데이터를 최대 길이에 맞게 청크로 분할하는 함수
-        :param data: 대용량 입력 데이터 문자열
-        :param max_length: 각 청크의 최대 문자 수
-        :return: 분할된 청크 리스트
+        LLM의 응답에서 JSON 형식만 추출 및 정리
         """
-        return [data[i:i + max_length] for i in range(0, len(data), max_length)]
-    
-    async def summarize_chunk(self, chunk: str, max_tokens: int, desired_summary_length: int, previous_summary: str = "") -> str:
-        """
-        단일 청크를 요약하는 비동기 함수
-        :param chunk: 요약할 청크 문자열
-        :param max_tokens: 요약 시 사용할 최대 토큰 수
-        :param previous_summary: 이전에 요약된 내용 (옵션)
-        :return: 요약된 문자열
-        """
-        print(f"previous_summary : {len(previous_summary)}   {previous_summary}\n")
-        print(f"chunk : {len(chunk)}   {chunk}\n")
-        print(f"desired_summary_length : {desired_summary_length}")
-        
-        if previous_summary:
-            combined_text = f"{previous_summary}\n\n{chunk}"
-        else:
-            combined_text = chunk
-        
-        prompt = f"""
-        <|start_header_id|>system<|end_header_id|>
-        - 입력된 데이터를 {desired_summary_length}자로 요약해주세요.
-        <|eot_id|><|start_header_id|>user<|end_header_id|>
-        입력 데이터:
-        {combined_text}
-        <|start_header_id|>assistant<|end_header_id|>
-        - 입력된 데이터를 {desired_summary_length}자로 요약해주세요.
-        """
-        print(f"[summarize_chunk] Prompt prepared for summary. Length: {len(prompt)} characters")
         try:
-            # API 요청 (비동기 함수이므로 await 사용)
-            summary = await self.send_request(prompt=prompt)
-            return summary
-        except Exception as e:
-            print(f"청크 요약 중 오류 발생: {e}")
-            return ""
-    
-    def backpropagation_summary(self, summaries: List[str], final_summary_length: int) -> str:
-        """
-        요약된 청크들을 최종 요약으로 합치는 함수
-        :param summaries: 요약된 청크 리스트
-        :param final_summary_length: 최종 요약의 최대 문자 수
-        :return: 최종 요약 문자열
-        """
-        # 모든 요약을 합침
-        combined_summary = ' '.join(summaries)
-        print(f"[backpropagation_summary] Combined summary length before trimming: {len(combined_summary)}")
-        
-        # 최종 요약 길이에 맞게 자름
-        if len(combined_summary) > final_summary_length:
-            combined_summary = combined_summary[:final_summary_length]
-            print(f"[backpropagation_summary] Trimmed combined summary to {final_summary_length} characters")
-        else:
-            print(f"[backpropagation_summary] Combined summary is within the final_summary_length")
-        
-        return combined_summary
-    
-    async def store_chunks(self, data: str, model_max_token: int, final_summary_length: int, max_tokens_per_chunk: int) -> str:
-        """
-        대용량 데이터를 청크로 분할하고, 각 청크를 모델에 전달하여 요약한 후, 모든 요약을 합쳐 최종 요약을 생성하는 함수
+            # JSON 부분만 추출 (정규표현식 사용)
+            json_match = re.search(r"\{.*\}", data, re.DOTALL)
+            if not json_match:
+                raise ValueError("JSON 형식을 찾을 수 없습니다.")
+            
+            # JSON 텍스트 추출
+            json_text = json_match.group()
 
-        :param model_max_token: 모델의 최대 토큰 수
-        :param data: 대용량 입력 데이터 문자열
-        :param final_summary_length: 최종 요약의 최대 문자 수
-        :param max_tokens_per_chunk: 각 청크의 최대 토큰 수
-        :return: 최종 요약 문자열
-        """
-        # w 값 설정
-        if model_max_token == 8192:
-            w = 250
-        elif model_max_token == 4096:
-            w = 100
-        else:
-            w = 100  # 기본값 설정
-        print(f"[store_chunks] Model max token: {model_max_token}, w: {w}")
-        
-        current_chunk_number = 0
-        remaining_data = data
-        summarized_chunks = []
-        accumulated_summary_length = 0
-        previous_summary = ""
-        
-        while remaining_data and accumulated_summary_length < final_summary_length:
-            # 현재 청크 크기 계산
-            current_chunk_size = max_tokens_per_chunk - (w * current_chunk_number)
-            current_chunk_size = max(current_chunk_size, 100)
-            print(f"[store_chunks] Current chunk number: {current_chunk_number}, chunk size: {current_chunk_size}")
+            # 이중 따옴표 문제 수정 (선택적)
+            json_text = json_text.replace("'", '"').replace("\n", "").strip()
             
-            # 청크 분할
-            chunks = self.split_into_chunks(remaining_data, current_chunk_size)
-            
-            if not chunks:
-                print("[store_chunks] No more chunks to process.")
-                break
-            
-            # 첫 번째 청크 가져오기
-            current_chunk = chunks[0]
-            remaining_data = ''.join(chunks[1:])  # 나머지 데이터
-            print(f"[store_chunks] Processing chunk {current_chunk_number + 1} with size {len(current_chunk)} characters")
-            
-            # 마지막 요약 길이를 계산
-            remaining_summary_space = final_summary_length - accumulated_summary_length
-            if remaining_summary_space <= 0:
-                print(f"[store_chunks] Remaining summary space is 0. Stopping.")
-                break
-            
-            # 현재 요약 목표 설정
-            desired_summary_length = min(500 + (w * current_chunk_number), remaining_summary_space)
-            max_tokens = min(max_tokens_per_chunk - (w * current_chunk_number), remaining_summary_space)
-            max_tokens = max(max_tokens, 100)  # 최소 100은 보장
-            print(f"[store_chunks] Desired summary length: {desired_summary_length}, max_tokens: {max_tokens}")
-            
-            # 청크 요약 (이전 요약을 포함)
-            summary = await self.summarize_chunk(current_chunk, max_tokens, desired_summary_length, previous_summary)
-            if not summary:
-                print("[store_chunks] Summary failed for current chunk. Skipping to next.")
-                continue
-            
-            if len(summary) > remaining_summary_space:
-                summary = summary[:remaining_summary_space]
-                print(f"[store_chunks] Trimmed summary to remaining space: {remaining_summary_space} characters.")
-                
-            summarized_chunks.append(summary)
-            accumulated_summary_length += len(summary)
-            print(f"[store_chunks] Accumulated summary length: {accumulated_summary_length}")
-            previous_summary = summary  # 현재 요약을 다음 청크에 포함
-            
-            current_chunk_number += 1
-        
-        # 모든 요약된 청크를 합쳐 최종 요약 생성
-        print("[store_chunks] Combining all summarized chunks into final summary.")
-        final_summary = ' '.join(summarized_chunks)  # 이미 초과 방지됨
-        print(f"[store_chunks] Final summary length: {len(final_summary)} characters")
-        return final_summary
-        # 1. 데이터 청크로 분할
-        chunks = self.split_into_chunks(data, max_tokens_per_chunk)
-        summarized_chunks = []
-        cycle_chunk = max_tokens / len(chunks)
-        print("\n=============>", len(chunks), type(chunks), cycle_chunk,"<================cycle_chunk\n")
-        # 2. 각 청크를 요약
-        for idx, chunk in enumerate(chunks):
-            # 메시지 형식으로 변환
-            prompt = f"""
-            <|start_header_id|>system<|end_header_id|>
-            - 입력된 데이터를 요약해주세요.
-            <|eot_id|><|start_header_id|>user<|end_header_id|>
-            입력 데이터:
-            {chunk}
-            """
-            try:
-                # API 요청 (비동기 함수이므로 await 사용)
-                response = await self.send_request(prompt=prompt)
+            # JSON 파싱
+            json_data = json.loads(json_text)
 
-                summarized_chunks.append(response)
-                print(f"Chunk {idx + 1} 요약 완료. \n {response}")
-            
-            except Exception as e:
-                print(f"Chunk {idx + 1} 처리 중 오류 발생: {e}")
+            # 키 오타 수정: 'desc' 또는 'descritption' -> 'description'
+            def fix_keys(d):
+                if isinstance(d, dict):
+                    new_d = {}
+                    for k, v in d.items():
+                        if k in ['desc', 'descritption', 'descryption', 'descirtion']:
+                            fixed_key = 'description'
+                        else:
+                            fixed_key = k
+                        new_d[fixed_key] = fix_keys(v)
+                    return new_d
+                elif isinstance(d, list):
+                    return [fix_keys(item) for item in d]
+                else:
+                    return d
 
-        # 3. 모든 요약을 하나로 결합
-        combined_summaries = ' '.join(summarized_chunks)
-        
-        # 4. 최종 요약 요청
-        prompt = f"""
-        <|start_header_id|>system<|end_header_id|>
-        - 입력된 내용을 기반으로 {max_tokens}자 이내로 기획서를 작성해 주세요.
-        <|eot_id|><|start_header_id|>user<|end_header_id|>
-        입력 데이터:
-        {combined_summaries}
-        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-        - 입력된 내용을 기반으로 {max_tokens}자 이내로 기획서를 작성해 주세요.
-        """
-    
-        try:
-            # final_websiteplan = WebsitePlan( **combined_summaries )
-            # summarized_chunks.append(website_plan.dict())
-            final_response = await self.send_request(prompt=prompt)
-            print(final_response,"<====final_response")
+            fixed_json = fix_keys(json_data)
+            print(f"Fixed JSON data: {fixed_json}")  # 디버깅을 위한 출력
+            return fixed_json
 
-            # 최종 요약이 500자를 초과하지 않도록 확인
-            if len(final_response) > final_summary_length:
-                final_response = final_response[:final_summary_length]
-                print("최종 요약이 500자를 초과하여 잘랐습니다.")
+        except json.JSONDecodeError as e:
+            print(f"JSON 파싱 실패: {e}")
+            raise RuntimeError("data 형식이 올바르지 않습니다.")
+        except ValueError as ve:
+            print(f"Value error: {ve}")
+            raise RuntimeError("data 형식이 올바르지 않습니다.")
 
-            print("최종 요약 완료.")
-            return final_response
-
-        except Exception as e:
-            print(f"최종 요약 처리 중 오류 발생: {e}")
-            return ""
-        
-    async def generate_section(self, model: str,summary:str, section_name: str) -> str:
+    async def generate_section(self, model: str,summary:str, section_name: str):
         """
         랜딩 페이지 섹션을 생성하는 함수
         """
         
         # 프롬프트 수정 진행중 뒤에 칠판 처럼
         prompt = f"""
-            <|start_header_id|>system<|end_header_id|>
-            - 너는 사이트의 섹션 구조를 정해주고, 그 안에 들어갈 내용을 작성해주는 AI 도우미야.
-            - 입력된 데이터를 기준으로 단일 페이지를 갖는 랜딩사이트 콘텐츠를 생성해야 해.
-            - 섹션 '{section_name}'에 어울리는 내용을 생성해야 하며, 반드시 다음 규칙을 따라야 한다:
-            1. assistant처럼 생성해야 하고 형식을 **절대** 벗어나면 안 된다.
-            2. "h1" : "main_title", "h2" : "sub_title", "h3" : "strength_title", "p" : "description", "ul" : {{features[]}}"형식으로 치환해서 섹션의 콘텐츠를 구성해주세요..
-            3. 태그들 안의 css나 다른것들은 입력하지마세요.
-            4. 섹션 안의 `children` 안의 컨텐츠 개수는 2~10개 사이에서 자유롭게 선택하되, 내용이 반복되지 않도록 다양하게 생성하라.
-            5. 모든 텍스트 내용은 입력 데이터에 맞게 작성하고, 섹션의 목적과 흐름에 맞춰야 한다.
-            6. 출력 결과는 코드 형태만 허용된다. 코드는 **절대 생성하지 마라.**
-            7. 오직 한글로만 작성하라.
-        
+        <|start_header_id|>system<|end_header_id|>
+        너는 사이트의 섹션 구조를 정해주고, 그 안에 들어갈 내용을 작성해주는 AI 도우미야.
+        다음 **규칙**을 반드시 지켜서, '{section_name}' 섹션에 어울리는 콘텐츠를 생성해줘:
 
-            <|eot_id|><|start_header_id|>user<|end_header_id|>
-            입력 데이터:
-            {summary}
-            랜딩 페이지 섹션을 구성하기 위한 PDF 내용 전체가 에 포함되어 있습니다.
-            섹션:
-            {section_name}
+        1) "assistant"처럼 **생성**해야 하고, 규정된 형식을 **절대** 벗어나면 안 된다.
+        2) HTML 태그를 다음과 같이 **치환**해서 사용해라:
+        - h1  ->  "main_title"
+        - h2  ->  "sub_title"
+        - h3  ->  "strength_title"
+        - p   ->  "description"
+        - ul  ->  "features" = "[{{ ... }}]" 형태 (예: "[{{ ... }}, {{ ... }}]")
+            - **main_title, sub_title, strength_title, description** 같은 키들은 **필요할 때만** 사용하고, 그 외에는 키를 아예 생성하지 말 것. 
+            - 즉, 쓰지 않는 태그(필드)는 **JSON에서 제외**하라.
+            - 모든 태그(필드)는 **반드시 문자열**이어야 하며, null이나 배열 형태로 쓰면 안 된다.
+            - ul 안에 들어갈 항목(li)도 sub_title, strength_title, description 등의 키를 사용할 수 있음.
+            - 단, features 안에서는 "main_title"은 **사용하지 않는다**.
+            - **features** 필드만 배열로 사용 가능.
+            - **features** 안에 들어가는 각 항목은 `{{}}` 객체 형태를 사용.
+            - 여기서도 필요한 키만 사용하고, 필요한 키들은 같은 키들로 features 안의 키들이 동일하게 쓰이게 사용. 안 쓰면 생략.
+            - 만약 features 자체가 필요 없다면, **features** 키를 생성하지 말 것.
+            - **features** 안의 모든 객체는 동일한 키 구조를 가져야 하며, 동일한 키를 반복해서 사용하지 말 것.
+            - 예: 첫 번째 객체에 "sub_title"과 "description" 키가 있다면, 나머지 객체들도 반드시 "sub_title"과 "description"을 사용해야 하며, 추가/생략 불가.
+        3) **"section_type"**은 반드시 포함해야 하고, 그 외 태그들은 해당 섹션의 목적과 흐름에 맞춰 **필요한 것만** 사용해도 된다.
+        4) **출력은 오직 JSON 형태**로만 해야 하며, 그 외 어떤 설명(문장, 코드, 해설)도 삽입하지 말 것.
+        5) 모든 텍스트 내용은 입력 데이터에 맞춰 작성하고, 섹션 '{section_name}'의 목적/흐름을 고려해 자연스럽게 작성한다.
+        6) 아래 예시 구조를 준수하되, 필드(태그)들은 섹션에 **필요한 것만** 사용하라.  
+            (예: h1이 굳이 필요 없으면 `main_title` 생략 가능)
+        7) **출력 형식 예시** (JSON 구조 예시):
 
+        {{
+            "section_type": "{section_name}",
+            "main_title": "필요하면 작성",
+            "description": "필요하면 작성",
+            "features": [
+                {{
+                    "sub_title": "필요하면 작성",
+                    "description": "필요하면 작성"
+                }},
+                {{
+                    "sub_title": "필요하면 작성",
+                    "description": "필요하면 작성"
+                }}
+            ]
+        }}
 
-            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-            - <div class = {section_name}>으로 시작해야하며, 이 안의 내용을 채워야한다. </div>
-            - 너는 출력 예시와 같은 코드 구조 응답만을 반환해야 한다.
-            - 출력 예시 :
-            <div class="{section_name}_SECTION">                                                                                                                                     
-                <h1>회사 이름 혹은 제품 이름</h1>
-                <p>회사 소개 혹은 제품 소개</p>
-            </div>
-            - 출력 예시 :                                    
-            <div class="{section_name}_SECTION">
-                <h3>서비스 강점</h3>
-                <h1>서비스 주요 특징</h1>
-                <p>서비스 주요 특징 설명</p>
-                <ul>                                                                                                                                 
-                    <li>
-                        <h2>특징 1</h2>
-                        <p>특징 1에 대한 설명</p>
-                    </li>
-                    <li>
-                        <h2>특징 2</h2>
-                        <p>특징 2에 대한 설명</p>
-                    </li>
-                    <li>
-                        <h2>특징 3</h2>
-                        <p>특징 3에 대한 설명</p>
-                    </li>
-                </ul>
-            </div>                            
+        - 위 예시처럼 **features 배열**에 들어가는 모든 객체를 섹션 {section_name}의 목적에 맞게 생성하되 **동일한 필드**("sub_title", "strength_title", "description" 중 자유롭게.)를 가질 것을 유의.
+        - **features** 배열 내 모든 객체는 동일한 키 세트를 사용해야 하며, 첫 번째 객체에 사용된 키와 동일해야 한다.
+        - **features** 배열 내 객체들은 동일한 순서로 키를 배치해 일관성을 유지할 것.
+        - **오직 하나의 JSON 객체**만 출력할 것.
+        <|eot_id|><|start_header_id|>user<|end_header_id|>
+        입력 데이터:
+        {summary}
+        섹션:
+        {section_name}
+
+        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+        - 위 **출력 형식**을 정확히 지키고, 오직 JSON만 반환하세요.
         """
-        return await self.send_request(prompt=prompt)  
+        repeat_count = 0
+        while repeat_count < 3:
+            try:
+                # 1) LLM에 요청
+                raw_json = await self.send_request(prompt=prompt)
+                print(f"raw_json : {type(raw_json)} / {raw_json}")
+
+                # 2) JSON 추출 + dict 변환
+                p_json = await self.process_data(raw_json)
+                print(f"Extracted JSON object: {type(p_json)} / {p_json} ")
+
+                # 3) Pydantic 모델 변환
+                parsed_result = Section(**p_json)
+
+
+                # 4) 성공하면 반환
+                return parsed_result
+
+            except RuntimeError as re:
+                print(f"Runtime error: {re}")
+                repeat_count += 1
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+                repeat_count += 1
+        raise RuntimeError("Failed to parse JSON after 3 attempts")
