@@ -1,29 +1,36 @@
 from config.config import OLLAMA_API_URL
 import requests, json, re
 from typing import List, Dict, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 
 class BaseSection(BaseModel):
     section_type: str
 
 class FeatureItem(BaseModel):
-    sub_title: Optional[str] = None
-    strength_title: Optional[str] = None
-    description: Optional[str] = None
+    sub_title: Optional[str] = Field(None, alias="sub_title")
+    strength_title: Optional[str] = Field(None, alias="strength_title")
+    description: Optional[str] = Field(None, alias="description")
     
 class Section(BaseSection):
-    main_title: Optional[str] = None
-    sub_title: Optional[str] = None
-    strength_title: Optional[str] = None
-    description: Optional[str] = None
-    features: Optional[List[FeatureItem]] = None
+    main_title: Optional[str] = Field(None, alias="main_title")
+    sub_title: Optional[str] = Field(None, alias="sub_title")
+    strength_title: Optional[str] = Field(None, alias="strength_title")
+    description: Optional[str] = Field(None, alias="description")
+    features: Optional[List[FeatureItem]] = Field(None, alias="features")
 
+    class Config:
+        allow_population_by_field_name = True
+        orm_mode = True
+        json_encoders = {
+            type(None): lambda v: v  # 기본적으로 None은 제외됨
+        }
+        
 parser = PydanticOutputParser(pydantic_object=Section)
 
 class OllamaLandingClient:
     
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model:str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.8, model:str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
@@ -67,52 +74,71 @@ class OllamaLandingClient:
         LLM의 응답에서 JSON 형식만 추출 및 정리
         """
         try:
-            # JSON 부분만 추출 (정규표현식 사용)
-            json_match = re.search(r"\{.*\}", data, re.DOTALL)
+            # JSON 부분만 추출
+            # json_match = re.search(r"\{(?:[^{}]|(?R))*\}", data, re.DOTALL | re.VERBOSE)
+            json_match = re.search(r"\{.*?\}", data, re.DOTALL)  # 중첩이 아닌 최상위 JSON만 추출
             if not json_match:
                 raise ValueError("JSON 형식을 찾을 수 없습니다.")
             
-            # JSON 텍스트 추출
             json_text = json_match.group()
-
-            # 이중 따옴표 문제 수정 (선택적)
-            json_text = json_text.replace("'", '"').replace("\n", "").strip()
             
-            # JSON 파싱
-            json_data = json.loads(json_text)
+            # 문자열 정리 및 이스케이프 처리
+            json_text = re.sub(r'[\u2018\u2019]', "'", json_text)  # 스마트 쿼트
+            json_text = re.sub(r'[\u201C\u201D]', '"', json_text)  # 스마트 더블 쿼트
+            json_text = json_text.replace("'", '"')  # 단일 따옴표를 이중 따옴표로 변환
+            
+            # 줄바꿈과 공백 정리
+            json_text = re.sub(r'\s+', ' ', json_text)
+            json_text = json_text.strip()
+            
+            # 누락된 쉼표 처리
+            # **쉼표 누락 처리 강화**
+            # 1. "}" 뒤에 쉼표 추가, 다음 키가 올 경우
+            json_text = re.sub(r'(\})\s*(?=")', r'\1,', json_text)
+            # 2. 마지막 쉼표 제거
+            json_text = re.sub(r',\s*([\}\]])', r'\1', json_text)
+            
+            # JSON 문자열 검증 및 포맷팅
+            try:
+                parsed = json.loads(json_text)
+                formatted_json = json.dumps(parsed, ensure_ascii=False)
+                json_data = json.loads(formatted_json)
+            except json.JSONDecodeError as e:
+                print(f"JSON 파싱 중간 실패: {e}")
+                print(f"Problematic JSON text: {json_text}")
+                raise
 
-            # 키 오타 수정: 'desc' 또는 'descritption' -> 'description'
+            # 키 오타 수정
             def fix_keys(d):
                 if isinstance(d, dict):
-                    new_d = {}
-                    for k, v in d.items():
-                        if k in ['desc', 'descritption', 'descryption', 'descirtion']:
-                            fixed_key = 'description'
-                        else:
-                            fixed_key = k
-                        new_d[fixed_key] = fix_keys(v)
-                    return new_d
+                    return {
+                        'description' if k in ['desc', 'descritption', 'descryption', 'descirtion'] else k: 
+                        fix_keys(v) for k, v in d.items()
+                    }
                 elif isinstance(d, list):
                     return [fix_keys(item) for item in d]
-                else:
-                    return d
+                return d
 
             fixed_json = fix_keys(json_data)
-            print(f"Fixed JSON data: {fixed_json}")  # 디버깅을 위한 출력
+            print(f"Fixed JSON data: {fixed_json}")
             return fixed_json
 
         except json.JSONDecodeError as e:
-            print(f"JSON 파싱 실패: {e}")
-            raise RuntimeError("data 형식이 올바르지 않습니다.")
+            print(f"JSON 파싱 최종 실패: {e}")
+            print(f"Problematic JSON: {json_text}")
+            raise RuntimeError(f"JSON 파싱 실패: {e}")
         except ValueError as ve:
             print(f"Value error: {ve}")
-            raise RuntimeError("data 형식이 올바르지 않습니다.")
+            raise RuntimeError(f"데이터 형식 오류: {ve}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            raise RuntimeError(f"예상치 못한 오류: {e}")
+
 
     async def generate_section(self, model: str,summary:str, section_name: str):
         """
         랜딩 페이지 섹션을 생성하는 함수
         """
-        
         # 프롬프트 수정 진행중 뒤에 칠판 처럼
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
@@ -121,11 +147,11 @@ class OllamaLandingClient:
 
         1) "assistant"처럼 **생성**해야 하고, 규정된 형식을 **절대** 벗어나면 안 된다.
         2) HTML 태그를 다음과 같이 **치환**해서 사용해라:
-        - h1  ->  "main_title"
-        - h2  ->  "sub_title"
-        - h3  ->  "strength_title"
-        - p   ->  "description"
-        - ul  ->  "features" = "[{{ ... }}]" 형태 (예: "[{{ ... }}, {{ ... }}]")
+        - h1  ->  "main_title" (선택)
+        - h2  ->  "sub_title"  (선택)
+        - h3  ->  "strength_title" (선택)
+        - p   ->  "description" (선택)
+        - ul  ->  "features" = "[{{ ... }}]" 형태 (예: "[{{ ... }}, {{ ... }}]") (선택)
             - **main_title, sub_title, strength_title, description** 같은 키들은 **필요할 때만** 사용하고, 그 외에는 키를 아예 생성하지 말 것. 
             - 즉, 쓰지 않는 태그(필드)는 **JSON에서 제외**하라.
             - 모든 태그(필드)는 **반드시 문자열**이어야 하며, null이나 배열 형태로 쓰면 안 된다.
@@ -137,42 +163,80 @@ class OllamaLandingClient:
             - 만약 features 자체가 필요 없다면, **features** 키를 생성하지 말 것.
             - **features** 안의 모든 객체는 동일한 키 구조를 가져야 하며, 동일한 키를 반복해서 사용하지 말 것.
             - 예: 첫 번째 객체에 "sub_title"과 "description" 키가 있다면, 나머지 객체들도 반드시 "sub_title"과 "description"을 사용해야 하며, 추가/생략 불가.
+            - features안의 {{}}객체가 4개를 넘을 수 없다.
+            - **features 배열**에 들어가는 모든 객체를 섹션 {section_name}의 목적에 맞게 생성하되 **동일한 필드**("sub_title", "strength_title", "description" 중 자유롭게.)를 가질 것을 유의.
+            - **features** 배열 내 모든 객체는 동일한 키 세트를 사용해야 하며, 첫 번째 객체에 사용된 키와 동일해야 한다.
+            - **features** 배열 내 객체들은 동일한 순서로 키를 배치해 일관성을 유지할 것.
         3) **"section_type"**은 반드시 포함해야 하고, 그 외 태그들은 해당 섹션의 목적과 흐름에 맞춰 **필요한 것만** 사용해도 된다.
         4) **출력은 오직 JSON 형태**로만 해야 하며, 그 외 어떤 설명(문장, 코드, 해설)도 삽입하지 말 것.
         5) 모든 텍스트 내용은 입력 데이터에 맞춰 작성하고, 섹션 '{section_name}'의 목적/흐름을 고려해 자연스럽게 작성한다.
         6) 아래 예시 구조를 준수하되, 필드(태그)들은 섹션에 **필요한 것만** 사용하라.  
             (예: h1이 굳이 필요 없으면 `main_title` 생략 가능)
         7) **출력 형식 예시** (JSON 구조 예시):
+        올바른 예시:
+            {{
+                "section_type": "example",
+                "main_title": "메인 제목",
+                "description": "설명",
+                "features": [
+                    {{
+                        "sub_title": "부제목1",
+                        "description": "설명1"
+                    }},
+                    {{
+                        "sub_title": "부제목2",
+                        "description": "설명2"
+                    }}
+                ]
+            }}
 
-        {{
-            "section_type": "{section_name}",
-            "main_title": "필요하면 작성",
-            "description": "필요하면 작성",
-            "features": [
-                {{
-                    "sub_title": "필요하면 작성",
-                    "description": "필요하면 작성"
-                }},
-                {{
-                    "sub_title": "필요하면 작성",
-                    "description": "필요하면 작성"
-                }}
-            ]
-        }}
+            잘못된 예시:
+            {{
+                "section_type": "example",
+                "main_title": "제목",
+                "strength_titles": [{{"title": "제목"}}], // 배열 사용 금지
+                "descriptions": [{{"desc": "설명"}}], // 배열 사용 금지
+                "features": [
+                    {{
+                        "sub_title": "제목1",
+                        "description": "설명1"
+                    }},
+                    {{
+                        "sub_title": "제목2"  // 불일치하는 키 구조 금지
+                    }}
+                ]
+            }}
+        
+            - **오직 하나의 JSON 객체**만 출력할 것.
+            <|eot_id|><|start_header_id|>user<|end_header_id|>
+            입력 데이터:
+            {summary}
+            섹션:
+            {section_name}
 
-        - 위 예시처럼 **features 배열**에 들어가는 모든 객체를 섹션 {section_name}의 목적에 맞게 생성하되 **동일한 필드**("sub_title", "strength_title", "description" 중 자유롭게.)를 가질 것을 유의.
-        - **features** 배열 내 모든 객체는 동일한 키 세트를 사용해야 하며, 첫 번째 객체에 사용된 키와 동일해야 한다.
-        - **features** 배열 내 객체들은 동일한 순서로 키를 배치해 일관성을 유지할 것.
-        - **오직 하나의 JSON 객체**만 출력할 것.
-        <|eot_id|><|start_header_id|>user<|end_header_id|>
-        입력 데이터:
-        {summary}
-        섹션:
-        {section_name}
+            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+            - 입력데이터를 토대로 키에 해당하는 내용들 채워 JSON만 반환하세요.
+            """
+        #        7) **출력 형식 예시** (JSON 구조 예시):
 
-        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-        - 위 **출력 형식**을 정확히 지키고, 오직 JSON만 반환하세요.
-        """
+        # {{
+        #     "section_type": "{section_name}",
+        #     "main_title": "string", 
+        #     "sub_title": "string",
+        #     "description": "string", 
+        #     "features": [
+        #         {{
+        #             "sub_title": "string", 
+        #             "strength_title" : "string", 
+        #             "description": "string" 
+        #         }},
+        #         {{
+        #             "sub_title": "string", ,
+        #             "strength_title" : "string", 
+        #             "description": "string" 
+        #         }}
+        #     ]
+        # }}
         repeat_count = 0
         while repeat_count < 3:
             try:
