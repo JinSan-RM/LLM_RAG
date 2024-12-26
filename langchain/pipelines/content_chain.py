@@ -1,13 +1,13 @@
 from langchain.prompts import PromptTemplate
-from modules.translators import KoEnTranslator, EnKoTranslator
+# from modules.translators import KoEnTranslator, EnKoTranslator
 from utils.ollama.ollama_client import OllamaClient
 import re, json
 
 
 class ContentChain:
     def __init__(self):
-        self.ko_en_translator = KoEnTranslator()
-        self.en_ko_translator = EnKoTranslator()
+        # self.ko_en_translator = KoEnTranslator()
+        # self.en_ko_translator = EnKoTranslator()
         self.ollama_client = OllamaClient()
 
         # self.text_generator = TextGenerator()
@@ -29,23 +29,23 @@ class ContentChain:
         print(f"run operation success \n value_type : {value_type}\n model : {model}" )
         final_output = None
         
-        if value_type == "general":
-            if discriminant:
-                # 한->영 번역
-                translated_text = self.ko_en_translator.translate(input_text)
-                # Ollama API 호출
-                generated_text = self.ollama_client.generate(model, input_text)
-                print("Generated Text:", generated_text)
-                # 영->한 번역
-                final_output = self.en_ko_translator.translate(generated_text)
-                return final_output
-            else:
-                # Ollama API 호출
-                generated_text = self.ollama_client.generate(model, input_text)
-                print("Generated Text:", generated_text)
-                # 영->한 번역
-                final_output = self.en_ko_translator.translate(generated_text)
-                return final_output
+        # if value_type == "general":
+        #     if discriminant:
+        #         # 한->영 번역
+        #         translated_text = self.ko_en_translator.translate(input_text)
+        #         # Ollama API 호출
+        #         generated_text = self.ollama_client.generate(model, input_text)
+        #         print("Generated Text:", generated_text)
+        #         # 영->한 번역
+        #         final_output = self.en_ko_translator.translate(generated_text)
+        #         return final_output
+        #     else:
+        #         # Ollama API 호출
+        #         generated_text = self.ollama_client.generate(model, input_text)
+        #         print("Generated Text:", generated_text)
+        #         # 영->한 번역
+        #         final_output = self.en_ko_translator.translate(generated_text)
+        #         return final_output
         if value_type == 'normal':
             
             prompt = f"""
@@ -319,4 +319,3 @@ class ContentChain:
     #         generated_text = self.text_generator.generate(self.prompt_template.format(text=input_text))
     #         final_output = self.en_ko_translator.translate(generated_text)
     #     return final_output
-
