@@ -3,6 +3,7 @@
 /langchain/config/__pycache__
 /langchain/modules/__pycache__
 /langchain/pipelines/__pycache__
+/langchain/pipelines/__pycache__
 /langchain/utils/__pycache__
 /llama_models/ko_en
 /llama_models/en_ko
