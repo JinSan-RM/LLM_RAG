@@ -111,6 +111,48 @@ class OllamaSummaryClient:
         
         return combined_summary
     
+    async def summary_proposal(self, final_summary: str):
+        
+        prompt = f"""
+            <|start_header_id|>system<|end_header_id|>
+            당신은 내용 요약을 도와주는 AI입니다.
+            다음 **규칙**을 반드시 지켜서 내가 원하는 proposal 생성해줘
+            
+            1) "assistant"처럼 **생성**해야 하고, 규정된 형식을 **절대** 벗어나면 안 된다.
+            2) **웹사이트명, 키워드, 제작목적, 주요타겟층, 핵심가치, 주요서비스, 부가기능**을 **필수**키로 사용해라.
+                
+                - **키워드, 주요타겟층, 핵심가치, 주요성과**는 []형식을 사용해서 입력해라.
+                - 입력데이터를 토대로 사이트명을 지정해라.
+                - 입력데이터를 토대로 핵심 키워드 **7개**를 [] 형태로 생성해주세요. 
+                - 입력데이터를 토대로 제작목적을 **200자**로 생성해주세요.
+                - 입력데이터를 토대로 사이트 제작자의 **주요타겟층 3개**를 설정해서 [] 형태로 생성해주세요.
+                - 입력데이터를 토대로 기업의 **핵심가치를 생성**해주세요.
+                - 입력데이터를 토대로 기업의 서비스 명 및 설명 추출 **string**으로 생성해주세요.
+                - 입력데이터를 토대로 기업의 주요성과에 알맞은 수상내역 또는 성과 **5개 내외**로 생성해주세요.
+            3) 모든 값들은 반드시 문자열이야한다.
+            4) **출력은 오직 JSON 형태**로만 해야 하며, 그 외 어떤 설명(문장, 코드, 해설)도 삽입하지 말 것.
+            5) 모든 텍스트 내용은 입력 데이터에 맞춰 작성하고 목적/흐름을 고려해 자연스럽게 작성한다.
+            6) 아래 예시 구조를 준수해라.
+            7) **출력 형식 예시** (JSON 구조 예시):
+            
+                {{
+                    "웹사이트명": "example 랜딩페이지",
+                    "키워드": ["","","","","","",""],
+                    "제작목적": "100자 이내",
+                    "주요타겟층": ["","",""],
+                    "핵심가치": ["", "", ""],
+                    "주요서비스": "",
+                    "주요성과":["","","","",""]
+                }}
+            
+            <|eot_id|><|start_header_id|>user<|end_header_id|>
+            입력 데이터:
+            {final_summary}
+            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+            -입력데이터를 기준으로 출력을 **Json** 형태로만 반환하세요.
+        """
+        return await self.send_request(prompt=prompt)
+    
     async def store_chunks(self, data: str, model_max_token: int, final_summary_length: int, max_tokens_per_chunk: int) -> str:
         """
         대용량 데이터를 청크로 분할하고, 각 청크를 모델에 전달하여 요약한 후, 모든 요약을 합쳐 최종 요약을 생성하는 함수
@@ -187,6 +229,9 @@ class OllamaSummaryClient:
         print("[store_chunks] Combining all summarized chunks into final summary.")
         final_summary = ' '.join(summarized_chunks)  # 이미 초과 방지됨
         print(f"[store_chunks] Final summary length: {len(final_summary)} characters")
+        proposal = await self.summary_proposal(final_summary)
+        print(f"\n proposal : {proposal}\n ")
+        
         return final_summary
     # 1. 데이터 청크로 분할
         chunks = self.split_into_chunks(data, max_tokens_per_chunk)
