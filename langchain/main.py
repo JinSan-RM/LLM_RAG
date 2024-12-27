@@ -714,6 +714,19 @@ async def LLM_land_page_generate(request: LandPageRequest):
             if isinstance(content, str):
                 content = clean_data(content)
             
+            print(f"content : {type(content)} / {content}")
+            def remove_null_values(data):
+                """
+                재귀적으로 JSON 데이터에서 null 값을 제거하는 함수.
+                """
+                if isinstance(data, dict):
+                    return {k: remove_null_values(v) for k, v in data.items() if v is not None}
+                elif isinstance(data, list):
+                    return [remove_null_values(item) for item in data if item is not None]
+                else:
+                    return data
+            content = remove_null_values(content)
+            
             result_dict[f'{section_name}'] = content
             print(f"content : {content}")
         
