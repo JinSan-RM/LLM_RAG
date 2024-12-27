@@ -739,8 +739,110 @@ async def LLM_land_page_generate(request: LandPageRequest):
         print(f"Error processing landing structure: {e}")
         raise HTTPException(status_code=500, detail="Error processing landing structure.")
 
+#===================================================================================================
+#===================================================================================================
+#===================================================================================================
+# API summary, menu, section 분리 작업. 
+# localhost:8001/land_summary_generate
+# localhost:8001/land_menu_generate
+# localhost:8001/land_section_generate
 
+@app.post("/land_summary_generate")
+async def land_summary(request: LandPageRequest):
+    if request.model == 'bllossom':
+        model_max_token = 8192
+        final_summary_length = 6000
+        max_tokens_per_chunk = 6000
+    elif request.model == 'solar':
+        model_max_token = 2048
+        final_summary_length = 1000
+        max_tokens_per_chunk = 1000
+    elif request.model == 'llama3.2':
+        model_max_token = 8192
+        final_summary_length = 6000
+        max_tokens_per_chunk = 6000
+        
+    start = time.time()
+    summary_client = OllamaSummaryClient(model=request.model)
+    summary = await summary_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+    end = time.time()
+    t = (end-start)
+    print("land summary process time : ", t)
+    return summary
+class landGen(BaseModel):
+    summary: str
+    model: str
+    menu: dict
+@app.post("/land_menu_generate")
+async def land_menu_generate(request: landGen):
 
+    menu_client = OllamaMenuClient(model=request.model)
+    
+    print(f"summary process time : {end - start}")
+    print("menu logic")
+    start = time.time()
+    menu_structure = await menu_client.menu_create_logic(request.summary)
+    end = time.time()
+    return menu_structure
+
+@app.post("/land_section_generate")
+async def  land_section_generate(request:landGen):
+    start_main = time.time()
+    def clean_data(text):
+        # 고정된 헤더 문자열들
+        headers_to_remove = [
+            "<|start_header_id|>system<|end_header_id|>",
+            "<|start_header_id|>", "<|end_header_id|>",
+            "<|start_header_id|>user<|end_header_id|>",
+            "<|start_header_id|>assistant<|end_header_id|>",
+            "<|eot_id|>"
+        ]
+        
+        
+        # 각 헤더 문자열 제거
+        cleaned_text = text
+        for header in headers_to_remove:
+            cleaned_text = cleaned_text.replace(header, '')
+        
+        pattern = r'<\|.*?\|>'
+        cleaned_text = re.sub(pattern, '', cleaned_text)
+    
+        return cleaned_text
+    content_client = OllamaLandingClient(model=request.model)
+    result_dict = {}
+    for section_num, section_name in request.menu.items():
+        print(f"Processing section {section_num}: {section_name}")
+
+        time.sleep(0.5)
+        # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
+        content = await content_client.generate_section(model=request.model,summary=request.summary, section_name=section_name)
+        if isinstance(content, str):
+            content = clean_data(content)
+        
+        print(f"content : {type(content)} / {content}")
+        def remove_null_values(data):
+            """
+            재귀적으로 JSON 데이터에서 null 값을 제거하는 함수.
+            """
+            if isinstance(data, dict):
+                return {k: remove_null_values(v) for k, v in data.items() if v is not None}
+            elif isinstance(data, list):
+                return [remove_null_values(item) for item in data if item is not None]
+            else:
+                return data
+        content = remove_null_values(content)
+        
+        result_dict[f'{section_name}'] = content
+        print(f"content : {content}")
+    
+
+    end_main = time.time()
+    t = end_main - start_main
+    print("section generate process time : ",t)
+    return result_dict
+#===================================================================================================
+#===================================================================================================
+#===================================================================================================
 
 @app.post("/chat_landpage_generate")
 async def chat_landpage_generate(request: LandPageRequest):
