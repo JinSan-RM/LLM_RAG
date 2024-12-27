@@ -142,9 +142,152 @@ class OllamaLandingClient:
         랜딩 페이지 섹션을 생성하는 함수
         """
         # 프롬프트 수정 진행중 뒤에 칠판 처럼
+        
+        # ======================================================
+        # 태그를 먼저 생성을 요청하고 치환하는 느낌으로 만든 프롬프트
+        # ======================================================
+        # prompt = f"""
+        # <|start_header_id|>system<|end_header_id|>
+        # 너는 웹사이트 섹션 구조를 설계하는 전문가야. 주어진 섹션의 특성과 내용을 분석하여 가장 적합한 HTML 구조를 설계한 후, 이를 JSON으로 변환하는 작업을 수행해.
+
+        # 다음 과정을 따라 '{section_name}' 섹션을 설계해줘:
+
+        # 1) 먼저 섹션의 목적과 내용을 파악하여 필요한 HTML 구조를 설계:
+        # 예시) Hero 섹션이라면:
+        # <h1>메인 타이틀</h1>
+        # <p>핵심 설명</p>
+
+        # 또는 Features 섹션이라면:
+        # <h2>섹션 타이틀</h2>
+        # <ul>
+        #     <li>
+        #     <h3>기능 제목</h3>
+        #     <p>기능 설명</p>
+        #     </li>
+        # </ul>
+
+        # 2) 설계한 HTML 구조에서 사용된 태그들만 JSON으로 변환:
+        # - h1 태그 발견 시:
+        #     단일: "main_title": "내용"
+        #     복수: "main_titles": ["내용1", "내용2"]
+        # - h2 태그 발견 시:
+        #     단일: "sub_title": "내용"
+        #     복수: "sub_titles": ["내용1", "내용2"]
+        # - h3 태그 발견 시:
+        #     단일: "strength_title": "내용"
+        #     복수: "strength_titles": ["내용1", "내용2"]
+        # - p 태그 발견 시:
+        #     단일: "description": "내용"
+        #     복수: "descriptions": ["내용1", "내용2"]
+        # - ul/li 구조 발견 시:
+        #     "features": [
+        #         {{
+        #             "sub_title": "기능 제목",
+        #             "strength_title": "부제목",
+        #             "description": "기능 설명"
+        #         }}
+        #     ]
+
+        # 3) 변환 규칙:
+        # - section_type은 필수
+        # - 실제 사용된 HTML 태그만 JSON 필드로 변환
+        # - 사용하지 않은 태그는 JSON에 포함하지 않음
+        # - features 배열 내 객체의 키는 동일해야 하며, HTML 구조에서 발견된 태그에 기반해 생성.
+        # - features 배열은 **최대 4개**까지만 포함.
+        # - features 배열 내 객체는 키와 단일 값들로만 가지고 **[]나 {{}}형은 사용할 수 없어.**
+
+        # 4) 잘못된 예시 방지:
+        #     - features 배열 내 객체의 키가 서로 다르면 안 됨:
+        #     잘못된 예시:
+        #     {{
+        #         "features": [
+        #             {{
+        #                 "sub_title": "기능 제목",
+        #                 "description": "기능 설명"
+        #             }},
+        #             {{
+        #                 "sub_title": "다른 기능 제목",
+        #                 "strength_title": "다른 부제목"
+        #             }}
+        #         ]
+        #     }}
+        #     - 올바른 예시:
+        #     {{
+        #         "features": [
+        #             {{
+        #                 "sub_title": "기능 제목",
+        #                 "strength_title": "부제목",
+        #                 "description": "기능 설명"
+        #             }},
+        #             {{
+        #                 "sub_title": "다른 기능 제목",
+        #                 "strength_title": "다른 부제목",
+        #                 "description": "다른 기능 설명"
+        #             }}
+        #         ]
+        #     }}
+
+        # 5) 출력 예시:
+        # Hero 섹션 분석:
+        # HTML:
+        # <h1>서비스 소개</h1>
+        # <p>최고의 경험을 제공합니다.</p>
+
+        # JSON 변환 결과:
+        # {{
+        #     "section_type": "hero",
+        #     "main_title": "서비스 소개",
+        #     "description": "최고의 경험을 제공합니다."
+        # }}
+
+        # Features 섹션 분석:
+        # HTML:
+        # <h2>주요 기능</h2>
+        # <ul>
+        #     <li>
+        #         <h2>빠른 속도</h2>
+        #         <h3>효율적인 처리</h3>
+        #         <p>최적화된 성능 제공</p>
+        #     </li>
+        #     <li>
+        #         <h2>안전한 보안</h2>
+        #         <h3>데이터 보호</h3>
+        #         <p>안정적인 환경</p>
+        #     </li>
+        # </ul>
+
+        # JSON 변환 결과:
+        # {{
+        #     "section_type": "features",
+        #     "sub_title": "주요 기능",
+        #     "features": [
+        #         {{
+        #             "sub_title": "빠른 속도",
+        #             "strength_title": "효율적인 처리",
+        #             "description": "최적화된 성능 제공"
+        #         }},
+        #         {{
+        #             "sub_title": "안전한 보안",
+        #             "strength_title": "데이터 보호",
+        #             "description": "안정적인 환경"
+        #         }}
+        #     ]
+        # }}
+
+        # <|eot_id|><|start_header_id|>user<|end_header_id|>
+        # 입력 데이터:
+        # {summary}
+        # 섹션:
+        # {section_name}
+        # <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+        # 반드시 단 하나의의**JSON** 형태로 결과를 반환하세요.
+        # """
+        # =================================
+        # 입력 예시만 주고 LLM에게 맞기는 방식
+        # =================================
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
-        너는 사이트의 섹션 구조를 정해주고, 그 안에 들어갈 내용을 작성해주는 AI 도우미야.
+        너는 사이트의 섹션 구조를 정해주고, 섹션에 필요한 구조를를 작성해주는 AI 도우미야.
         다음 **규칙**을 반드시 지켜서, '{section_name}' 섹션에 어울리는 콘텐츠를 생성해줘:
 
         1) "assistant"처럼 **생성**해야 하고, 규정된 형식을 **절대** 벗어나면 안 된다.
