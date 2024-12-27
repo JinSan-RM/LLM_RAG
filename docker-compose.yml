@@ -67,16 +67,6 @@ services:
       service_network:
         ipv4_address: 172.19.0.6
 
-  # ollama-deployer:
-  #   build:
-  #     context: ./kubernetes/ollama
-  #   environment:
-  #     - KUBECONFIG=/root/.kube/config
-  #   volumes:
-  #     - ~/.kube/config:/root/.kube/config:ro # 호스트의 kubeconfig를 컨테이너에 읽기 전용으로 마운트
-  #   network_mode: "host" # 호스트 네트워크를 사용하여 Kubernetes 클러스터에 접근
-  #   restart: "no"
-
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -101,6 +91,7 @@ services:
           - driver: nvidia
             count: 1
             capabilities: [gpu]
+      
   langchain:
     build:
       context: ./langchain  # 현재 디렉토리를 컨텍스트로 사용
