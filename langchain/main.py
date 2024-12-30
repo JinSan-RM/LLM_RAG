@@ -13,9 +13,9 @@ from utils.PDF2TXT import PDF2TEXT
 from script.prompt import RAG_TEMPLATE, WEB_MENU_TEMPLATE
 from utils.ollama.ollama_chat import OllamaChatClient
 from pipelines.content_summary import SummaryContentChain
-from utils.ollama.ollama_landingpage import OllamaLandingClient
-from utils.ollama.ollama_menu import OllamaMenuClient
-from utils.ollama.ollama_summary import OllamaSummaryClient
+from utils.ollama.land.ollama_landingpage import OllamaLandingClient
+from utils.ollama.land.ollama_menu import OllamaMenuClient
+from utils.ollama.land.ollama_summary import OllamaSummaryClient
 
 # local lib
 # ------------------------------------------------------------------------ #
@@ -711,25 +711,9 @@ async def LLM_land_page_generate(request: LandPageRequest):
             time.sleep(0.5)
             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
             content = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name)
-            if isinstance(content, str):
-                content = clean_data(content)
-            
-            print(f"content : {type(content)} / {content}")
-            def remove_null_values(data):
-                """
-                재귀적으로 JSON 데이터에서 null 값을 제거하는 함수.
-                """
-                if isinstance(data, dict):
-                    return {k: remove_null_values(v) for k, v in data.items() if v is not None}
-                elif isinstance(data, list):
-                    return [remove_null_values(item) for item in data if item is not None]
-                else:
-                    return data
-            content = remove_null_values(content)
-            
+            print(f"content {section_name} : {content} \n")
             result_dict[f'{section_name}'] = content
-            print(f"content : {content}")
-        
+        print(f"result_dict : {result_dict}")
 
         end_main = time.time()
         t = end_main - start_main
