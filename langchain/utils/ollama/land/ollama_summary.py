@@ -1,5 +1,5 @@
 from utils.ollama.ollama_content import OllamaContentClient
-from utils.ollama.ollama_landingpage_plan import WebsitePlan, WebsitePlanException
+from utils.ollama.land.ollama_landingpage_plan import WebsitePlan, WebsitePlanException
 from config.config import OLLAMA_API_URL
 import requests, json
 from typing import List, Dict

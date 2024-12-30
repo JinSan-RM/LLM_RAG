@@ -3,6 +3,7 @@ import requests, json, re
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
+from utils.ollama.land.ollama_tagmatch import parse_allowed_tags
 
 class BaseSection(BaseModel):
     section_type: str
@@ -30,7 +31,7 @@ parser = PydanticOutputParser(pydantic_object=Section)
 
 class OllamaLandingClient:
     
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.8, model:str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.4, model:str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
@@ -287,77 +288,36 @@ class OllamaLandingClient:
         # =================================
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
-        너는 사이트의 섹션 구조를 정해주고, 섹션에 필요한 구조를를 작성해주는 AI 도우미야.
-        다음 **규칙**을 반드시 지켜서, '{section_name}' 섹션에 어울리는 콘텐츠를 생성해줘:
+        너는 사이트의 섹션 구조를 정해주고, {section_name} 섹션에 필요한 콘텐츠를 작성해주는 AI 도우미야.  
+        아래 규칙들을 **절대** 지키면서 HTML을 생성해줘. (지시사항과 데이터가 충돌할 경우, **지시사항**을 최우선으로 따른다.)
 
-        1) "assistant"처럼 **생성**해야 하고, 규정된 형식을 **절대** 벗어나면 안 된다.
-        2) HTML 태그를 다음과 같이 **치환**해서 사용해라:
-        - h1  ->  "main_title" (선택)
-        - h2  ->  "sub_title"  (선택)
-        - h3  ->  "strength_title" (선택)
-        - p   ->  "description" (선택)
-        - ul  ->  "features" = "[{{ ... }}]" 형태 (예: "[{{ ... }}, {{ ... }}]") (선택)
-            - **main_title, sub_title, strength_title, description, features** 키들만 사용하고, 그 외에는 키를 아예 생성하지 말 것. 
-            - 모든 태그(필드)는 **반드시 문자열**이어야 하며, null이나 배열 형태로 쓰면 안 된다.
-            - ul 안에 들어갈 항목(li)도 sub_title, strength_title, description의 키만을 사용할 수 있음.
-            - **features** 필드만 배열로 사용.
-                예: 첫 번째 객체에 "sub_title"과 "description" 키가 있다면, 나머지 객체들도 반드시 "sub_title"과 "description"을 사용해야 하며, 추가/생략 불가.
-            - **features**안의 {{}}객체가 4개를 넘을 수 없다.
-            - **features 배열**에 들어가는 모든 객체를 섹션 {section_name}의 목적에 맞게 생성하되 **동일한 필드**("sub_title", "strength_title", "description" 중 자유롭게.)를 가질 것을 유의.
-            - **features** 배열 내 모든 객체는 동일한 키 세트를 사용해야 하며, 첫 번째 객체에 사용된 키와 동일해야 한다.
-        3) **"section_type"**은 반드시 포함해야 하고, 그 외 태그들은 해당 섹션의 목적과 흐름에 맞춰 **필요한 것만** 사용해도 된다.
-        4) **출력은 오직 JSON 형태**로만 해야 하며, 그 외 어떤 설명(문장, 코드, 해설, "\")도 삽입하지 말 것.
-        5) 아래 예시 구조를 준수하되, 필드(태그)들은 섹션에 **필요한 것만** 사용하라.  
-            (예: h1이 굳이 필요 없으면 `main_title` 생략 가능)
-        6) **출력 형식 예시** (JSON 구조 예시):
-        올바른 예시:
-            {{
-                "section_type": "{section_name}",
-                "main_title": "메인 제목",
-                "sub_title": "부 제목",
-                "strength_title": "보충 제목",
-                "description": "설명",
-                "features": [
-                    {{
-                        "sub_title": "부제목1",
-                        "strength_title": "보충 제목1",
-                        "description": "설명1"
-                    }},
-                    {{
-                        "sub_title": "부제목2",
-                        "strength_title": "보충 제목2",
-                        "description": "설명2"
-                    }}
-                ]
-            }}
+        1) **출력 형식**  
+        - 출력은 오직 **HTML 태그**만 사용해야 하며, 추가 설명이나 주석, 어떠한 부가 설명도 포함해서는 안 된다.  
+        - "h1", "h2", "h3", "p", "ul", "li" 태그만 사용 가능.  
+        - 이외의 어떤 태그도 사용하면 안 된다.
 
-            잘못된 예시:
-            {{
-                "section_type": "example",
-                "main_title": "제목",
-                "strength_titles": [{{"title": "제목"}}], // 배열 사용 금지
-                "descriptions": [{{"desc": "설명"}}], // 배열 사용 금지
-                "features": [
-                    {{
-                        "sub_title": "제목1",
-                        "description": "설명1"
-                    }},
-                    {{
-                        "sub_title": "제목2"  // 불일치하는 키 구조 금지
-                    }}
-                ]
-            }}
+        2) **태그 구조 규칙**  
+        - **절대로 "<ul>" 안에 "<ul>"을 중첩**하여 넣으면 안 된다.  
+        - 만약 입력 데이터에 "<ul>"이 중첩되어 있거나, 여러 단계의 "<ul>" 구조를 보유하고 있어도, **한 레벨**로 병합하거나 **필요 시 요약**하여 단일 "<ul>" 구조로만 표현해야 한다.  
+        - "<li>" 태그 안에서는 "<ul>"을 사용하지 않는다.
+        - "<li>" 태그 안에는 오직 "h2", "h3", "p"만 사용할 수 있다.  
+        - 첫 "<li>" 태그 안에 들어가는 태그(키)를 기준으로, 모든 "<li>" 태그는 동일한 구조를 유지한다.  
+        - 하나의 "<ul>" 태그에는 "<li>"가 **최대 4개까지만** 들어갈 수 있다. (4개를 초과할 경우, 나머지 정보를 요약·병합하거나 생략)
+        - "<ul>" 내 모든 "<li>" 객체는 동일한 **키 세트**(동일한 태그 구조)를 가져야 한다.
+
+        섹션 이름과 입력 데이터에 적합한 HTML 형태를 만들어주되, 위 규칙을 위반해서는 안 된다.
+        최종 출력은 별도의 텍스트 설명이나 JSON, 기타 형식은 넣지 않는다. 오직 HTML만 출력한다.
         
-            - **오직 하나의 JSON 객체**만 출력할 것.
-            <|eot_id|><|start_header_id|>user<|end_header_id|>
-            입력 데이터:
-            {summary}
-            섹션:
-            {section_name}
+        <|eot_id|><|start_header_id|>user<|end_header_id|> 
+        섹션: {section_name}
+        
+        입력 데이터: {summary} 
+        
 
-            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-            - 반드시 **JSON**형태를 완벽히 갖춰 결과를 반환하세요.
-            """
+        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+        반드시 **HTML**형태로만 결과를 반환하세요. 
+        """
         #        7) **출력 형식 예시** (JSON 구조 예시):
 
         # {{
@@ -385,19 +345,20 @@ class OllamaLandingClient:
                 raw_json = await self.send_request(prompt=prompt)
                 print(f"raw_json : {type(raw_json)} / {raw_json}")
 
-                # 2) JSON 추출 + dict 변환
-                p_json = await self.process_data(raw_json)
-                print(f"Extracted JSON object: {type(p_json)} / {p_json} ")
+                raw_json = parse_allowed_tags(raw_json)
+                # # 2) JSON 추출 + dict 변환
+                # p_json = await self.process_data(raw_json)
+                print(f"Extracted JSON object: {type(raw_json)} / {raw_json} ")
                 
-                if isinstance(p_json, str):
-                    p_json = json.loads(p_json) 
+                # if isinstance(p_json, str):
+                #     p_json = json.loads(p_json) 
 
-                # 3) Pydantic 모델 변환
-                parsed_result = Section(**p_json)
+                # # 3) Pydantic 모델 변환
+                # parsed_result = Section(**p_json)
 
 
                 # 4) 성공하면 반환
-                return parsed_result
+                return raw_json
 
             except RuntimeError as re:
                 print(f"Runtime error: {re}")
