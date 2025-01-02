@@ -3,7 +3,7 @@ import requests, json, re
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
-from utils.ollama.land.ollama_tagmatch import parse_html, extract_body_content_with_regex
+from utils.ollama.land.ollama_tagmatch import parse_html, extract_body_content_with_regex, fix_html_without_parser, convert_html_to_structure
 
 class BaseSection(BaseModel):
     section_type: str
@@ -285,7 +285,8 @@ class OllamaLandingClient:
                 # 1) LLM에 요청
                 raw_json = await self.send_request(prompt=prompt)
                 raw_json = extract_body_content_with_regex(raw_json)
-                tag = parse_html(raw_json)
+                tag = fix_html_without_parser(raw_json)
+                tag = convert_html_to_structure(tag)
                 raw_json = re.sub("\n", "", raw_json)
                 print(f"raw_json : {type(raw_json)} / {raw_json}")
                 # # 2) JSON 추출 + dict 변환
