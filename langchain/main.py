@@ -624,8 +624,11 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 # ======================================================================================
 # LLM기반 랜딩 페이지 제작 API
 # ======================================================================================
+# class LandPageRequest(BaseModel):
+#     input_text: str
+#     model: str = "solar"
 class LandPageRequest(BaseModel):
-    input_text: str
+    path: str
     model: str = "solar"
     
 # 엔드포인트 정의
@@ -635,26 +638,6 @@ async def LLM_land_page_generate(request: LandPageRequest):
     랜딩 페이지 섹션 생성을 처리하는 API 엔드포인트
     """
     start_main = time.time()
-    def clean_data(text):
-        # 고정된 헤더 문자열들
-        headers_to_remove = [
-            "<|start_header_id|>system<|end_header_id|>",
-            "<|start_header_id|>", "<|end_header_id|>",
-            "<|start_header_id|>user<|end_header_id|>",
-            "<|start_header_id|>assistant<|end_header_id|>",
-            "<|eot_id|>"
-        ]
-        
-        
-        # 각 헤더 문자열 제거
-        cleaned_text = text
-        for header in headers_to_remove:
-            cleaned_text = cleaned_text.replace(header, '')
-        
-        pattern = r'<\|.*?\|>'
-        cleaned_text = re.sub(pattern, '', cleaned_text)
-    
-        return cleaned_text
     try:
         print(f"Start process: {request.input_text}")
         print(f"Model: {request.model}")

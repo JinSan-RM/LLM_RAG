@@ -167,79 +167,12 @@ class OllamaLandingClient:
         #     </li>
         # </ul>
 
-        # 2) 설계한 HTML 구조에서 사용된 태그들만 JSON으로 변환:
-        # - h1 태그 발견 시:
-        #     단일: "main_title": "내용"
-        #     복수: "main_titles": ["내용1", "내용2"]
-        # - h2 태그 발견 시:
-        #     단일: "sub_title": "내용"
-        #     복수: "sub_titles": ["내용1", "내용2"]
-        # - h3 태그 발견 시:
-        #     단일: "strength_title": "내용"
-        #     복수: "strength_titles": ["내용1", "내용2"]
-        # - p 태그 발견 시:
-        #     단일: "description": "내용"
-        #     복수: "descriptions": ["내용1", "내용2"]
-        # - ul/li 구조 발견 시:
-        #     "features": [
-        #         {{
-        #             "sub_title": "기능 제목",
-        #             "strength_title": "부제목",
-        #             "description": "기능 설명"
-        #         }}
-        #     ]
-
-        # 3) 변환 규칙:
-        # - section_type은 필수
-        # - 실제 사용된 HTML 태그만 JSON 필드로 변환
-        # - 사용하지 않은 태그는 JSON에 포함하지 않음
-        # - features 배열 내 객체의 키는 동일해야 하며, HTML 구조에서 발견된 태그에 기반해 생성.
-        # - features 배열은 **최대 4개**까지만 포함.
-        # - features 배열 내 객체는 키와 단일 값들로만 가지고 **[]나 {{}}형은 사용할 수 없어.**
-
-        # 4) 잘못된 예시 방지:
-        #     - features 배열 내 객체의 키가 서로 다르면 안 됨:
-        #     잘못된 예시:
-        #     {{
-        #         "features": [
-        #             {{
-        #                 "sub_title": "기능 제목",
-        #                 "description": "기능 설명"
-        #             }},
-        #             {{
-        #                 "sub_title": "다른 기능 제목",
-        #                 "strength_title": "다른 부제목"
-        #             }}
-        #         ]
-        #     }}
-        #     - 올바른 예시:
-        #     {{
-        #         "features": [
-        #             {{
-        #                 "sub_title": "기능 제목",
-        #                 "strength_title": "부제목",
-        #                 "description": "기능 설명"
-        #             }},
-        #             {{
-        #                 "sub_title": "다른 기능 제목",
-        #                 "strength_title": "다른 부제목",
-        #                 "description": "다른 기능 설명"
-        #             }}
-        #         ]
-        #     }}
 
         # 5) 출력 예시:
         # Hero 섹션 분석:
         # HTML:
         # <h1>서비스 소개</h1>
         # <p>최고의 경험을 제공합니다.</p>
-
-        # JSON 변환 결과:
-        # {{
-        #     "section_type": "hero",
-        #     "main_title": "서비스 소개",
-        #     "description": "최고의 경험을 제공합니다."
-        # }}
 
         # Features 섹션 분석:
         # HTML:
@@ -257,35 +190,49 @@ class OllamaLandingClient:
         #     </li>
         # </ul>
 
-        # JSON 변환 결과:
-        # {{
-        #     "section_type": "features",
-        #     "sub_title": "주요 기능",
-        #     "features": [
-        #         {{
-        #             "sub_title": "빠른 속도",
-        #             "strength_title": "효율적인 처리",
-        #             "description": "최적화된 성능 제공"
-        #         }},
-        #         {{
-        #             "sub_title": "안전한 보안",
-        #             "strength_title": "데이터 보호",
-        #             "description": "안정적인 환경"
-        #         }}
-        #     ]
-        # }}
-
         # <|eot_id|><|start_header_id|>user<|end_header_id|>
         # 입력 데이터:
         # {summary}
         # 섹션:
         # {section_name}
         # <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-        # 반드시 단 하나의의**JSON** 형태로 결과를 반환하세요.
+        # 반드시 단 하나의의**HTML** 형태로 결과를 반환하세요.
         # """
         # =================================
         # 입력 예시만 주고 LLM에게 맞기는 방식
         # =================================
+        # prompt = f"""
+        # <|start_header_id|>system<|end_header_id|>
+        # 너는 사이트의 섹션 구조를 정해주고, {section_name} 섹션에 필요한 콘텐츠를 작성해주는 AI 도우미야.  
+        # 아래 규칙들을 **절대** 지키면서 HTML을 생성해줘. (지시사항과 데이터가 충돌할 경우, **지시사항**을 최우선으로 따른다.)
+
+        # 1) **출력 형식**  
+        # - 출력은 오직 **HTML 태그**만 사용해야 하며, 추가 설명이나 주석, 어떠한 부가 설명도 포함해서는 안 된다.  
+        # - "h1", "h2", "h3", "p", "ul", "li" 태그만 사용 가능.  
+        # - 이외의 어떤 태그도 사용하면 안 된다.
+
+        # 2) **태그 구조 규칙**  
+        # - **절대로 "<ul>" 자식에 "<ul>"을 중첩**하여 넣으면 안 된다.  
+        # - 만약 입력 데이터에 "<ul>"이 중첩되어 있거나, 여러 단계의 "<ul>" 구조를 보유하고 있어도, **한 레벨**로 병합하거나 **필요 시 요약**하여 단일 "<ul>" 구조로만 표현해야 한다.  
+        # - "<li>" 태그 안에서는 "<ul>"을 사용하지 않는다.
+        # - "<li>" 태그 안에는 오직 "h2", "h3", "p"만 사용할 수 있다.  
+        # - 첫 "<li>" 태그 안에 들어가는 태그(키)를 기준으로, 모든 "<li>" 태그는 동일한 구조를 유지한다.  
+        # - 하나의 "<ul>" 태그에는 "<li>"가 **최대 4개까지만** 들어갈 수 있다. (4개를 초과할 경우, 나머지 정보를 요약·병합하거나 생략)
+        # - "<ul>" 내 모든 "<li>" 객체는 동일한 **키 세트**(동일한 태그 구조)를 가져야 한다.
+
+        # 섹션 이름과 입력 데이터에 적합한 HTML 형태를 만들어주되, 위 규칙을 위반해서는 안 된다.
+        # 최종 출력은 별도의 텍스트 설명이나 JSON, 기타 형식은 넣지 않는다. 오직 HTML만 출력한다.
+        
+        # <|eot_id|><|start_header_id|>user<|end_header_id|> 
+        # 섹션: {section_name}
+        
+        # 입력 데이터: {summary} 
+        
+
+        # <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+        # 반드시 **HTML**형태로만 결과를 반환하세요. 
+        # """
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
         너는 사이트의 섹션 구조를 정해주고, {section_name} 섹션에 필요한 콘텐츠를 작성해주는 AI 도우미야.  
@@ -297,13 +244,24 @@ class OllamaLandingClient:
         - 이외의 어떤 태그도 사용하면 안 된다.
 
         2) **태그 구조 규칙**  
-        - **절대로 "<ul>" 안에 "<ul>"을 중첩**하여 넣으면 안 된다.  
-        - 만약 입력 데이터에 "<ul>"이 중첩되어 있거나, 여러 단계의 "<ul>" 구조를 보유하고 있어도, **한 레벨**로 병합하거나 **필요 시 요약**하여 단일 "<ul>" 구조로만 표현해야 한다.  
-        - "<li>" 태그 안에서는 "<ul>"을 사용하지 않는다.
-        - "<li>" 태그 안에는 오직 "h2", "h3", "p"만 사용할 수 있다.  
-        - 첫 "<li>" 태그 안에 들어가는 태그(키)를 기준으로, 모든 "<li>" 태그는 동일한 구조를 유지한다.  
-        - 하나의 "<ul>" 태그에는 "<li>"가 **최대 4개까지만** 들어갈 수 있다. (4개를 초과할 경우, 나머지 정보를 요약·병합하거나 생략)
-        - "<ul>" 내 모든 "<li>" 객체는 동일한 **키 세트**(동일한 태그 구조)를 가져야 한다.
+        - 태그 구조는 {section_name}에 적합한 태그 구조를 작성해줘.
+        - 이 "<ul>" 태그는 1~5개의 "<li>" 태그만 포함할 수 있다.
+        - "<li>" 태그 안에는 <h2>, <h3>, <p> 태그만을 사용할 수 있다
+        - 각 "<li>" 태그는 다음 구조만 허용된다:
+            <li>
+                <h2>제목</h2>
+                <h3>부제목</h3> [선택사항]
+                <p>내용</p>
+            </li>
+        - **절대 금지사항**:
+            * "<ul>" 태그 안에 또 다른 "<ul>" 태그가 올 수 없다
+            * "<li>" 태그 안에 "<ul>" 태그가 올 수 없다
+            * "<p>" 태그 안에 어떤 태그도 올 수 없다
+        
+        - 5개를 초과하는 "<li>" 항목은:
+            * 유사한 내용끼리 병합
+            * 가장 중요한 5개 항목만 선택
+            * 나머지 정보는 관련 항목의 "<p>" 태그 안에 통합
 
         섹션 이름과 입력 데이터에 적합한 HTML 형태를 만들어주되, 위 규칙을 위반해서는 안 된다.
         최종 출력은 별도의 텍스트 설명이나 JSON, 기타 형식은 넣지 않는다. 오직 HTML만 출력한다.
@@ -318,26 +276,6 @@ class OllamaLandingClient:
 
         반드시 **HTML**형태로만 결과를 반환하세요. 
         """
-        #        7) **출력 형식 예시** (JSON 구조 예시):
-
-        # {{
-        #     "section_type": "{section_name}",
-        #     "main_title": "string", 
-        #     "sub_title": "string",
-        #     "description": "string", 
-        #     "features": [
-        #         {{
-        #             "sub_title": "string", 
-        #             "strength_title" : "string", 
-        #             "description": "string" 
-        #         }},
-        #         {{
-        #             "sub_title": "string", ,
-        #             "strength_title" : "string", 
-        #             "description": "string" 
-        #         }}
-        #     ]
-        # }}
         repeat_count = 0
         while repeat_count < 3:
             try:
