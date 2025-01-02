@@ -3,7 +3,7 @@ import requests, json, re
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
-from utils.ollama.land.ollama_tagmatch import parse_allowed_tags
+from utils.ollama.land.ollama_tagmatch import parse_html, extract_body_content_with_regex
 
 class BaseSection(BaseModel):
     section_type: str
@@ -31,7 +31,7 @@ parser = PydanticOutputParser(pydantic_object=Section)
 
 class OllamaLandingClient:
     
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.4, model:str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.7, model:str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
@@ -138,7 +138,7 @@ class OllamaLandingClient:
             print(f"Problematic JSON text: {json_text}")
             raise RuntimeError(f"JSON 파싱 실패: {e}")
         
-    async def generate_section(self, model: str,summary:str, section_name: str):
+    async def generate_section(self, model: str,summary:str, section_name: str, section_num: int ):
         """
         랜딩 페이지 섹션을 생성하는 함수
         """
@@ -233,60 +233,64 @@ class OllamaLandingClient:
 
         # 반드시 **HTML**형태로만 결과를 반환하세요. 
         # """
-        prompt = f"""
+        prompt=f"""
         <|start_header_id|>system<|end_header_id|>
-        너는 사이트의 섹션 구조를 정해주고, {section_name} 섹션에 필요한 콘텐츠를 작성해주는 AI 도우미야.  
-        아래 규칙들을 **절대** 지키면서 HTML을 생성해줘. (지시사항과 데이터가 충돌할 경우, **지시사항**을 최우선으로 따른다.)
+        너는 창의적이고 전문적인 웹사이트 랜딩페이지 생성 전문가야.
 
-        1) **출력 형식**  
-        - 출력은 오직 **HTML 태그**만 사용해야 하며, 추가 설명이나 주석, 어떠한 부가 설명도 포함해서는 안 된다.  
-        - "h1", "h2", "h3", "p", "ul", "li" 태그만 사용 가능.  
-        - 이외의 어떤 태그도 사용하면 안 된다.
+        [★ 목적 / 상황]
+        - 랜딩페이지의 “{section_num}”번째 “{section_name}” 섹션을 만들어야 한다.
+        - HTML 태그는 h1/h2/h3/p/ul/li만 사용 가능.
 
-        2) **태그 구조 규칙**  
-        - 태그 구조는 {section_name}에 적합한 태그 구조를 작성해줘.
-        - 이 "<ul>" 태그는 1~5개의 "<li>" 태그만 포함할 수 있다.
-        - "<li>" 태그 안에는 <h2>, <h3>, <p> 태그만을 사용할 수 있다
-        - 각 "<li>" 태그는 다음 구조만 허용된다:
-            <li>
-                <h2>제목</h2>
-                <h3>부제목</h3> [선택사항]
-                <p>내용</p>
-            </li>
-        - **절대 금지사항**:
-            * "<ul>" 태그 안에 또 다른 "<ul>" 태그가 올 수 없다
-            * "<li>" 태그 안에 "<ul>" 태그가 올 수 없다
-            * "<p>" 태그 안에 어떤 태그도 올 수 없다
-        
-        - 5개를 초과하는 "<li>" 항목은:
-            * 유사한 내용끼리 병합
-            * 가장 중요한 5개 항목만 선택
-            * 나머지 정보는 관련 항목의 "<p>" 태그 안에 통합
+        [★ 절대 규칙]
+        1) **h1, h2, h3, p, ul, li의 HTML 태그만** 사용  
+        2) **아무런 속성도 붙이지 말 것** (class, style, id 등 불가)  
+        3) **주석, 설명, 빈줄 등 추가 텍스트** 전부 금지 → 순수 HTML만 생성  
+        4) **중첩 구조 절대 금지** (ul 안에 ul 불가 / li 안에 ul 불가)  
+        5) **ul 태그는 선택적** (꼭 필요하면 1개만 쓸 수 있음)  
+        - 만약 ul을 사용한다면, **단 하나만** 허용  
+        - li는 1~5개까지만 쓸 수 있음  
+        - li 안에는 h2, h3, p 태그만 가능(ul 절대 불가)  
+        - 모든 li 구조는 동일한 태그 세트를 유지해야 함  
+        6) h1, h2, h3, p 등을 **ul 밖에서도** 최소 2개 이상 써서, 본문을 다양하게 구성.  
+        - 즉, “ul 없이” 서술하는 부분과, “ul을 활용한 부분” 둘 다 고려  
+        - 굳이 ul을 쓰지 않아도 괜찮다. (필요 없다면 생략)  
 
-        섹션 이름과 입력 데이터에 적합한 HTML 형태를 만들어주되, 위 규칙을 위반해서는 안 된다.
-        최종 출력은 별도의 텍스트 설명이나 JSON, 기타 형식은 넣지 않는다. 오직 HTML만 출력한다.
-        
-        <|eot_id|><|start_header_id|>user<|end_header_id|> 
+        [★ 구성 / 다양성 지침]
+        - “{section_name}” 섹션의 성격에 맞춰 **창의적인 톤앤매너**로 작성  
+        - 정보가 많으면, **적절히 통합·간소화**  
+        - 반복 문장은 지양, **스토리텔링**·비유·사례 등을 자유롭게 활용  
+        - 너무 짧거나 중복된 문장 말고, **약간 풍부**하게 써줘  
+        - 전문 용어와 친근한 표현을 **적절히 섞어** 서술  
+        - 가능하면 **h1**, **h2**, **h3**, **p**를 **다양한 순서**로 조합해봐  
+        - (선택) ul을 하나 사용하고 싶다면, 그 안에 최대 5개의 li.  
+        - 예: li 안에 “<h3>~</h3><p>~</p>” 구조 등.  
+        - h1 태그는 정말 필요하면 1번만 쓸 수 있음(랜딩 섹션 메인 타이틀로).
+
+        [★ 출력 형식]
+        - **위 규칙을 철저히 지켜**서 순수 HTML 구조로만 출력하라.
+        - 결과에 ul이 여러 개거나 중첩 ul이 있으면 무효이므로, 절대 생성하지 말 것.
+        - 결과에 주석, 문맥 외 설명, 속성, 빈줄이 들어가면 안 됨.
+
+        <|eot_id|><|start_header_id|>user<|end_header_id|>
         섹션: {section_name}
-        
-        입력 데이터: {summary} 
-        
 
+        입력 데이터: {summary}
         <|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
-        반드시 **HTML**형태로만 결과를 반환하세요. 
+        "반드시 HTML 형태로만 결과를 반환" 
         """
         repeat_count = 0
         while repeat_count < 3:
             try:
                 # 1) LLM에 요청
                 raw_json = await self.send_request(prompt=prompt)
+                raw_json = extract_body_content_with_regex(raw_json)
+                tag = parse_html(raw_json)
+                raw_json = re.sub("\n", "", raw_json)
                 print(f"raw_json : {type(raw_json)} / {raw_json}")
-
-                raw_json = parse_allowed_tags(raw_json)
                 # # 2) JSON 추출 + dict 변환
                 # p_json = await self.process_data(raw_json)
-                print(f"Extracted JSON object: {type(raw_json)} / {raw_json} ")
+                print(f"Extracted JSON object: {type(tag)} / {tag} ")
                 
                 # if isinstance(p_json, str):
                 #     p_json = json.loads(p_json) 
@@ -296,10 +300,10 @@ class OllamaLandingClient:
 
 
                 # 4) 성공하면 반환
-                return raw_json
+                return raw_json, tag
 
-            except RuntimeError as re:
-                print(f"Runtime error: {re}")
+            except RuntimeError as r:
+                print(f"Runtime error: {r}")
                 repeat_count += 1
             except Exception as e:
                 print(f"Unexpected error: {e}")

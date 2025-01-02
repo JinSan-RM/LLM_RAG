@@ -639,8 +639,21 @@ async def LLM_land_page_generate(request: LandPageRequest):
     """
     start_main = time.time()
     try:
-        print(f"Start process: {request.input_text}")
+        print(f"Start process: {request.path}")
         print(f"Model: {request.model}")
+        
+        response = requests.get(request.path)
+        # 응답 상태 확인
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="PDF 파일을 다운로드할 수 없습니다."
+            )
+            
+        # Response 내용을 바이트로 가져오기
+        pdf_content = response.content
+        all_text = PDF2TEXT([pdf_content])
+        print(f"all_text: {all_text}")
         
         # OllamaContentClient와 ConversationHandler 초기화
         content_client = OllamaLandingClient(model=request.model)
@@ -673,7 +686,8 @@ async def LLM_land_page_generate(request: LandPageRequest):
             
         start = time.time()
         summary_client = OllamaSummaryClient(model=request.model)
-        summary = await summary_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+        # summary = await summary_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+        summary = await summary_client.store_chunks(data=all_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
         
         menu_client = OllamaMenuClient(model=request.model)
         end = time.time()
@@ -693,9 +707,10 @@ async def LLM_land_page_generate(request: LandPageRequest):
 
             time.sleep(0.5)
             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
-            content = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name)
+            content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
             print(f"content {section_name} : {content} \n")
-            result_dict[f'{section_name}'] = content
+            result_dict[f'{section_name}'] = {"content" : content, "HTML_tag": tag, "section_tag":section_name}
+            
         print(f"result_dict : {result_dict}")
 
         end_main = time.time()

@@ -9,4 +9,4 @@ from .ollama.ollama_chat import OllamaChatClient
 from .ollama.land.ollama_landingpage import OllamaLandingClient
 from .ollama.land.ollama_menu import OllamaMenuClient
 from .ollama.land.ollama_summary import OllamaSummaryClient
-from .ollama.land.ollama_tagmatch import parse_allowed_tags
+from .ollama.land.ollama_tagmatch import parse_html, extract_body_content_with_regex
