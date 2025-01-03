@@ -235,49 +235,37 @@ class OllamaLandingClient:
         # """
         prompt=f"""
         <|start_header_id|>system<|end_header_id|>
-        너는 창의적이고 전문적인 웹사이트 랜딩페이지 생성 전문가야.
+        너는 전문적인 웹사이트 랜딩페이지 생성 전문가야 목적과 규칙 구성 지침 출력형식을 따라 생성을 도와줘.
+    
+        목적
+        - 입력 데이터를 기반으로 랜딩페이지의 "{section_num}"번째 "{section_name}"을 만들어야 한다.
+        - 각 섹션의 특성에 맞는 매력적이고 설득력 있는 콘텐츠를 생성한다.
+        - 사용자의 관심을 끌고 행동을 유도하는 효과적인 메시지를 전달한다.
+        - 제한된 10개의 태그 내에서 최대한 효과적인 메시지 전달을 한다.
 
-        [★ 목적 / 상황]
-        - 랜딩페이지의 “{section_num}”번째 “{section_name}” 섹션을 만들어야 한다.
-        - HTML 태그는 h1/h2/h3/p/ul/li만 사용 가능.
+        규칙
+        1) **h1, h2, h3, p, ul, li의 HTML 태그**를 필요한 것 만 사용
+        2) **HTML 태그는 전체 10개만 사용**  
+        3) **아무런 속성도 붙이지 말 것** (class, style, id 등 불가)  
+        4) **주석, 설명, 빈줄 등 추가 텍스트** 전부 금지 → 순수 HTML만 생성 
+        5) ul은 한번만 사용 
+        6) li는 1~5개까지만 쓸 수 있음  
+        7) li 안에는 h2, h3, p 태그만 가능(ul 절대 불가)  
+        8) 모든 li 구조는 동일한 태그 세트를 유지해야 함     
 
-        [★ 절대 규칙]
-        1) **h1, h2, h3, p, ul, li의 HTML 태그만** 사용  
-        2) **아무런 속성도 붙이지 말 것** (class, style, id 등 불가)  
-        3) **주석, 설명, 빈줄 등 추가 텍스트** 전부 금지 → 순수 HTML만 생성  
-        4) **중첩 구조 절대 금지** (ul 안에 ul 불가 / li 안에 ul 불가)  
-        5) **ul 태그는 선택적** (꼭 필요하면 1개만 쓸 수 있음)  
-        - 만약 ul을 사용한다면, **단 하나만** 허용  
-        - li는 1~5개까지만 쓸 수 있음  
-        - li 안에는 h2, h3, p 태그만 가능(ul 절대 불가)  
-        - 모든 li 구조는 동일한 태그 세트를 유지해야 함  
-        6) h1, h2, h3, p 등을 **ul 밖에서도** 최소 2개 이상 써서, 본문을 다양하게 구성.  
-        - 즉, “ul 없이” 서술하는 부분과, “ul을 활용한 부분” 둘 다 고려  
-        - 굳이 ul을 쓰지 않아도 괜찮다. (필요 없다면 생략)  
+        구성
+        - “{section_name}” 섹션의 성격에 맞춰 작성  
+        - 입력 데이터를 기반으로 너무 짧거나 중복된 문장 말고, **풍부**하게 써줘  
 
-        [★ 구성 / 다양성 지침]
-        - “{section_name}” 섹션의 성격에 맞춰 **창의적인 톤앤매너**로 작성  
-        - 정보가 많으면, **적절히 통합·간소화**  
-        - 반복 문장은 지양, **스토리텔링**·비유·사례 등을 자유롭게 활용  
-        - 너무 짧거나 중복된 문장 말고, **약간 풍부**하게 써줘  
-        - 전문 용어와 친근한 표현을 **적절히 섞어** 서술  
-        - 가능하면 **h1**, **h2**, **h3**, **p**를 **다양한 순서**로 조합해봐  
-        - (선택) ul을 하나 사용하고 싶다면, 그 안에 최대 5개의 li.  
-        - 예: li 안에 “<h3>~</h3><p>~</p>” 구조 등.  
-        - h1 태그는 정말 필요하면 1번만 쓸 수 있음(랜딩 섹션 메인 타이틀로).
-
-        [★ 출력 형식]
-        - **위 규칙을 철저히 지켜**서 순수 HTML 구조로만 출력하라.
-        - 결과에 ul이 여러 개거나 중첩 ul이 있으면 무효이므로, 절대 생성하지 말 것.
-        - 결과에 주석, 문맥 외 설명, 속성, 빈줄이 들어가면 안 됨.
+        출력 형식
+        - **위 내용을 철저히 지켜**서 순수 HTML 구조로만 출력하라.
 
         <|eot_id|><|start_header_id|>user<|end_header_id|>
         섹션: {section_name}
 
         입력 데이터: {summary}
         <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-        "반드시 HTML 형태로만 결과를 반환" 
+        입력데이터를 기반으로 **HTML** 형태로만 결과를 반환"
         """
         repeat_count = 0
         while repeat_count < 3:
@@ -288,10 +276,12 @@ class OllamaLandingClient:
                 tag = fix_html_without_parser(raw_json)
                 tag = convert_html_to_structure(tag)
                 raw_json = re.sub("\n", "", raw_json)
-                print(f"raw_json : {type(raw_json)} / {raw_json}")
+                # if tag or raw_json is None:
+                #     break
+                # print(f"raw_json : {type(raw_json)} / {raw_json}")
                 # # 2) JSON 추출 + dict 변환
                 # p_json = await self.process_data(raw_json)
-                print(f"Extracted JSON object: {type(tag)} / {tag} ")
+                # print(f"Extracted JSON object: {type(tag)} / {tag} ")
                 
                 # if isinstance(p_json, str):
                 #     p_json = json.loads(p_json) 

@@ -211,7 +211,7 @@ class OllamaMenuClient:
                 
                 # Pydantic 모델 생성
                 pydantic_menu_data = self.parse_menu_data_union(menu_dict)
-                print(f"pydantic_menu_data : {pydantic_menu_data}")
+                # print(f"pydantic_menu_data : {pydantic_menu_data}")
                 
                 # 성공적으로 처리된 menu_structure 반환
                 return pydantic_menu_data

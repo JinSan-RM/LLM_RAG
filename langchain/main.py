@@ -641,6 +641,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
     try:
         print(f"Start process: {request.path}")
         print(f"Model: {request.model}")
+        start = time.time()
         
         response = requests.get(request.path)
         # 응답 상태 확인
@@ -653,23 +654,24 @@ async def LLM_land_page_generate(request: LandPageRequest):
         # Response 내용을 바이트로 가져오기
         pdf_content = response.content
         all_text = PDF2TEXT([pdf_content])
-        print(f"all_text: {all_text}")
+        end = time.time()
+        print(f"menu_create process time : {end - start}")
+ 
         
         # OllamaContentClient와 ConversationHandler 초기화
         content_client = OllamaLandingClient(model=request.model)
 
         # STEP 1: 랜딩 페이지 섹션 구조 생성
-        section_options = ["Introduce", "Solution", "Features", "Social", "CTA", "Pricing", "About Us", "Team", "blog"]
-        section_cnt = random.randint(6, 9)
-        print(f"Selected section count: {section_cnt}")
+        # section_options = ["Introduce", "Solution", "Features", "Social", "CTA", "Pricing", "About Us", "Team", "blog"]
+        # section_cnt = random.randint(6, 9)
 
-        # 섹션 고정 및 랜덤 채움
-        section_dict = {1: "Header", 2: "Hero", section_cnt - 1: random.choice(["FAQ", "Map", "Youtube", "Contact", "Support"]), section_cnt: "Footer"}
-        filled_indices = {1, 2, section_cnt - 1, section_cnt}
-        for i in range(3, section_cnt):
-            if i not in filled_indices:
-                section_dict[i] = random.choice(section_options)
-        landing_structure = dict(sorted(section_dict.items()))
+        # # 섹션 고정 및 랜덤 채움
+        # section_dict = {1: "Header", 2: "Hero", section_cnt - 1: random.choice(["FAQ", "Map", "Youtube", "Contact", "Support"]), section_cnt: "Footer"}
+        # filled_indices = {1, 2, section_cnt - 1, section_cnt}
+        # for i in range(3, section_cnt):
+        #     if i not in filled_indices:
+        #         section_dict[i] = random.choice(section_options)
+        # landing_structure = dict(sorted(section_dict.items()))
         
         if request.model == 'bllossom':
             model_max_token = 8192
@@ -700,7 +702,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
         print(f"menu_create process time : {end - start}")
 
         #==============================================================================================
-        print(f"Generated landing structure: {landing_structure}")
+        print(f"Generated landing structure: {menu_structure}")
         result_dict = {}
         for section_num, section_name in menu_structure.items():
             print(f"Processing section {section_num}: {section_name}")
@@ -708,8 +710,12 @@ async def LLM_land_page_generate(request: LandPageRequest):
             time.sleep(0.5)
             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
             content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
+            print(f"content {section_name} : {content}\n")
+            if len(content) == 0  or len(tag) == 0:
+                print("content or tag is None cause retry")
+                content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
             print(f"content {section_name} : {content} \n")
-            result_dict[f'{section_name}'] = {"content" : content, "HTML_tag": tag, "section_tag":section_name}
+            result_dict[f'{section_num}_Section'] = {"content" : content, "HTML_tag": tag, "section_tag":section_name}
             
         print(f"result_dict : {result_dict}")
 

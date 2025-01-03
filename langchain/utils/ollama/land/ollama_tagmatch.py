@@ -155,7 +155,7 @@ def parse_html(html_str: str) -> str:
     # 3) 결과 연결
     final_string = "_".join(all_ul_results)
     return final_string
-
+# ================================================================
 import re
 
 def remove_disallowed_tags(html_str: str, allowed_tags=None) -> str:
@@ -282,104 +282,85 @@ def fix_html_without_parser(html_str: str) -> str:
     
     return step3
 
+#========================================================================
+# tag 뽑는 구조
+
+def get_tag_name(block: str) -> str:
+    """
+    예) block="<h2>Title</h2>"   -> "h2"
+        block="<ul>...</ul>"     -> "ul"
+        block="<p>...</p>"       -> "p"
+    단순 정규식으로 태그 이름 추출.
+    """
+    m = re.match(r'(?is)<(h[1-3]|p|ul)\b', block)
+    if m:
+        return m.group(1).lower()
+    return ""
+
+
 def parse_ul_structure(ul_html: str) -> str:
     """
-    <ul>...</ul>에서 <li>들을 찾아,
-    각 <li> 내부 태그 구조가 동일하다고 가정:
-      -> 첫 <li>를 parse_li_structure로 파악 => e.g. "h2_p"
-      -> li 개수 N => "li(h2_p)*N"
+    <ul> ... </ul> 안의 <li>... </li>들을 찾아,
+    각 <li>의 내부 구조(여기서는 'h1/h2/h3/p'만) → 예) "h3" 혹은 "h3_p" 등
+    첫 li 구조를 parse_li_structure로 얻고, li 개수(N) => "li(h3_p)*N"
     """
-    # <li>...</li> 찾기
     li_pattern = re.compile(r'(?is)<li\b[^>]*>(.*?)</li>')
     li_contents = li_pattern.findall(ul_html)
-
     if not li_contents:
-        return ""  # <li>가 없다면 빈
+        return ""
 
-    # 1) 첫 번째 <li> 분석
-    sample_li = li_contents[0]
-    li_structure = parse_li_structure(sample_li)  # 예) "h2_p"
+    # 첫 li 분석
+    first_li = li_contents[0]
+    li_struct = parse_li_structure(first_li)
+    # li 개수
+    count_li = len(li_contents)
 
-    # 2) li 개수
-    count_li = len(li_contents)  # 예) 5
-
-    if li_structure:
-        # "li(h2_p)*5"
-        return f"li({li_structure})*{count_li}"
+    if li_struct:
+        return f"li({li_struct})*{count_li}"
     else:
-        # "li()*5" 정도라도
         return f"li()*{count_li}"
 
 
 def parse_li_structure(li_inner_html: str) -> str:
     """
-    <li> 내부에 있는 h1/h2/h3/p 태그를 순서대로 살펴서,
-    예) <h2>Title</h2><p>Paragraph</p> => "h2_p"
-    여러 개 태그가 있을 수 있으므로 '_'로 연결
+    <li> 내부 태그(h1/h2/h3/p)를 순서대로 찾아, 예) <h3>...</h3><p>...</p> => "h3_p"
     """
-    # 정규식으로 <h1>, <h2>, <h3>, <p> 태그를 순서대로 찾음
-    pattern_tags = re.compile(r'(?is)<(h[1-3]|p)\b[^>]*>.*?</\1>')
-    matches = pattern_tags.findall(li_inner_html)
+    # finditer로 순회
+    pattern = re.compile(r'(?is)<(h[2-3]|p)\b[^>]*>.*?</\1>')
+    parts = []
+    for m in pattern.finditer(li_inner_html):
+        tagname = m.group(1).lower()
+        parts.append(tagname)
 
-    # matches 는 [("h2"), ("p"), ...] 형태
-    # 하지만 group()을 직접 써야 태그 이름을 알 수 있으므로, finditer 써볼 수도 있음
-    # 여기서는 간단히...
-    # matches[i] -> e.g. "h2", "p"
-    
-    # 근데 matches를 이렇게 하면 group(1)만 나오므로, 실제 순회하면서 태그 이름 매칭
-    result = []
-    for m in pattern_tags.finditer(li_inner_html):
-        tagname = m.group(1).lower()  # "h2", "p", ...
-        result.append(tagname)
+    # "h3_p" 처럼 '_' 구분
+    return "_".join(parts)
 
-    # 예) ["h2","p"] -> "h2_p"
-    return "_".join(result)
 
 def convert_html_to_structure(html_str: str) -> str:
     """
-    예) 
-      <h2>Company Overview</h2>
-      <ul> ... </ul>
-    => "h2_li(h2_p)*5"
+    최상위 레벨로 (h1, h2, h3, p, ul) 태그를 순서대로 찾는다.
+    - h1/h2/h3/p => 해당 태그명 그대로 사용
+    - ul        => parse_ul_structure -> "li(...)*N"
+                  결과를 괄호로 감싸 "(li(h3_p)*3)"
+    마지막에 '_'로 이어붙여서 구조 문자열 반환.
     """
-    # (1) 최상위 태그만 순차적으로 찾기
-    #     예) <h2>...</h2>, <h3>...</h3>, <p>...</p>, <ul>...</ul> 등
-    #     단순히 정규식으로 "같은 레벨" 매칭 (중첩 안 되는 상황 가정)
-    pattern_top = re.compile(r'(?is)(<(?:h[1-3]|p|ul)\b[^>]*>.*?</(?:h[1-3]|p|ul)>)')
-    top_blocks = pattern_top.findall(html_str)
 
-    structure_parts = []
+    # 최상위 블록을 찾기 (단순 정규식)
+    pattern_top = re.compile(r'(?is)(<ul\b[^>]*>.*?</ul>|<h1\b[^>]*>.*?</h1>|<h2\b[^>]*>.*?</h2>|<h3\b[^>]*>.*?</h3>|<p\b[^>]*>.*?</p>)')
+    top_blocks = pattern_top.findall(html_str)
+    print(f"top_blocks : {top_blocks} | html_str: {html_str}")
+    structure_list = []
 
     for block in top_blocks:
-        block = block.strip()
-        # h1/h2/h3/p 태그면 => "h2", "p", ...
-        # ul 태그면 => parse_ul_structure -> "li(...)*N"
-        tag_name = get_tag_name(block)  # 예) "h2", "ul", ...
+        tagname = get_tag_name(block)
+        if tagname in ["h1", "h2", "h3", "p"]:
+            # 예) "h1", "h2", "h3", "p"
+            structure_list.append(tagname)
+        elif tagname == "ul":
+            ul_struct = parse_ul_structure(block)  # ex) "li(h3_p)*3"
+            # 괄호로 묶어서 표시
+            if ul_struct:
+                structure_list.append(f"{ul_struct}")
 
-        if tag_name in ["h1","h2","h3","p"]:
-            # 그냥 "h2", "h3", "p" 등
-            structure_parts.append(tag_name)
-        elif tag_name == "ul":
-            # ul 분석
-            ul_structure = parse_ul_structure(block)
-            if ul_structure:
-                structure_parts.append(ul_structure)
-        else:
-            # 기타는 무시(사실상 없을거라 가정)
-            pass
-
-    # 최종적으로 구조 파츠를 "_"로 연결
-    # 예) ["h2", "li(h2_p)*5"] -> "h2_li(h2_p)*5"
-    return "_".join(structure_parts)
-
-
-def get_tag_name(block: str) -> str:
-    """
-    예) block="<h2>Title</h2>" -> "h2"
-        block="<ul>...</ul>"   -> "ul"
-    단순 정규식으로 태그 이름을 뽑는다.
-    """
-    m = re.match(r'(?is)<(h[1-6]|p|ul)\b', block)
-    if m:
-        return m.group(1).lower()
-    return ""  # 못 찾으면 빈 문자열
+    # 최종 "_" 조합
+    return "_".join(structure_list)
