@@ -630,6 +630,7 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 class LandPageRequest(BaseModel):
     path: str
     model: str = "solar"
+    block: list = []
     
 # 엔드포인트 정의
 @app.post("/generate_land_section")
@@ -698,6 +699,9 @@ async def LLM_land_page_generate(request: LandPageRequest):
         print("menu logic")
         start = time.time()
         menu_structure = await menu_client.menu_create_logic(summary)
+        
+        
+
         end = time.time()
         print(f"menu_create process time : {end - start}")
 
@@ -711,6 +715,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
             content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
             print(f"content {section_name} : {content}\n")
+            print(f"content {len(section_name)} : {len(content)}\n")
             if len(content) == 0  or len(tag) == 0:
                 print("content or tag is None cause retry")
                 content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
