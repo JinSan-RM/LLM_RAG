@@ -4,7 +4,7 @@ import requests, json, re
 
 class OllamaBlockRecommend:
     
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.4, model:str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model:str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
@@ -54,20 +54,31 @@ class OllamaBlockRecommend:
         for section_name, HTMLtag_list in block_list.items():
             
             prompt=f"""
-            <|start_system|>system<|end_system|>
-            1. 내가 제공할 태그 리스트는 부모부터 자식 순으로 작성된 HTML 태그들입니다.
-            2. 입력 데이터 내용을 바탕으로 {section_name} 섹션에 가장 어울리는 태그 하나를 {HTMLtag_list} 중에서 선정해 주세요.
-            3. 태그의 HTML 구조는 변경하지 말고, 단 하나의 **HTML 태그**만 반환하세요.
-            4. 제공받은 태그 리스트의 데이터 외 다른 설명, 첨부, 주석등을 하지 마세요.
+            <|start_header_id|>system<|end_header_id|>
+            1. 입력 데이터 내용을 바탕으로 {section_name} 섹션에 가장 어울리는 태그 하나를 {HTMLtag_list} 중에서 선정해 주세요.
+            2. 태그의 HTML 구조는 변경하지 말고, 단 하나의 **HTML 태그**만 반환하세요.
+            3. **반드시 단 하나의 Emmet 형식의 HTML 태그**만 출력하고, 그 외의 어떤 텍스트도 포함하지 마세요.
+            4. 주석(<!-- -->), 설명, 빈 줄 등 모든 추가 텍스트를 금지합니다.
+            5. 어떤 설명(문장, 코드, 해설, "")도 삽입하지 말 것.
+            6. 최종 출력은 오직 Emmet 형식의 HTML 태그만 있어야 하며, 다른 형식(JSON, 코드 블록 등)은 사용하지 마세요.
+            7. 출력예시 대로 출력하세요.
+            
+            <|end_system|>
 
-            <|start_user|>user<|end_user|>
+            <|eot_id|><|start_header_id|>user<|end_header_id|>
             # 입력 데이터:
             {summary}
 
             # 태그 리스트:
             {HTMLtag_list}
-            <|start_assistant|>assistant<|end_assistant|>
-            반드시 단 하나의 **HTML 태그**만 선정하여 반환하세요.
+            
+            출력예시:
+            
+            {HTMLtag_list[0]}
+
+            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+            **반드시 태그 리스트 안의 데이터중 하나를 골라서 그 값만 반환하세요.**
+            최종 출력은 오직 데이터만 있어야 하며, 다른 형식(JSON, 코드 블록, 설명 등)은 사용하지 마세요.
             """
 
             raw_json = await self.send_request(prompt=prompt)
@@ -79,24 +90,53 @@ class OllamaBlockRecommend:
                     # raw_json을  emmet 문법으로 뽑았는데, 이걸 다시 풀어서 쓸 수 HTML 구조로 뽑아야함.
                     section_dict = {}
                     parser = EmmetParser()
+                    print(raw_json)
                     html = parser.parse_emmet(raw_json)
                     print(f"raw_json : {raw_json} || html : {html}")
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
-                    1. 제공된 입력 데이터 내용을 바탕으로 {section_name} 섹션의 {html} 구조 내에 적절한 내용을 채워주세요.
+                    1. 제공된 입력 데이터 내용을 바탕으로 {section_name} 섹션 내에 적절한 내용을 채워주세요.
                     2. HTML 구조는 변경하지 않고, 기존의 태그와 형식을 유지하면서 내용을 풍부하게 작성해주세요.
                     3. 제공받은 html 구조의 컨텐츠를 채우는 것 외에 다른 설명, 첨부, 주석등을 하지 마세요.
+                    **아무런 속성도 붙이지 말 것** (class, style, id 등 css 불가)  
+                    주석(<!-- -->)이나 설명, 빈 줄 등 추가 텍스트 전부 금지
+                    최종 출력은 별도의 텍스트 설명이나 JSON, 기타 형식은 넣지 않는다. 오직 HTML만 출력한다.
+                    **결과는 제공받은 섹션의 구조안의 내용만 채운다.**
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
                     # 입력 데이터:
                     {summary}
 
                     # 섹션:
-                    {section_name}
                     {html}
+                    
+                    출력예시:
+                    
+                    <h1> content title </h1>
+                    <h3> strength title </h3>
+                    <ul>
+                        <li>
+                            <h2> sub title </h2>
+                            <p> description </p>
+                        </li>
+                        <li>
+                            <h2> sub title2 </h2>
+                            <p> description2 </p>
+                        </li>
+                        <li>
+                            <h2> sub title3 </h2>
+                            <p> description3 </p>
+                        </li>
+                        <li>
+                            <h2> sub title4 </h2>
+                            <p> description4 </p>
+                        </li>
+                    </ul>
                     <|end_user|>
 
                     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-                    반드시 단 하나의 완전한 **HTML** 블록 형태로 결과를 반환하세요.
+                    - 입력데이터와 섹션을 기반으로 **HTML**형태 결과를 반환하세요.
+                    반드시 단 하나의 완전한 **HTML** 형태로 결과를 반환하세요.
+                    **아무런 속성도 붙이지 말 것** (class, style, id 등 css 불가) 
                     """
                     print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
@@ -105,7 +145,7 @@ class OllamaBlockRecommend:
                     print(f"raw_json : {type(gen_content)} {len(gen_content)} / {gen_content}")
                     section_dict['HTML_Tag'] = raw_json
                     section_dict['gen_content'] = gen_content
-                    result_dict['section_name'] = section_dict
+                    result_dict[f'{section_name}'] = section_dict
                     break
                 except RuntimeError as r:
                     print(f"Runtime error: {r}")
