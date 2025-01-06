@@ -11,4 +11,4 @@ from .ollama.land.ollama_menu import OllamaMenuClient
 from .ollama.land.ollama_summary import OllamaSummaryClient
 from .ollama.land.ollama_tagmatch import parse_html, extract_body_content_with_regex, fix_html_without_parser, convert_html_to_structure
 from .ollama.land.ollama_block_content import OllamaBlockContent
-from .ollama.land.ollama_block_recommand import OllamaBlockRecommend
+from .ollama.land.ollama_block_recommand import OllamaBlockRecommend, EmmetParser

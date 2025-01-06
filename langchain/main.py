@@ -660,7 +660,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
  
         
         # OllamaContentClient와 ConversationHandler 초기화
-        content_client = OllamaLandingClient(model=request.model)
+        # content_client = OllamaLandingClient(model=request.model)
         
         if request.model == 'bllossom':
             model_max_token = 8192
@@ -674,6 +674,10 @@ async def LLM_land_page_generate(request: LandPageRequest):
             model_max_token = 8192
             final_summary_length = 6000
             max_tokens_per_chunk = 6000
+        elif request.model == 'EEVE':
+            model_max_token = 4096
+            final_summary_length = 3000
+            max_tokens_per_chunk = 3000
             
         start = time.time()
         summary_client = OllamaSummaryClient(model=request.model)

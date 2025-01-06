@@ -54,19 +54,22 @@ class OllamaBlockRecommend:
         for section_name, HTMLtag_list in block_list.items():
             
             prompt=f"""
-            <|start_header_id|>system<|end_header_id|>
-            1. 내가 태그 리스트를 보여줄 건데, {summary} 내용을 토대로 {section_name}에 어울리는 태그를 하나 선정해줘.
-            2. 태그들은 HTML을 부모부터 자식 순으로 해서 Emmet 문법으로 작성한 것이야.
-            3. {summary} 내용을 토대로 {section_name}에 잘 어울릴 태그 목록이야 {HTMLtag_list} 이 중에서 하나를 선정해서 해줘.
-            <|eot_id|><|start_header_id|>user<|end_header_id|>
+            <|start_system|>system<|end_system|>
+            1. 내가 제공할 태그 리스트는 부모부터 자식 순으로 작성된 HTML 태그들입니다.
+            2. 입력 데이터 내용을 바탕으로 {section_name} 섹션에 가장 어울리는 태그 하나를 {HTMLtag_list} 중에서 선정해 주세요.
+            3. 태그의 HTML 구조는 변경하지 말고, 단 하나의 **HTML 태그**만 반환하세요.
+            4. 제공받은 태그 리스트의 데이터 외 다른 설명, 첨부, 주석등을 하지 마세요.
+
+            <|start_user|>user<|end_user|>
             # 입력 데이터:
             {summary}
-            태그 :
+
+            # 태그 리스트:
             {HTMLtag_list}
-            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-            반드시 단 하나의 **tag** 만 선정해서 결과를 반환하세요.
-            
+            <|start_assistant|>assistant<|end_assistant|>
+            반드시 단 하나의 **HTML 태그**만 선정하여 반환하세요.
             """
+
             raw_json = await self.send_request(prompt=prompt)
             
             repeat_count = 0
@@ -75,21 +78,25 @@ class OllamaBlockRecommend:
                     # 1) LLM에 요청
                     # raw_json을  emmet 문법으로 뽑았는데, 이걸 다시 풀어서 쓸 수 HTML 구조로 뽑아야함.
                     section_dict = {}
-                    html = self.parse_emmet(raw_json)
+                    parser = EmmetParser()
+                    html = parser.parse_emmet(raw_json)
                     print(f"raw_json : {raw_json} || html : {html}")
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
-                    1. {summary} 내용을 기반으로 {html} 안에 내용을 채워줘.
-                    2. {summary}을 참고해서 {html} 안의 내용들을 풍부하게 채워줘.
-                    3. {html} 형식을 바꿔서는 안 돼.
-                    4. {summary}를 참고해서 {section_name}에 어울리는 내용으로 {html} 내용을 작성해줘.
+                    1. 제공된 입력 데이터 내용을 바탕으로 {section_name} 섹션의 {html} 구조 내에 적절한 내용을 채워주세요.
+                    2. HTML 구조는 변경하지 않고, 기존의 태그와 형식을 유지하면서 내용을 풍부하게 작성해주세요.
+                    3. 제공받은 html 구조의 컨텐츠를 채우는 것 외에 다른 설명, 첨부, 주석등을 하지 마세요.
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
                     # 입력 데이터:
                     {summary}
-                    섹션:
+
+                    # 섹션:
+                    {section_name}
                     {html}
+                    <|end_user|>
+
                     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-                    반드시 단 하나의 **HTML** 형태로 결과를 반환하세요.
+                    반드시 단 하나의 완전한 **HTML** 블록 형태로 결과를 반환하세요.
                     """
                     print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
@@ -111,109 +118,109 @@ class OllamaBlockRecommend:
     
     
     # ============================================================
-    class EmmetParser:
-        def parse_emmet(self, emmet_str):
-            """
-            Emmet-like 문자열을 HTML로 변환하는 함수
-            :param emmet_str: 예: "h1_h1_h3_li(h2_h3)*2"
-            :return: 변환된 HTML 문자열
-            """
-            # 최상위 '_' 단위로 분리
-            top_level_parts = self.split_children(emmet_str)
-            html_output = ''
+class EmmetParser:
+    def parse_emmet(self, emmet_str):
+        """
+        Emmet-like 문자열을 HTML로 변환하는 함수
+        :param emmet_str: 예: "h1_h1_h3_li(h2_h3)*2"
+        :return: 변환된 HTML 문자열
+        """
+        # 최상위 '_' 단위로 분리
+        top_level_parts = self.split_children(emmet_str)
+        html_output = ''
 
-            for part in top_level_parts:
-                html_output += self.parse_part(part)
+        for part in top_level_parts:
+            html_output += self.parse_part(part)
 
-            return html_output.strip()
+        return html_output.strip()
 
-        def parse_part(self, part):
-            """
-            단일 파트(예: "li(h2_h3)*2")를 HTML로 변환하는 재귀 함수
-            :param part: "li(h2_h3)*2" 같이 괄호, 반복 등이 섞인 문자열
-            :return: 변환된 HTML 문자열
-            """
-            # 정규식을 통해 태그명, 자식, 반복 횟수 등을 추출
-            pattern = r'^(?P<tag>[a-z0-9]+)(?:\((?P<children>[^\)]*)\))?(?:\*(?P<count>\d+))?$'
-            match = re.match(pattern, part, re.IGNORECASE)
+    def parse_part(self, part):
+        """
+        단일 파트(예: "li(h2_h3)*2")를 HTML로 변환하는 재귀 함수
+        :param part: "li(h2_h3)*2" 같이 괄호, 반복 등이 섞인 문자열
+        :return: 변환된 HTML 문자열
+        """
+        # 정규식을 통해 태그명, 자식, 반복 횟수 등을 추출
+        pattern = r'^(?P<tag>[a-z0-9]+)(?:\((?P<children>[^\)]*)\))?(?:\*(?P<count>\d+))?$'
+        match = re.match(pattern, part, re.IGNORECASE)
 
-            if not match:
-                # 매칭되지 않으면 빈 문자열 반환 또는 예외 처리
-                print(f"Warning: '{part}' is not a valid Emmet-like syntax.")
-                return ''
+        if not match:
+            # 매칭되지 않으면 빈 문자열 반환 또는 예외 처리
+            print(f"Warning: '{part}' is not a valid Emmet-like syntax.")
+            return ''
 
-            tag = match.group('tag')
-            children = match.group('children')
-            count = int(match.group('count')) if match.group('count') else 1
+        tag = match.group('tag')
+        children = match.group('children')
+        count = int(match.group('count')) if match.group('count') else 1
 
-            # 자식 요소가 있는 경우 재귀적으로 파싱
-            children_html = ''
-            if children:
-                child_parts = self.split_children(children)
-                for child in child_parts:
-                    children_html += self.parse_part(child)
+        # 자식 요소가 있는 경우 재귀적으로 파싱
+        children_html = ''
+        if children:
+            child_parts = self.split_children(children)
+            for child in child_parts:
+                children_html += self.parse_part(child)
 
-            # 반복 처리
-            if tag == 'li' and count > 1:
-                # li를 반복하면 <ul>로 감싸준다
-                ul_content = ''
-                for _ in range(count):
-                    ul_content += self.wrap_with_tag('li', children_html)
-                return self.wrap_with_tag('ul', ul_content)
+        # 반복 처리
+        if tag == 'li' and count > 1:
+            # li를 반복하면 <ul>로 감싸준다
+            ul_content = ''
+            for _ in range(count):
+                ul_content += self.wrap_with_tag('li', children_html)
+            return self.wrap_with_tag('ul', ul_content)
+        else:
+            # 그 외 태그들은 단순히 반복해서 붙여준다
+            result = ''
+            for _ in range(count):
+                result += self.wrap_with_tag(tag, children_html)
+            return result
+
+    def wrap_with_tag(self, tag, content):
+        """
+        태그로 감싸는 함수
+        :param tag: 태그명 (예: 'h1', 'p', 'ul' 등)
+        :param content: 태그 내부에 들어갈 내용
+        :return: 감싸진 HTML 문자열
+        """
+        if content:
+            # 들여쓰기를 추가하여 가독성을 높임
+            indented_content = self.indent_html(content)
+            return f'<{tag}>\n{indented_content}</{tag}>\n'
+        else:
+            return f'<{tag}></{tag}>\n'
+
+    def split_children(self, children_str):
+        """
+        자식 요소 문자열을 '_' 단위로 분리하되, 괄호 내의 '_'는 무시하는 함수
+        :param children_str: "h2_h3" 등
+        :return: 분리된 자식 요소 리스트
+        """
+        parts = []
+        current = ''
+        depth = 0
+        for char in children_str:
+            if char == '(':
+                depth += 1
+                current += char
+            elif char == ')':
+                depth -= 1
+                current += char
+            elif char == '_' and depth == 0:
+                if current:
+                    parts.append(current)
+                    current = ''
             else:
-                # 그 외 태그들은 단순히 반복해서 붙여준다
-                result = ''
-                for _ in range(count):
-                    result += self.wrap_with_tag(tag, children_html)
-                return result
+                current += char
+        if current:
+            parts.append(current)
+        return parts
 
-        def wrap_with_tag(self, tag, content):
-            """
-            태그로 감싸는 함수
-            :param tag: 태그명 (예: 'h1', 'p', 'ul' 등)
-            :param content: 태그 내부에 들어갈 내용
-            :return: 감싸진 HTML 문자열
-            """
-            if content:
-                # 들여쓰기를 추가하여 가독성을 높임
-                indented_content = self.indent_html(content)
-                return f'<{tag}>\n{indented_content}</{tag}>\n'
-            else:
-                return f'<{tag}></{tag}>\n'
-
-        def split_children(self, children_str):
-            """
-            자식 요소 문자열을 '_' 단위로 분리하되, 괄호 내의 '_'는 무시하는 함수
-            :param children_str: "h2_h3" 등
-            :return: 분리된 자식 요소 리스트
-            """
-            parts = []
-            current = ''
-            depth = 0
-            for char in children_str:
-                if char == '(':
-                    depth += 1
-                    current += char
-                elif char == ')':
-                    depth -= 1
-                    current += char
-                elif char == '_' and depth == 0:
-                    if current:
-                        parts.append(current)
-                        current = ''
-                else:
-                    current += char
-            if current:
-                parts.append(current)
-            return parts
-
-        def indent_html(self, html_str, level=1):
-            """
-            HTML 문자열에 들여쓰기를 추가하는 함수
-            :param html_str: 들여쓰기를 추가할 HTML 문자열
-            :param level: 기본 들여쓰기 레벨
-            :return: 들여쓰기가 적용된 HTML 문자열
-            """
-            indent = '  ' * level
-            indented = ''.join([indent + line if line.strip() else line for line in html_str.split('\n')])
-            return indented
+    def indent_html(self, html_str, level=1):
+        """
+        HTML 문자열에 들여쓰기를 추가하는 함수
+        :param html_str: 들여쓰기를 추가할 HTML 문자열
+        :param level: 기본 들여쓰기 레벨
+        :return: 들여쓰기가 적용된 HTML 문자열
+        """
+        indent = '  ' * level
+        indented = ''.join([indent + line if line.strip() else line for line in html_str.split('\n')])
+        return indented
