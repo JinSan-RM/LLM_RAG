@@ -16,7 +16,7 @@ from pipelines.content_summary import SummaryContentChain
 from utils.ollama.land.ollama_landingpage import OllamaLandingClient
 from utils.ollama.land.ollama_menu import OllamaMenuClient
 from utils.ollama.land.ollama_summary import OllamaSummaryClient
-
+from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
 # local lib
 # ------------------------------------------------------------------------ #
 # outdoor lib
@@ -630,7 +630,7 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 class LandPageRequest(BaseModel):
     path: str
     model: str = "solar"
-    block: list = []
+    block: dict = {}
     
 # 엔드포인트 정의
 @app.post("/generate_land_section")
@@ -661,18 +661,6 @@ async def LLM_land_page_generate(request: LandPageRequest):
         
         # OllamaContentClient와 ConversationHandler 초기화
         content_client = OllamaLandingClient(model=request.model)
-
-        # STEP 1: 랜딩 페이지 섹션 구조 생성
-        # section_options = ["Introduce", "Solution", "Features", "Social", "CTA", "Pricing", "About Us", "Team", "blog"]
-        # section_cnt = random.randint(6, 9)
-
-        # # 섹션 고정 및 랜덤 채움
-        # section_dict = {1: "Header", 2: "Hero", section_cnt - 1: random.choice(["FAQ", "Map", "Youtube", "Contact", "Support"]), section_cnt: "Footer"}
-        # filled_indices = {1, 2, section_cnt - 1, section_cnt}
-        # for i in range(3, section_cnt):
-        #     if i not in filled_indices:
-        #         section_dict[i] = random.choice(section_options)
-        # landing_structure = dict(sorted(section_dict.items()))
         
         if request.model == 'bllossom':
             model_max_token = 8192
@@ -689,7 +677,6 @@ async def LLM_land_page_generate(request: LandPageRequest):
             
         start = time.time()
         summary_client = OllamaSummaryClient(model=request.model)
-        # summary = await summary_client.store_chunks(data=request.input_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
         summary = await summary_client.store_chunks(data=all_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
         
         menu_client = OllamaMenuClient(model=request.model)
@@ -698,35 +685,39 @@ async def LLM_land_page_generate(request: LandPageRequest):
         print(f"summary process time : {end - start}")
         print("menu logic")
         start = time.time()
-        menu_structure = await menu_client.menu_create_logic(summary)
+        menu_structure = await menu_client.section_structure_create_logic(summary)
         
         
 
         end = time.time()
         print(f"menu_create process time : {end - start}")
 
+        block_client = OllamaBlockRecommend(model=request.model)
+        result = await block_client.generate_block_content(summary=summary, block_list=request.block)
+        print(f"result : {result}")
+        
         #==============================================================================================
-        print(f"Generated landing structure: {menu_structure}")
-        result_dict = {}
-        for section_num, section_name in menu_structure.items():
-            print(f"Processing section {section_num}: {section_name}")
+        # print(f"Generated landing structure: {menu_structure}")
+        # result_dict = {}
+        # for section_num, section_name in menu_structure.items():
+        #     print(f"Processing section {section_num}: {section_name}")
 
-            time.sleep(0.5)
-            # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
-            content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
-            print(f"content {section_name} : {content}\n")
-            print(f"content {len(section_name)} : {len(content)}\n")
-            if len(content) == 0  or len(tag) == 0:
-                print("content or tag is None cause retry")
-                content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
-            print(f"content {section_name} : {content} \n")
-            result_dict[f'{section_num}_Section'] = {"content" : content, "HTML_tag": tag, "section_tag":section_name}
+        #     time.sleep(0.5)
+        #     # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
+        #     content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
+        #     print(f"content {section_name} : {content}\n")
+        #     print(f"content {len(section_name)} : {len(content)}\n")
+        #     if len(content) == 0  or len(tag) == 0:
+        #         print("content or tag is None cause retry")
+        #         content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
+        #     print(f"content {section_name} : {content} \n")
+        #     result_dict[f'{section_num}_Section'] = {"content" : content, "HTML_tag": tag, "section_tag":section_name}
             
-        print(f"result_dict : {result_dict}")
+        # print(f"result_dict : {result_dict}")
 
-        end_main = time.time()
-        t = end_main - start_main
-        return result_dict, t
+        # end_main = time.time()
+        # t = end_main - start_main
+        return result
 
     except Exception as e:
         print(f"Error processing landing structure: {e}")

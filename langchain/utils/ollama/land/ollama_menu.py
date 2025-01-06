@@ -102,7 +102,7 @@ class OllamaMenuClient:
         else:
             raise ValueError("Unknown data format")
         
-    async def menu_recommend(self, data: str):
+    async def section_recommend(self, data: str):
         data = self.clean_data(data)
         print(f"data: {len(data)} / {data}")
         prompt = f"""
@@ -194,12 +194,12 @@ class OllamaMenuClient:
     
         return cleaned_text
 
-    async def menu_create_logic(self, data: str):
+    async def section_structure_create_logic(self, data: str):
         """
         메뉴 데이터를 생성하고 Pydantic 모델을 사용해 처리하는 로직.
         """
         # menu_recommend 실행
-        menu_data = await self.menu_recommend(data)
+        menu_data = await self.section_recommend(data)
         print(f"menu_data : {menu_data}")
         repeat_count = 0
 
