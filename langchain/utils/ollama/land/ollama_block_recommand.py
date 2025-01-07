@@ -154,30 +154,25 @@ class OllamaBlockRecommend:
         - 사용자가 원하는 문자만 남기고 나머지는 모두 제거합니다.
         - 유효한 Emmet 문자열이 하나도 없으면 None을 반환합니다.
         """
-
-        # 예: '**h3_li(h3_p)*3**\r\n\r\n\r\n신뢰도: 100%'
-        print(f"text : {text}")
-
         # 2) 앞뒤에 있을 수 있는 별표(**) 제거
         #    예: '**h3_li(h3_p)*3**' → 'h3_li(h3_p)*3'
-        raw_value = text.strip('*').strip()
-        print(f"raw_value : {raw_value}")
+        raw_value = text.strip('**').strip()
+        raw_value = raw_value.replace("**","")
 
         # 3) 여러 줄이 있을 수 있으므로 일단 첫 줄만 취득
         #    (줄바꿈으로 split하여 첫 요소만)
         raw_value = raw_value.split('\n', 1)[0]
-        print(f"raw_value : {raw_value}")
 
         # 4) '신뢰도:', '기타 불필요 텍스트' 같은 것들이 섞여 있을 수 있으니
         #    여기서는 간단히 공백 기준으로 잘라서,
         #    허용된 Emmet 문자만 남기고 나머지는 전부 제거.
         
         # a) 허용할 Emmet 문자를 정의 (알파벳, 숫자, 괄호, 밑줄, *, +, >, . 등)
-        allowed_chars = set("hlip12345_()*")
+        allowed_chars = set("hlip123456789_()*")
+        
 
         # b) raw_value 내에서 허용된 문자만 살려서 재조합
         filtered = "".join(ch for ch in raw_value if ch in allowed_chars)
-        print(f"filtered : {filtered}")
 
         # 5) 최종 결과가 비어 있으면 None 반환
         return filtered if filtered else text
