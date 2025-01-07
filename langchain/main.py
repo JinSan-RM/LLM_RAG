@@ -731,10 +731,9 @@ async def LLM_land_page_generate(request: LandPageRequest):
 #===================================================================================================
 #===================================================================================================
 # API summary, menu, section 분리 작업. 
-# localhost:8001/land_summary_generate
-# localhost:8001/land_menu_generate
-# localhost:8001/land_section_generate
-
+# pdf 읽고 summary 생성
+# summary 기반으로 섹션 구조 추천
+# 섹션 구조에 알맞게 context 내용 나눠서. 데이터 전송
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
     
@@ -774,6 +773,11 @@ async def land_summary(request: LandPageRequest):
 
     section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
     return summary, section_structure, section_per_context
+
+# section context 데이터와 section structure 데이터를 기반으로
+# 섹션 별 태그에 적합한 블럭 추천
+# section 별 태그에 값을 입력
+
 class landGen(BaseModel):
     model: str
     block: dict
