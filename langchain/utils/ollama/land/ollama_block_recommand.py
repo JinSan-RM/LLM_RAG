@@ -53,36 +53,34 @@ class OllamaBlockRecommend:
         result_dict = {}
         for section_name, HTMLtag_list in block_list.items():
             
-            prompt=f"""
+            prompt = f"""
             <|start_header_id|>system<|end_header_id|>
-            1. 입력 데이터 내용을 바탕으로 {section_name} 섹션에 가장 어울리는 태그 하나를 {HTMLtag_list} 중에서 선정해 주세요.
-            2. 태그의 HTML 구조는 변경하지 말고, 단 하나의 **HTML 태그**만 반환하세요.
-            3. **반드시 단 하나의 Emmet 형식의 HTML 태그**만 출력하고, 그 외의 어떤 텍스트도 포함하지 마세요.
-            4. 주석(<!-- -->), 설명, 빈 줄 등 모든 추가 텍스트를 금지합니다.
-            5. 어떤 설명(문장, 코드, 해설, "")도 삽입하지 말 것.
-            6. 최종 출력은 오직 Emmet 형식의 HTML 태그만 있어야 하며, 다른 형식(JSON, 코드 블록 등)은 사용하지 마세요.
-            7. 출력예시 대로 출력하세요.
-            
-            <|end_system|>
+            1. {section_name} 섹션에 가장 잘 어울리는 태그 하나를 태그리스트트 중에서 선정하세요.
+            2. 단 하나의 태그만 반환하시고, 그 외의 어떤 텍스트도 출력하지 마세요.
+            3. 태그의 HTML 구조는 변경하지 말고 그대로 출력하세요.
+            4. **주석(<!-- -->), 설명, 빈 줄 등 추가 텍스트나 요약본, 문장(해설, 코드 등)을 삽입하지 마세요.**
+            5. **태그리스트 중 하나만** 최종 출력해야 하며, 다른 모든 형식(JSON, 코드 블록 등)은 절대 포함하지 마세요.
+            6. 예: {HTMLtag_list[0]}
+            7. 만약 태그 리스트 중 하나가 아닌 다른 텍스트가 발견되면, 오류가 발생했다고 판단하고 **재시도**하세요.
+            8. 출력예시를 따라 출력하세요.
 
             <|eot_id|><|start_header_id|>user<|end_header_id|>
-            # 입력 데이터:
-            {summary}
 
             # 태그 리스트:
             {HTMLtag_list}
-            
+
             출력예시:
-            
             {HTMLtag_list[0]}
 
             <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-            **반드시 태그 리스트 안의 데이터중 하나를 골라서 그 값만 반환하세요.**
-            최종 출력은 오직 데이터만 있어야 하며, 다른 형식(JSON, 코드 블록, 설명 등)은 사용하지 마세요.
+            **반드시 태그 리스트 안의 데이터 중 하나만 골라서 그 값만 출력하세요.**
+            **최종 출력은 오직 태그만 있어야 하며, 다른 형식(JSON, 코드 블록, 설명 등)이나 텍스트를 절대 포함하면 안 됩니다.**
             """
-
-            raw_json = await self.send_request(prompt=prompt)
             
+            raw_json = await self.send_request(prompt=prompt)
+            print(f"raw_json bf: {raw_json}")
+            raw_json = self.extract_emmet_tag(raw_json)
+            print(f"raw_json af: {raw_json}")
             repeat_count = 0
             while repeat_count < 3:
                 try:
@@ -95,48 +93,39 @@ class OllamaBlockRecommend:
                     print(f"raw_json : {raw_json} || html : {html}")
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
-                    1. 제공된 입력 데이터 내용을 바탕으로 {section_name} 섹션 내에 적절한 내용을 채워주세요.
-                    2. HTML 구조는 변경하지 않고, 기존의 태그와 형식을 유지하면서 내용을 풍부하게 작성해주세요.
-                    3. 제공받은 html 구조의 컨텐츠를 채우는 것 외에 다른 설명, 첨부, 주석등을 하지 마세요.
-                    **아무런 속성도 붙이지 말 것** (class, style, id 등 css 불가)  
-                    주석(<!-- -->)이나 설명, 빈 줄 등 추가 텍스트 전부 금지
-                    최종 출력은 별도의 텍스트 설명이나 JSON, 기타 형식은 넣지 않는다. 오직 HTML만 출력한다.
-                    **결과는 제공받은 섹션의 구조안의 내용만 채운다.**
+                    아래 지침을 철저히 지키세요:
+
+                    1. 사용자에게서 입력받은 HTML 구조(html)는 절대 변경하지 않습니다.
+                    - 태그 이름, 태그 계층, 태그의 개수, 순서, 닫힘 태그 등 **그대로 유지**해야 합니다.
+                    - 예: <ul> 내부에 li가 3개면, 꼭 3개만 있어야 하고 추가/삭제 불가.
+                    - 다른 태그나 속성(class, style, id 등)을 추가하거나 삭제하지 마세요.
+
+                    2. 입력 데이터(summary)를 바탕으로, **태그 안의 내용(텍스트)만 적절히 채워넣어** 주세요.
+                    - 예: <h1> </h1> 사이에 summary에서 추출한 내용 등을 넣어, <h1>최종 문구</h1> 형태로 완성합니다.
+                    - 필요하다면 문장 요약/재구성해서 각 태그 안에 할당하지만, **구조(태그)는 건드리지 않습니다**.
+
+                    3. **주석(<!-- -->), 설명, 빈 줄 등 어떤 추가 텍스트도 삽입하지 마세요**.
+                    - 출력은 오직 수정된 HTML 조각만 있어야 합니다.
+
+                    4. **아무런 HTML 속성도 붙이지 말 것** (예: class, style, id 등 금지).
+                    
+                    5. <html>, <head>, <body>, <!DOCTYPE> 같은 최상위 태그는 **절대 추가하지 마세요.**
+
+                    6. 최종 출력은 JSON, 코드블록, 설명, 따옴표 등을 쓰지 말고, **오직 HTML**로만 내놓으세요.
+
+
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
-                    # 입력 데이터:
+                    # 입력 데이터 (summary):
                     {summary}
 
-                    # 섹션:
+                    # HTML 구조 (이 구조는 변경 금지, 안에 텍스트만 채워넣으세요):
                     {html}
-                    
-                    출력예시:
-                    
-                    <h1> content title </h1>
-                    <h3> strength title </h3>
-                    <ul>
-                        <li>
-                            <h2> sub title </h2>
-                            <p> description </p>
-                        </li>
-                        <li>
-                            <h2> sub title2 </h2>
-                            <p> description2 </p>
-                        </li>
-                        <li>
-                            <h2> sub title3 </h2>
-                            <p> description3 </p>
-                        </li>
-                        <li>
-                            <h2> sub title4 </h2>
-                            <p> description4 </p>
-                        </li>
-                    </ul>
-                    <|end_user|>
 
                     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-                    - 입력데이터와 섹션을 기반으로 **HTML**형태 결과를 반환하세요.
-                    반드시 단 하나의 완전한 **HTML** 형태로 결과를 반환하세요.
-                    **아무런 속성도 붙이지 말 것** (class, style, id 등 css 불가) 
+                    - 위 두 정보를 사용해, **주어진 HTML 구조** 안쪽에만 summary 내용을 적절히 배치하세요.
+                    - <html>, <head>, <body> 같은 태그를 추가로 만들지 마세요.
+                    - 구조(태그 이름, 계층, 태그 수, 순서)는 절대 바꾸지 말고, **속성·주석·추가 태그 없이** 그대로 출력하세요.
+                    - 최종 출력은 오직 HTML만, 다른 형식이나 설명 문구 없이 내놓으세요.
                     """
                     print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
@@ -156,7 +145,43 @@ class OllamaBlockRecommend:
                     
         return result_dict
     
-    
+    def extract_emmet_tag(self, text):
+        """
+        주어진 문자열에서 "HTML_Tag": "..." 형태를 찾고,
+        그 안의 값 중 Emmet 표기 부분(h1, h2, h3, p, li(...), etc)만 추출해서 반환합니다.
+        
+        - "신뢰도: 100%" 등 불필요한 문구가 있으면 무시하고 제거합니다.
+        - 사용자가 원하는 문자만 남기고 나머지는 모두 제거합니다.
+        - 유효한 Emmet 문자열이 하나도 없으면 None을 반환합니다.
+        """
+
+        # 예: '**h3_li(h3_p)*3**\r\n\r\n\r\n신뢰도: 100%'
+        print(f"text : {text}")
+
+        # 2) 앞뒤에 있을 수 있는 별표(**) 제거
+        #    예: '**h3_li(h3_p)*3**' → 'h3_li(h3_p)*3'
+        raw_value = text.strip('*').strip()
+        print(f"raw_value : {raw_value}")
+
+        # 3) 여러 줄이 있을 수 있으므로 일단 첫 줄만 취득
+        #    (줄바꿈으로 split하여 첫 요소만)
+        raw_value = raw_value.split('\n', 1)[0]
+        print(f"raw_value : {raw_value}")
+
+        # 4) '신뢰도:', '기타 불필요 텍스트' 같은 것들이 섞여 있을 수 있으니
+        #    여기서는 간단히 공백 기준으로 잘라서,
+        #    허용된 Emmet 문자만 남기고 나머지는 전부 제거.
+        
+        # a) 허용할 Emmet 문자를 정의 (알파벳, 숫자, 괄호, 밑줄, *, +, >, . 등)
+        allowed_chars = set("hlip12345_()*")
+
+        # b) raw_value 내에서 허용된 문자만 살려서 재조합
+        filtered = "".join(ch for ch in raw_value if ch in allowed_chars)
+        print(f"filtered : {filtered}")
+
+        # 5) 최종 결과가 비어 있으면 None 반환
+        return filtered if filtered else text
+
     # ============================================================
 class EmmetParser:
     def parse_emmet(self, emmet_str):
