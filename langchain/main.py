@@ -772,18 +772,18 @@ async def land_summary(request: LandPageRequest):
 
     menu_client = OllamaMenuClient(model=request.model)
 
-    menu_structure = await menu_client.section_structure_create_logic(summary)
-    return summary, menu_structure
+    section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
+    return summary, section_structure, section_per_context
 class landGen(BaseModel):
-    summary: str
     model: str
     block: dict
+    section_context: dict
 
 @app.post("/land_section_generate")
 async def  land_section_generate(request:landGen):
     content_client = OllamaBlockRecommend(model=request.model)
 
-    content = await content_client.generate_block_content(summary=request.summary, block_list=request.block)
+    content = await content_client.generate_block_content(block_list=request.block, context=request.section_context)
         
     print(f"content : {type(content)} / {content}")
         

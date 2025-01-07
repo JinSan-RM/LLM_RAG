@@ -12,6 +12,9 @@ class MenuDataDict(BaseModel):
 
 class MenuDataList(BaseModel):
     menu_structure: List[str]
+
+class SectionContext(BaseModel):
+    section : Dict
     
 MenuUnion = Union[MenuDict, MenuDataDict, MenuDataList]
 
@@ -32,6 +35,7 @@ class OllamaMenuClient:
             "model" : self.model,
             "prompt": prompt,
             "temperature": self.temperature,
+            "format": "json"
         }
         try:
             response = requests.post(self.api_url, json=payload)
@@ -193,6 +197,49 @@ class OllamaMenuClient:
         cleaned_text = re.sub(pattern, '', cleaned_text)
     
         return cleaned_text
+    
+    async def section_per_context(self, data: str, menu:dict):
+        reversed_menu_dict = {value: key for key, value in menu.items()}
+        prompt = f"""
+        <|start_header_id|>system<|end_header_id|>
+        당신은 웹사이트 랜딩 페이지를 구성하는 전문 디자이너입니다.
+        구성된 랜딩 페이지의 각 섹션 구성에 알맞게 입력 데이터({{data}})를 요약/분배하여 섹션 내용에 맞춰 작성하세요.
+
+        ### 규칙
+        1. **섹션 구조**는 다음과 같이 메뉴 이름(키) 목록을 가집니다:
+        {menu}
+        2. 입력 데이터({{data}})에서 필요한 내용을 발췌하여 각 섹션에 알맞게 배정하세요.
+         - 각 섹션마다 내용을 풍부하고 내용 전달할 수 있을 만한 양으로 **150자 정도**로 작성해줘.
+        3. **JSON 형식 이외의** 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
+        4. 최종 출력은 반드시 **오직 JSON 구조**만 반환해야 합니다.
+
+        ### 출력 형식
+        다음 예시처럼 `menu_structure` 객체를 만들어, 각 섹션을 순서대로 키로 하고 값에 요약 데이터를 채워 넣어 주세요.
+        - 예시:
+                menu_structure : {{
+                    "Navbars": "요약 데이터를 토대로 내용 작성",
+                    "Hero Header Sections": "요약 데이터를 토대로 내용 작성",
+                    "Feature Sections": "요약 데이터를 토대로 내용 작성",
+                    "Content Sections": "요약 데이터를 토대로 내용 작성",
+                    "Testimonial Sections": "요약 데이터를 토대로 내용 작성",
+                    "CTA Sections": "요약 데이터를 토대로 내용 작성",
+                    "Pricing Sections": "요약 데이터를 토대로 내용 작성",
+                    "Contact Sections": "요약 데이터를 토대로 내용 작성",
+                    "Footers": "요약 데이터를 토대로 내용 작성"
+                }}
+
+        <|eot_id|><|start_header_id|>user<|end_header_id|>
+        입력 데이터:
+        {data}
+        
+        섹션 구조:
+        {reversed_menu_dict}
+        <|start_header_id|>assistant<|end_header_id|>
+        반드시 **json** 형태로만 결과를 반환
+        """
+        print(f"prompt len : {len(prompt)} / {prompt}")
+        menu_data = await self.send_request(prompt=prompt)
+        return menu_data
 
     async def section_structure_create_logic(self, data: str):
         """
@@ -213,14 +260,15 @@ class OllamaMenuClient:
                 pydantic_menu_data = self.parse_menu_data_union(menu_dict)
                 # print(f"pydantic_menu_data : {pydantic_menu_data}")
                 
-                # 성공적으로 처리된 menu_structure 반환
-                return pydantic_menu_data
+                section_context = await self.section_per_context(data, pydantic_menu_data)
+                section_data = await self.process_menu_data(section_context)
+                print(f"section_context : {section_context}")
+                return pydantic_menu_data, section_data
             except Exception as e:  # 모든 예외를 잡고 싶다면
                 print(f"Error processing landing structure: {e}")
                 repeat_count += 1
-                menu_data = await self.menu_recommend(data)
+                menu_data = await self.section_recommend(data)
 
         # 실패 시 처리
-        print("Failed to process menu data after 3 attempts.")
         return data
                 

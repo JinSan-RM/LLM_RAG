@@ -43,7 +43,7 @@ class OllamaBlockRecommend:
             print(f"HTTP 요청 실패: {e}")
             raise RuntimeError(f"Ollama API 요청 실패: {e}")
         
-    async def generate_block_content(self, summary:str, block_list: dict ):
+    async def generate_block_content(self, block_list: dict, context: dict):
         """
         랜딩 페이지 섹션을 생성하는 함수
         """
@@ -52,7 +52,8 @@ class OllamaBlockRecommend:
         # 프롬프트
         result_dict = {}
         for section_name, HTMLtag_list in block_list.items():
-            
+            if section_name in context:
+                ctx_value = context[section_name]
             prompt = f"""
             <|start_header_id|>system<|end_header_id|>
             1. {section_name} 섹션에 가장 잘 어울리는 태그 하나를 태그리스트트 중에서 선정하세요.
@@ -93,39 +94,34 @@ class OllamaBlockRecommend:
                     print(f"raw_json : {raw_json} || html : {html}")
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
-                    아래 지침을 철저히 지키세요:
-
-                    1. 사용자에게서 입력받은 HTML 구조(html)는 절대 변경하지 않습니다.
-                    - 태그 이름, 태그 계층, 태그의 개수, 순서, 닫힘 태그 등 **그대로 유지**해야 합니다.
-                    - 예: <ul> 내부에 li가 3개면, 꼭 3개만 있어야 하고 추가/삭제 불가.
-                    - 다른 태그나 속성(class, style, id 등)을 추가하거나 삭제하지 마세요.
-
-                    2. 입력 데이터(summary)를 바탕으로, **태그 안의 내용(텍스트)만 적절히 채워넣어** 주세요.
-                    - 예: <h1> </h1> 사이에 summary에서 추출한 내용 등을 넣어, <h1>최종 문구</h1> 형태로 완성합니다.
-                    - 필요하다면 문장 요약/재구성해서 각 태그 안에 할당하지만, **구조(태그)는 건드리지 않습니다**.
-
-                    3. **주석(<!-- -->), 설명, 빈 줄 등 어떤 추가 텍스트도 삽입하지 마세요**.
-                    - 출력은 오직 수정된 HTML 조각만 있어야 합니다.
-
-                    4. **아무런 HTML 속성도 붙이지 말 것** (예: class, style, id 등 금지).
+                    너는 자료를 HTML 태그의 형식에 맞게 정리하는 역할을 할 거야.
                     
-                    5. <html>, <head>, <body>, <!DOCTYPE> 같은 최상위 태그는 **절대 추가하지 마세요.**
-
-                    6. 최종 출력은 JSON, 코드블록, 설명, 따옴표 등을 쓰지 말고, **오직 HTML**로만 내놓으세요.
-
-
+                    1. user가 자료와 HTML 태그를 줄거야. 그러면 자료를 HTML 태그의 특성에 맞춰서 자료를 정리해서 넣으면 돼.
+                    2. 오로지 user가 제공한 HTML 태그들 만을 이용해. 다른 태그를 추가하거나, 설명하는 말을 쓰지마.
+                    3. 내용은 태그 안에만 작성 가능하고, 태그 밖에는 작성하지 마.
+                    4. 전체 섹션 리스트 중, 현재 섹션을 고려해서 내용을 작성해줘.
+                    5. 사용자가 입력한 자료를 하나의 섹션에 다 넣지 않아도 돼. 전체 섹션에 분배해서 들어갈거야.
+                    6. **사용자가 입력한 HTML 구조를 반드시 지켜줘.** 자료를 더 넣으려고 태그를 추가하지 마. 없으면 없는대로 쓸거야.
+                    7. **주석(<!-- -->), 설명, 빈 줄 등 어떤 추가 텍스트도 삽입하지 마세요**. 출력은 오직 수정된 HTML 조각만 있어야 합니다.
+                    8. 최종 출력은 오직 HTML만, 다른 형식이나 설명 문구 없이 내놓으세요.
+                    9. 출력 언어는 한글로 해줘.
+                    
+                    
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
-                    # 입력 데이터 (summary):
-                    {summary}
-
+                    # 전체 섹션 리스트:
+                    {block_list.keys()}
+                    
+                    # 현재 섹션:
+                    {section_name}
+                    
                     # HTML 구조 (이 구조는 변경 금지, 안에 텍스트만 채워넣으세요):
                     {html}
 
+                    # 입력 데이터 (summary):
+                    {ctx_value}
+
                     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-                    - 위 두 정보를 사용해, **주어진 HTML 구조** 안쪽에만 summary 내용을 적절히 배치하세요.
-                    - <html>, <head>, <body> 같은 태그를 추가로 만들지 마세요.
-                    - 구조(태그 이름, 계층, 태그 수, 순서)는 절대 바꾸지 말고, **속성·주석·추가 태그 없이** 그대로 출력하세요.
-                    - 최종 출력은 오직 HTML만, 다른 형식이나 설명 문구 없이 내놓으세요.
+
                     """
                     print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
