@@ -51,9 +51,12 @@ class OllamaBlockRecommend:
         # 블록 리스트들을 받아와서 summary 데이터랑 합쳐서 가장 적합할 블록 추천해달라는 근데 섹션 전체에 각각 다.
         # 프롬프트
         result_dict = {}
-        for section_name, HTMLtag_list in block_list.items():
-            if section_name in context:
-                ctx_value = context[section_name]
+        for section_name, data_list in block_list.items():
+            tag_slice = []
+            for block_id, tag_list in data_list.items():
+                tag_slice.append(tag_list)
+                if section_name in context:
+                    ctx_value = context[section_name]
             prompt = f"""
             <|start_header_id|>system<|end_header_id|>
             1. {section_name} 섹션에 가장 잘 어울리는 태그 하나를 태그리스트트 중에서 선정하세요.
@@ -61,17 +64,17 @@ class OllamaBlockRecommend:
             3. 태그의 HTML 구조는 변경하지 말고 그대로 출력하세요.
             4. **주석(<!-- -->), 설명, 빈 줄 등 추가 텍스트나 요약본, 문장(해설, 코드 등)을 삽입하지 마세요.**
             5. **태그리스트 중 하나만** 최종 출력해야 하며, 다른 모든 형식(JSON, 코드 블록 등)은 절대 포함하지 마세요.
-            6. 예: {HTMLtag_list[0]}
+            6. 예: {tag_slice[0]}
             7. 만약 태그 리스트 중 하나가 아닌 다른 텍스트가 발견되면, 오류가 발생했다고 판단하고 **재시도**하세요.
             8. 출력예시를 따라 출력하세요.
 
             <|eot_id|><|start_header_id|>user<|end_header_id|>
 
             # 태그 리스트:
-            {HTMLtag_list}
+            {tag_slice}
 
             출력예시:
-            {HTMLtag_list[0]}
+            {tag_slice[0]}
 
             <|eot_id|><|start_header_id|>assistant<|end_header_id|>
             **반드시 태그 리스트 안의 데이터 중 하나만 골라서 그 값만 출력하세요.**
@@ -80,6 +83,7 @@ class OllamaBlockRecommend:
             
             raw_json = await self.send_request(prompt=prompt)
             print(f"raw_json bf: {raw_json}")
+            b_id = self.find_key_by_value(mapping=data_list, target_value=raw_json)
             raw_json = self.extract_emmet_tag(raw_json)
             print(f"raw_json af: {raw_json}")
             repeat_count = 0
@@ -129,6 +133,7 @@ class OllamaBlockRecommend:
                     gen_content = re.sub("\n", "", gen_content)
                     print(f"raw_json : {type(gen_content)} {len(gen_content)} / {gen_content}")
                     section_dict['HTML_Tag'] = raw_json
+                    section_dict['Block_id'] = b_id
                     section_dict['gen_content'] = gen_content
                     result_dict[f'{section_name}'] = section_dict
                     break
@@ -138,8 +143,19 @@ class OllamaBlockRecommend:
                 except Exception as e:
                     print(f"Unexpected error: {e}")
                     repeat_count += 1
-                    
+                
         return result_dict
+    
+    def find_key_by_value(self, mapping: dict, target_value: str):
+        """
+        주어진 딕셔너리(mapping)에서 target_value를 값(value)으로 가지는 
+        첫 번째 키(key)를 찾아 반환한다.
+        매칭되는 키가 없으면 None을 반환한다.
+        """
+        for key, value in mapping.items():
+            if value == target_value:
+                return key
+        return None
     
     def extract_emmet_tag(self, text):
         """
