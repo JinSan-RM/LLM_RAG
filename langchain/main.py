@@ -629,6 +629,8 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 #     model: str = "solar"
 class LandPageRequest(BaseModel):
     path: str
+    path2: str = ''
+    path3: str = ''
     model: str = "solar"
     block: dict = {}
     
@@ -643,8 +645,23 @@ async def LLM_land_page_generate(request: LandPageRequest):
         print(f"Start process: {request.path}")
         print(f"Model: {request.model}")
         start = time.time()
-        
+        pdf_list = []
         response = requests.get(request.path)
+        if response.status_code == 200:
+            pdf_data = BytesIO(response.content)
+            pdf_list.append(pdf_data)
+            
+            if request.path2 != ''  :
+            # print("path2 : ", path2)
+                response2 = requests.get(request.path2)
+                pdf_data2 = BytesIO(response2.content)
+                pdf_list.append(pdf_data2)
+            if request.path3 != '' :
+            # print("path3 : ", path3)
+                response3 = requests.get(request.path3)
+                pdf_data3 = BytesIO(response3.content)
+                pdf_list.append(pdf_data3)
+        
         # 응답 상태 확인
         if response.status_code != 200:
             raise HTTPException(
@@ -653,8 +670,10 @@ async def LLM_land_page_generate(request: LandPageRequest):
             )
             
         # Response 내용을 바이트로 가져오기
-        pdf_content = response.content
-        all_text = PDF2TEXT([pdf_content])
+        # pdf_content = response.content
+        # all_text = PDF2TEXT([pdf_content])
+        all_text = PDF2TEXT(pdf_list)
+        print(f"all_text[:500] : {all_text[:500]}")
         end = time.time()
         print(f"menu_create process time : {end - start}")
  
@@ -737,7 +756,26 @@ async def LLM_land_page_generate(request: LandPageRequest):
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
     
+
+    print(f"Start process: {request.path}")
+    print(f"Model: {request.model}")
+    pdf_list = []
     response = requests.get(request.path)
+    if response.status_code == 200:
+        pdf_data = BytesIO(response.content)
+        pdf_list.append(pdf_data)
+        
+        if request.path2 != ''  :
+        # print("path2 : ", path2)
+            response2 = requests.get(request.path2)
+            pdf_data2 = BytesIO(response2.content)
+            pdf_list.append(pdf_data2)
+        if request.path3 != '' :
+        # print("path3 : ", path3)
+            response3 = requests.get(request.path3)
+            pdf_data3 = BytesIO(response3.content)
+            pdf_list.append(pdf_data3)
+    
     # 응답 상태 확인
     if response.status_code != 200:
         raise HTTPException(
@@ -746,9 +784,10 @@ async def land_summary(request: LandPageRequest):
         )
         
     # Response 내용을 바이트로 가져오기
-    pdf_content = response.content
-    all_text = PDF2TEXT([pdf_content])
-
+    # pdf_content = response.content
+    # all_text = PDF2TEXT([pdf_content])
+    all_text = PDF2TEXT(pdf_list)
+    print(f"all_text[:500] : {all_text}")
     if request.model == 'bllossom':
         model_max_token = 8192
         final_summary_length = 6000
