@@ -109,6 +109,7 @@ class OllamaBlockRecommend:
                     7. **주석(<!-- -->), 설명, 빈 줄 등 어떤 추가 텍스트도 삽입하지 마세요**. 출력은 오직 수정된 HTML 조각만 있어야 합니다.
                     8. 최종 출력은 오직 HTML만, 다른 형식이나 설명 문구 없이 내놓으세요.
                     9. 출력 언어는 한글로 해줘.
+                    10. <html> <head> <body> 이런태그는 절대 사용하지 말아줘.
                     
                     
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
@@ -180,7 +181,7 @@ class OllamaBlockRecommend:
         #    허용된 Emmet 문자만 남기고 나머지는 전부 제거.
         
         # a) 허용할 Emmet 문자를 정의 (알파벳, 숫자, 괄호, 밑줄, *, +, >, . 등)
-        allowed_chars = set("hlip123456789_()*")
+        allowed_chars = set("hlip123456789_()*+")
         
 
         # b) raw_value 내에서 허용된 문자만 살려서 재조합

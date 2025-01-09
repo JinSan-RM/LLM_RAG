@@ -116,8 +116,7 @@ class OllamaMenuClient:
         - 구성 규칙은 다음과 같습니다:
 
         1. **필수 섹션**:
-        - "Navbars" (가중치: 0)는 항상 포함됩니다.
-        - "Hero Header Sections" 또는 "Header Sections" (가중치: 10)는 반드시 포함됩니다.
+        - "Hero_Header" (가중치: 10)는 반드시 포함됩니다.
         - "Footers" (가중치: 90)는 항상 마지막 섹션으로 포함됩니다.
 
         2. **가중치 규칙**:
@@ -127,39 +126,38 @@ class OllamaMenuClient:
 
         3. **섹션 목록**:
         아래는 섹션 이름과 가중치입니다:
-        - Navbars: 0
-        - Hero Header Sections: 10
-        - Header Sections: 10
-        - Feature Sections: 30
-        - CTA Sections: 30
-        - Contact Sections: 30
-        - Pricing Sections: 30
-        - Content Sections: 50
-        - Testimonial Sections: 60
-        - FAQ Sections: 60
-        - Logo Sections: 60
-        - Team Sections: 60
-        - Gallery Sections: 60
-        - Bento Grids: 60
-        - Multi-step Forms: 60
-        - Comparison Sections: 60
-        - Footers: 90
-        - Contact Modals: 90
+        - Footers : 0
+        - Hero_Header : 10
+        - Header : 10
+        - Feature : 30
+        - CTA : 30
+        - Contact : 30
+        - Pricing : 30
+        - Stats : 30
+        - Content : 50
+        - Testimonial : 60
+        - FAQ : 60
+        - Logo : 60
+        - Team : 60
+        - Gallery : 60
+        - Multi_step : 60
+        - Timeline : 60
+        - Comparison : 60
+        - Countdown : 60
 
         4. **출력 형식**:
 
         - 섹션 이름을 순서대로 나열한 JSON 형식으로 작성하세요.
         - 예시:
                 menu_structure : {{
-                    "1": "Navbars",
-                    "2": "Hero Header Sections",
-                    "3": "Feature Sections",
-                    "4": "Content Sections",
-                    "5": "Testimonial Sections",
-                    "6": "CTA Sections",
-                    "7": "Pricing Sections",
-                    "8": "Contact Sections",
-                    "9": "Footers"
+                    "1": "Hero_Header",
+                    "2": "Feature",
+                    "3": "Content",
+                    "4": "Testimonial",
+                    "5": "CTA",
+                    "6": "Pricing",
+                    "7": "Contact",
+                    "8": "Footers"
                 }}
 
 
@@ -210,6 +208,7 @@ class OllamaMenuClient:
         {menu}
         2. 입력 데이터({{data}})에서 필요한 내용을 발췌하여 각 섹션에 알맞게 배정하세요.
          - 각 섹션마다 내용을 풍부하고 내용 전달할 수 있을 만한 양으로 **150자 정도**로 작성해줘.
+         - 오탈자가 없게 작성해줘.
         3. **JSON 형식 이외의** 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
         4. 최종 출력은 반드시 **오직 JSON 구조**만 반환해야 합니다.
 
@@ -217,14 +216,13 @@ class OllamaMenuClient:
         다음 예시처럼 `menu_structure` 객체를 만들어, 각 섹션을 순서대로 키로 하고 값에 요약 데이터를 채워 넣어 주세요.
         - 예시:
                 menu_structure : {{
-                    "Navbars": "요약 데이터를 토대로 내용 작성",
-                    "Hero Header Sections": "요약 데이터를 토대로 내용 작성",
-                    "Feature Sections": "요약 데이터를 토대로 내용 작성",
-                    "Content Sections": "요약 데이터를 토대로 내용 작성",
-                    "Testimonial Sections": "요약 데이터를 토대로 내용 작성",
-                    "CTA Sections": "요약 데이터를 토대로 내용 작성",
-                    "Pricing Sections": "요약 데이터를 토대로 내용 작성",
-                    "Contact Sections": "요약 데이터를 토대로 내용 작성",
+                    "Hero_Header": "요약 데이터를 토대로 내용 작성",
+                    "Feature": "요약 데이터를 토대로 내용 작성",
+                    "Content": "요약 데이터를 토대로 내용 작성",
+                    "Testimonial": "요약 데이터를 토대로 내용 작성",
+                    "CTA": "요약 데이터를 토대로 내용 작성",
+                    "Pricing": "요약 데이터를 토대로 내용 작성",
+                    "Contact": "요약 데이터를 토대로 내용 작성",
                     "Footers": "요약 데이터를 토대로 내용 작성"
                 }}
 
@@ -263,6 +261,8 @@ class OllamaMenuClient:
                 section_context = await self.section_per_context(data, pydantic_menu_data)
                 section_data = await self.process_menu_data(section_context)
                 print(f"section_context : {section_context}")
+
+
                 return pydantic_menu_data, section_data
             except Exception as e:  # 모든 예외를 잡고 싶다면
                 print(f"Error processing landing structure: {e}")
@@ -270,5 +270,5 @@ class OllamaMenuClient:
                 menu_data = await self.section_recommend(data)
 
         # 실패 시 처리
-        return data
+        return menu_data, data
                 

@@ -811,7 +811,18 @@ async def land_summary(request: LandPageRequest):
     menu_client = OllamaMenuClient(model=request.model)
 
     section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
-    return summary, section_structure, section_per_context
+    # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
+    ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=lambda x: int(x))]
+
+    # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
+    second_items = list(section_per_context.items())
+
+    # 3. 순차적으로 매핑하기
+    new_dict = {}
+    for new_key, (_, value) in zip(ordered_new_keys, second_items):
+        new_dict[new_key] = value
+    print(f"result : {new_dict}")
+    return summary, new_dict
 
 # section context 데이터와 section structure 데이터를 기반으로
 # 섹션 별 태그에 적합한 블럭 추천
