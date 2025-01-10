@@ -2,7 +2,7 @@ import fitz, re, requests
 from io import BytesIO
 from fastapi import HTTPException
 
-class PDFHandle:
+class PDFHandle():
     
     def __init__(self, path: str, path2: str = '', path3: str = ''):
         self.path = path
