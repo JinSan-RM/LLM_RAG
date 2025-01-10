@@ -2,18 +2,10 @@
 메인 실행 파일
 '''
 # main.py
-from config.config import MILVUS_HOST, MILVUS_PORT
 from pipelines.content_chain import ContentChain
-from utils.helpers import languagechecker, insert_data, create_collection, search_data
-from utils.ollama.ollama_embedding import get_embedding_from_ollama, OllamaEmbeddings, embedding_from_ollama
-from utils.ollama.ollama_client import OllamaClient, OllamaLLM
-from utils.ollama.ollama_content import OllamaContentClient
-from utils.RAGChain import CustomRAGChain
+from utils.helpers import languagechecker
 from utils.PDF2TXT import PDFHandle
-from script.prompt import RAG_TEMPLATE, WEB_MENU_TEMPLATE
 from utils.ollama.ollama_chat import OllamaChatClient
-from pipelines.content_summary import SummaryContentChain
-from utils.ollama.land.ollama_landingpage import OllamaLandingClient
 from utils.ollama.land.ollama_menu import OllamaMenuClient
 from utils.ollama.land.ollama_summary import OllamaSummaryClient
 from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
@@ -22,19 +14,8 @@ from models.models_conf import ModelParam
 # ------------------------------------------------------------------------ #
 # outdoor lib
 
-from fastapi import FastAPI, HTTPException, Body
-from fastapi.responses import StreamingResponse
-from langchain.vectorstores import Milvus
-from langchain.prompts import PromptTemplate
-from langchain.chains import RetrievalQA
-from pymilvus import connections, Collection, utility
-from typing import AsyncGenerator, List, Any, Union
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Dict
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import requests, json, re
-from io import BytesIO
 import time, random
 import torch, gc
 
@@ -69,22 +50,9 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
                 pdf_data = pdf_data[:8192]
         
 
-        content_chain = ContentChain()
         # ContentChain에서 결과 생성
-        # result = content_chain.run(all_text, discriminant, model='llama3.2', value_type='menu')
+        content_chain = ContentChain()
         result = content_chain.run(pdf_data, discriminant, model='bllossom', value_type='menu')
-        print("process end structure")
-        # if result['menu_structure']:
-        #     menu_content = []
-        #     for menu in result['menu_structure']:
-        #         context = None
-        #         menu_content_dict = {}
-        #         context = content_chain.contents_run(model='bllossom', input_text=all_text, menu=menu)
-        #         menu_content_dict[menu] = context
-        #         menu_content.append(menu_content_dict)
-        #         print(f"menu_content_dict[menu] : {menu_content_dict[menu]}")
-        #     result['menu_content'] = menu_content
-                
         
         print(f"Final result: {result}")  # 디버깅용 출력
 
@@ -101,9 +69,7 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
 # ======================================================================================
 # LLM기반 랜딩 페이지 제작 API
 # ======================================================================================
-# class LandPageRequest(BaseModel):
-#     input_text: str
-#     model: str = "solar"
+
 class LandPageRequest(BaseModel):
     path: str
     path2: str = ''
@@ -245,10 +211,24 @@ async def  land_section_generate(request:landGen):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #===================================================================================================
-#===================================================================================================
-#===================================================================================================
-# chat 방식 테스트트
+
+# chat 방식 테스트
 @app.post("/chat_landpage_generate")
 async def chat_landpage_generate(request: LandPageRequest):
     client = OllamaChatClient()

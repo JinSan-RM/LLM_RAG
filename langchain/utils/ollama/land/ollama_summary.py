@@ -1,7 +1,6 @@
-from utils.ollama.ollama_content import OllamaContentClient
 from config.config import OLLAMA_API_URL
 import requests, json
-from typing import List, Dict
+from typing import List
 
 
 class OllamaSummaryClient:
@@ -55,18 +54,14 @@ class OllamaSummaryClient:
         """
         return [data[i:i + max_length] for i in range(0, len(data), max_length)]
     
-    async def summarize_chunk(self, chunk: str, max_tokens: int, desired_summary_length: int, previous_summary: str = "") -> str:
+    async def summarize_chunk(self, chunk: str, desired_summary_length: int, previous_summary: str = "") -> str:
         """
         단일 청크를 요약하는 비동기 함수
         :param chunk: 요약할 청크 문자열
-        :param max_tokens: 요약 시 사용할 최대 토큰 수
         :param previous_summary: 이전에 요약된 내용 (옵션)
         :return: 요약된 문자열
         """
-        # print(f"previous_summary : {len(previous_summary)}   {previous_summary}\n")
-        # print(f"chunk : {len(chunk)}   {chunk}\n")
-        # print(f"desired_summary_length : {desired_summary_length}")
-        
+
         if previous_summary:
             combined_text = f"{previous_summary}\n\n{chunk}"
         else:
@@ -99,12 +94,12 @@ class OllamaSummaryClient:
         """
         # 모든 요약을 합침
         combined_summary = ' '.join(summaries)
-        # print(f"[backpropagation_summary] Combined summary length before trimming: {len(combined_summary)}")
+        
         
         # 최종 요약 길이에 맞게 자름
         if len(combined_summary) > final_summary_length:
             combined_summary = combined_summary[:final_summary_length]
-            # print(f"[backpropagation_summary] Trimmed combined summary to {final_summary_length} characters")
+        
         else:
             print(f"[backpropagation_summary] Combined summary is within the final_summary_length")
         
@@ -169,7 +164,7 @@ class OllamaSummaryClient:
             w = 100
         else:
             w = 100  # 기본값 설정
-        # print(f"[store_chunks] Model max token: {model_max_token}, w: {w}")
+        
         
         current_chunk_number = 0
         remaining_data = data
@@ -181,7 +176,7 @@ class OllamaSummaryClient:
             # 현재 청크 크기 계산
             current_chunk_size = max_tokens_per_chunk - (w * current_chunk_number)
             current_chunk_size = max(current_chunk_size, 100)
-            # print(f"[store_chunks] Current chunk number: {current_chunk_number}, chunk size: {current_chunk_size}")
+        
             
             # 청크 분할
             chunks = self.split_into_chunks(remaining_data, current_chunk_size)
@@ -193,98 +188,41 @@ class OllamaSummaryClient:
             # 첫 번째 청크 가져오기
             current_chunk = chunks[0]
             remaining_data = ''.join(chunks[1:])  # 나머지 데이터
-            # print(f"[store_chunks] Processing chunk {current_chunk_number + 1} with size {len(current_chunk)} characters")
+        
             
             # 마지막 요약 길이를 계산
             remaining_summary_space = final_summary_length - accumulated_summary_length
             if remaining_summary_space <= 0:
-                # print(f"[store_chunks] Remaining summary space is 0. Stopping.")
+                print(f"[store_chunks] Remaining summary space is 0. Stopping.")
                 break
             
             # 현재 요약 목표 설정
             desired_summary_length = min(500 + (w * current_chunk_number), remaining_summary_space)
             max_tokens = min(max_tokens_per_chunk - (w * current_chunk_number), remaining_summary_space)
             max_tokens = max(max_tokens, 100)  # 최소 100은 보장
-            # print(f"[store_chunks] Desired summary length: {desired_summary_length}, max_tokens: {max_tokens}")
+            
             
             # 청크 요약 (이전 요약을 포함)
-            summary = await self.summarize_chunk(current_chunk, max_tokens, desired_summary_length, previous_summary)
+            summary = await self.summarize_chunk(current_chunk, desired_summary_length, previous_summary)
             if not summary:
                 print("[store_chunks] Summary failed for current chunk. Skipping to next.")
                 continue
             
             if len(summary) > remaining_summary_space:
                 summary = summary[:remaining_summary_space]
-                # print(f"[store_chunks] Trimmed summary to remaining space: {remaining_summary_space} characters.")
+            
                 
             summarized_chunks.append(summary)
             accumulated_summary_length += len(summary)
-            # print(f"[store_chunks] Accumulated summary length: {accumulated_summary_length}")
+            
             previous_summary = summary  # 현재 요약을 다음 청크에 포함
             
             current_chunk_number += 1
         
         # 모든 요약된 청크를 합쳐 최종 요약 생성
-        # print("[store_chunks] Combining all summarized chunks into final summary.")
         final_summary = ' '.join(summarized_chunks)  # 이미 초과 방지됨
-        # print(f"[store_chunks] Final summary length: {len(final_summary)} characters")
-        proposal = await self.summary_proposal(final_summary)
-        # print(f"\n proposal : {proposal}\n ")
+        
+        # 원하면 proposal 사용 가능
+        # proposal = await self.summary_proposal(final_summary)
         
         return final_summary
-    # 1. 데이터 청크로 분할
-        chunks = self.split_into_chunks(data, max_tokens_per_chunk)
-        summarized_chunks = []
-        cycle_chunk = max_tokens / len(chunks)
-        print("\n=============>", len(chunks), type(chunks), cycle_chunk,"<================cycle_chunk\n")
-        # 2. 각 청크를 요약
-        for idx, chunk in enumerate(chunks):
-            # 메시지 형식으로 변환
-            prompt = f"""
-            <|start_header_id|>system<|end_header_id|>
-            - 입력된 데이터를 요약해주세요.
-            <|eot_id|><|start_header_id|>user<|end_header_id|>
-            입력 데이터:
-            {chunk}
-            """
-            try:
-                # API 요청 (비동기 함수이므로 await 사용)
-                response = await self.send_request(prompt=prompt)
-
-                summarized_chunks.append(response)
-                print(f"Chunk {idx + 1} 요약 완료. \n {response}")
-            
-            except Exception as e:
-                print(f"Chunk {idx + 1} 처리 중 오류 발생: {e}")
-
-        # 3. 모든 요약을 하나로 결합
-        combined_summaries = ' '.join(summarized_chunks)
-        
-        # 4. 최종 요약 요청
-        prompt = f"""
-        <|start_header_id|>system<|end_header_id|>
-        - 입력된 내용을 기반으로 {max_tokens}자 이내로 기획서를 작성해 주세요.
-        <|eot_id|><|start_header_id|>user<|end_header_id|>
-        입력 데이터:
-        {combined_summaries}
-        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-        - 입력된 내용을 기반으로 {max_tokens}자 이내로 기획서를 작성해 주세요.
-        """
-    
-        try:
-            # final_websiteplan = WebsitePlan( **combined_summaries )
-            # summarized_chunks.append(website_plan.dict())
-            final_response = await self.send_request(prompt=prompt)
-            print(final_response,"<====final_response")
-
-            # 최종 요약이 500자를 초과하지 않도록 확인
-            if len(final_response) > final_summary_length:
-                final_response = final_response[:final_summary_length]
-                print("최종 요약이 500자를 초과하여 잘랐습니다.")
-
-            print("최종 요약 완료.")
-            return final_response
-
-        except Exception as e:
-            print(f"최종 요약 처리 중 오류 발생: {e}")
-            return ""

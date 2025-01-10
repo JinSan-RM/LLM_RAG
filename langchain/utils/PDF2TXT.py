@@ -91,7 +91,12 @@ class PDFHandle():
         return text
 
     def PDF_request(self):
-        
+        """
+        PDF에서 추출한 텍스트를 정리하는 함수
+            
+        Returns:
+            str: PDF 기반 전체 텍스트
+        """
         pdf_list = []
         response = requests.get(self.path)
         
