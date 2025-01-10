@@ -9,7 +9,7 @@ from utils.ollama.ollama_embedding import get_embedding_from_ollama, OllamaEmbed
 from utils.ollama.ollama_client import OllamaClient, OllamaLLM
 from utils.ollama.ollama_content import OllamaContentClient
 from utils.RAGChain import CustomRAGChain
-from utils.PDF2TXT import PDF2TEXT
+from utils.PDF2TXT import PDFHandle
 from script.prompt import RAG_TEMPLATE, WEB_MENU_TEMPLATE
 from utils.ollama.ollama_chat import OllamaChatClient
 from pipelines.content_summary import SummaryContentChain
@@ -17,6 +17,7 @@ from utils.ollama.land.ollama_landingpage import OllamaLandingClient
 from utils.ollama.land.ollama_menu import OllamaMenuClient
 from utils.ollama.land.ollama_summary import OllamaSummaryClient
 from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
+from models.models_conf import ModelParam
 # local lib
 # ------------------------------------------------------------------------ #
 # outdoor lib
@@ -559,43 +560,24 @@ async def generate_menu(path: str, path2: str='', path3: str=''):
     torch.cuda.empty_cache()
     
     try:
-        pdf_list = []
-        response = requests.get(path)
-
-        if response.status_code == 200:
-            pdf_data = BytesIO(response.content)
-            pdf_list.append(pdf_data)
-            
-            if path2 != ''  :
-            # print("path2 : ", path2)
-                response2 = requests.get(path2)
-                pdf_data2 = BytesIO(response2.content)
-                pdf_list.append(pdf_data2)
-            if path3 != '' :
-            # print("path3 : ", path3)
-                response3 = requests.get(path3)
-                pdf_data3 = BytesIO(response3.content)
-                pdf_list.append(pdf_data3)
-        all_text = PDF2TEXT(pdf_list)
-        print(all_text[:1000], len(all_text),"<====all_text \n")
+        pdf_handle = PDFHandle()
+        pdf_data = pdf_handle.PDF_request(path, path2, path3)
   
         
         start = time.time() 
         # 입력 텍스트가 한국어인지 판별 뺴야함 이부분들 한국어 체크
-        discriminant = languagechecker(all_text)
+        discriminant = languagechecker(pdf_data)
         if discriminant:
-            if len(all_text) > 2500:
-                all_text = all_text[:2500]
+            if len(pdf_data) > 2500:
+                pdf_data = pdf_data[:2500]
         else:
-            if len(all_text) > 8192:
-                all_text = all_text[:8192]
+            if len(pdf_data) > 8192:
+                pdf_data = pdf_data[:8192]
         
-        print(len(all_text), "after")
-        print(discriminant, "<===진행")
 
         # ContentChain에서 결과 생성
         # result = content_chain.run(all_text, discriminant, model='llama3.2', value_type='menu')
-        result = content_chain.run(all_text, discriminant, model='bllossom', value_type='menu')
+        result = content_chain.run(pdf_data, discriminant, model='bllossom', value_type='menu')
         print("process end structure")
         # if result['menu_structure']:
         #     menu_content = []
@@ -633,113 +615,53 @@ class LandPageRequest(BaseModel):
     path3: str = ''
     model: str = "solar"
     block: dict = {}
-    
+# Example
+'''
+{
+    "path" : "https://cdn.zaemit.com/weven_data/app_weven/ai/PDF/회사소개서_KG이니시스.pdf",
+    "path2" : "",
+    "path3" : "",
+    "model" : "EEVE"
+    "block" : {}
+}
+'''
 # 엔드포인트 정의
 @app.post("/generate_land_section")
 async def LLM_land_page_generate(request: LandPageRequest):
     """
     랜딩 페이지 섹션 생성을 처리하는 API 엔드포인트
     """
-    start_main = time.time()
     try:
-        print(f"Start process: {request.path}")
-        print(f"Model: {request.model}")
-        start = time.time()
-        pdf_list = []
-        response = requests.get(request.path)
-        if response.status_code == 200:
-            pdf_data = BytesIO(response.content)
-            pdf_list.append(pdf_data)
-            
-            if request.path2 != ''  :
-            # print("path2 : ", path2)
-                response2 = requests.get(request.path2)
-                pdf_data2 = BytesIO(response2.content)
-                pdf_list.append(pdf_data2)
-            if request.path3 != '' :
-            # print("path3 : ", path3)
-                response3 = requests.get(request.path3)
-                pdf_data3 = BytesIO(response3.content)
-                pdf_list.append(pdf_data3)
+        # ========================
+        #         PDF 모듈
+        # ========================
+        pdf_handle = PDFHandle()
+        pdf_text = pdf_handle.PDF_request(request.path, request.path2, request.path3)
         
-        # 응답 상태 확인
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail="PDF 파일을 다운로드할 수 없습니다."
-            )
-            
-        # Response 내용을 바이트로 가져오기
-        # pdf_content = response.content
-        # all_text = PDF2TEXT([pdf_content])
-        all_text = PDF2TEXT(pdf_list)
-        print(f"all_text[:500] : {all_text[:500]}")
-        end = time.time()
-        print(f"menu_create process time : {end - start}")
- 
-        
-        # OllamaContentClient와 ConversationHandler 초기화
-        # content_client = OllamaLandingClient(model=request.model)
-        
-        if request.model == 'bllossom':
-            model_max_token = 8192
-            final_summary_length = 6000
-            max_tokens_per_chunk = 6000
-        elif request.model == 'solar':
-            model_max_token = 2048
-            final_summary_length = 1000
-            max_tokens_per_chunk = 1000
-        elif request.model == 'llama3.2':
-            model_max_token = 8192
-            final_summary_length = 6000
-            max_tokens_per_chunk = 6000
-        elif request.model == 'EEVE':
-            model_max_token = 4096
-            final_summary_length = 3000
-            max_tokens_per_chunk = 3000
-            
-        start = time.time()
+        # ========================
+        #      model set 모듈
+        # ========================
+        model_conf = ModelParam()
+        model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set(request.model)
+
+        # ========================
+        #      내용 요약 모듈
+        # ========================
         summary_client = OllamaSummaryClient(model=request.model)
-        summary = await summary_client.store_chunks(data=all_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+        summary = await summary_client.store_chunks(data=pdf_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
         
+        # ========================
+        #      메뉴 생성 모듈
+        # ========================
         menu_client = OllamaMenuClient(model=request.model)
-        end = time.time()
-        
-        print(f"summary process time : {end - start}")
-        print("menu logic")
-        start = time.time()
         menu_structure = await menu_client.section_structure_create_logic(summary)
-        
-        
-
-        end = time.time()
-        print(f"menu_create process time : {end - start}")
-
+        # ========================
+        #      블록 추천 모듈
+        # ========================
         block_client = OllamaBlockRecommend(model=request.model)
         result = await block_client.generate_block_content(summary=summary, block_list=request.block)
         print(f"result : {result}")
-        
-        #==============================================================================================
-        # print(f"Generated landing structure: {menu_structure}")
-        # result_dict = {}
-        # for section_num, section_name in menu_structure.items():
-        #     print(f"Processing section {section_num}: {section_name}")
 
-        #     time.sleep(0.5)
-        #     # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
-        #     content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
-        #     print(f"content {section_name} : {content}\n")
-        #     print(f"content {len(section_name)} : {len(content)}\n")
-        #     if len(content) == 0  or len(tag) == 0:
-        #         print("content or tag is None cause retry")
-        #         content, tag = await content_client.generate_section(model=request.model,summary=summary, section_name=section_name, section_num= section_num)
-        #     print(f"content {section_name} : {content} \n")
-        #     result_dict[f'{section_num}_Section'] = {"content" : content, "HTML_tag": tag, "section_tag":section_name}
-            
-        # print(f"result_dict : {result_dict}")
-
-        # end_main = time.time()
-        # t = end_main - start_main
         return result
 
     except Exception as e:
@@ -748,7 +670,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
 
 #===================================================================================================
 #===================================================================================================
-#===================================================================================================
+
 # API summary, menu, section 분리 작업. 
 # pdf 읽고 summary 생성
 # summary 기반으로 섹션 구조 추천
@@ -756,61 +678,30 @@ async def LLM_land_page_generate(request: LandPageRequest):
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
     
-
-    print(f"Start process: {request.path}")
-    print(f"Model: {request.model}")
-    pdf_list = []
-    response = requests.get(request.path)
-    if response.status_code == 200:
-        pdf_data = BytesIO(response.content)
-        pdf_list.append(pdf_data)
-        
-        if request.path2 != ''  :
-        # print("path2 : ", path2)
-            response2 = requests.get(request.path2)
-            pdf_data2 = BytesIO(response2.content)
-            pdf_list.append(pdf_data2)
-        if request.path3 != '' :
-        # print("path3 : ", path3)
-            response3 = requests.get(request.path3)
-            pdf_data3 = BytesIO(response3.content)
-            pdf_list.append(pdf_data3)
+    # ========================
+    #         PDF 모듈
+    # ========================
+    pdf_handle = PDFHandle()
+    pdf_data = pdf_handle.PDF_request(request.path, request.path2, request.path3)
     
-    # 응답 상태 확인
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail="PDF 파일을 다운로드할 수 없습니다."
-        )
-        
-    # Response 내용을 바이트로 가져오기
-    # pdf_content = response.content
-    # all_text = PDF2TEXT([pdf_content])
-    all_text = PDF2TEXT(pdf_list)
-    print(f"all_text[:500] : {all_text}")
-    if request.model == 'bllossom':
-        model_max_token = 8192
-        final_summary_length = 6000
-        max_tokens_per_chunk = 6000
-    elif request.model == 'solar':
-        model_max_token = 2048
-        final_summary_length = 1000
-        max_tokens_per_chunk = 1000
-    elif request.model == 'llama3.2':
-        model_max_token = 8192
-        final_summary_length = 6000
-        max_tokens_per_chunk = 6000
-    elif request.model == 'EEVE':
-        model_max_token = 4096      
-        final_summary_length = 3000
-        max_tokens_per_chunk = 3000
-        
+    # ========================
+    #      model set 모듈
+    # ========================
+    model_conf = ModelParam()
+    model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set(request.model)
+    
+    # ========================
+    #      내용 요약 모듈
+    # ========================
     summary_client = OllamaSummaryClient(model=request.model)
-    summary = await summary_client.store_chunks(data=all_text, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
+    summary = await summary_client.store_chunks(data=pdf_data, model_max_token=model_max_token, final_summary_length=final_summary_length, max_tokens_per_chunk=max_tokens_per_chunk)
 
+    # ========================
+    #      메뉴 생성 모듈
+    # ========================
     menu_client = OllamaMenuClient(model=request.model)
-
     section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
+
     # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
     ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=lambda x: int(x))]
 
@@ -824,6 +715,8 @@ async def land_summary(request: LandPageRequest):
     print(f"result : {new_dict}")
     return summary, new_dict
 
+
+
 # section context 데이터와 section structure 데이터를 기반으로
 # 섹션 별 태그에 적합한 블럭 추천
 # section 별 태그에 값을 입력
@@ -833,16 +726,31 @@ class landGen(BaseModel):
     block: dict
     section_context: dict
 
+# Example Data
+'''
+{   "model" : "EEVE",
+    "block" : {
+        "Navbars" : {"b101":"h1_p_p_p_p", "b111":"h2_p_p_p_p", "b121":"h3_p_p_p_p"},
+        },
+   "section_context" : {
+        "Navbars": "KG이니시스는 1998년 설립된 전자결제 선도 기업으로, 시장 점유율 1위를 자랑하며 안전한 결제 서비스를 제공합니다. 다양한 사업 분야를 통해 온라인 및 오프라인 가맹점에 종합적인 솔루션을 제공하며 간편결제, 통합간편결제, VA(Value Added Network) 등 다양한 서비스를 제공합니다."
+        }
+}
+'''
+    
 @app.post("/land_section_generate")
 async def  land_section_generate(request:landGen):
+    # ==============================================
+    #        블록 추천 / 블록 컨텐츠 생성 모듈    
+    # ==============================================
     content_client = OllamaBlockRecommend(model=request.model)
-
     content = await content_client.generate_block_content(block_list=request.block, context=request.section_context)
-        
-    print(f"content : {type(content)} / {content}")
-        
     
     return content
+
+
+
+
 #===================================================================================================
 #===================================================================================================
 #===================================================================================================
