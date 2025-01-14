@@ -1,4 +1,4 @@
-FROM /usr/local/bin/EEVE-Korean-Instruct-10.8B-v1.0-Q4_K_M.gguf
+FROM ./EEVE-Korean-Instruct-10.8B-v1.0-Q4_K_M.gguf
 
 TEMPLATE """{{- if .System }}
 <s>{{ .System }}</s>
