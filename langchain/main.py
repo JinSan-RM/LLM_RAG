@@ -74,7 +74,7 @@ class LandPageRequest(BaseModel):
     path: str
     path2: str = ''
     path3: str = ''
-    model: str = "solar"
+    model: str = ''
     block: dict = {}
 # Example
 '''
@@ -137,7 +137,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
 # 섹션 구조에 알맞게 context 내용 나눠서. 데이터 전송
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
-    
+    start = time.time()
     # ========================
     #         PDF 모듈
     # ========================
@@ -173,7 +173,9 @@ async def land_summary(request: LandPageRequest):
     for new_key, (_, value) in zip(ordered_new_keys, second_items):
         new_dict[new_key] = value
     print(f"result : {new_dict}")
-    return summary, new_dict
+    end = time.time()
+    t = (end - start)
+    return summary, new_dict, t
 
 
 
@@ -200,13 +202,15 @@ class landGen(BaseModel):
     
 @app.post("/land_section_generate")
 async def  land_section_generate(request:landGen):
+    start = time.time()
     # ==============================================
     #        블록 추천 / 블록 컨텐츠 생성 모듈    
     # ==============================================
     content_client = OllamaBlockRecommend(model=request.model)
     content = await content_client.generate_block_content(block_list=request.block, context=request.section_context)
-    
-    return content
+    end = time.time()
+    t = (end - start)
+    return content, t
 
 
 
