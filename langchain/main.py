@@ -175,7 +175,8 @@ async def land_summary(request: LandPageRequest):
     print(f"result : {new_dict}")
     end = time.time()
     t = (end - start)
-    return summary, new_dict, t
+    print(f" running time : {t}")
+    return summary, new_dict
 
 
 
@@ -210,7 +211,9 @@ async def  land_section_generate(request:landGen):
     content = await content_client.generate_block_content(block_list=request.block, context=request.section_context)
     end = time.time()
     t = (end - start)
-    return content, t
+    print(f" running time : {t}")
+    print(f" content : {content}")
+    return content
 
 
 
