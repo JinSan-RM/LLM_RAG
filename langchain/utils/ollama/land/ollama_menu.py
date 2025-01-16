@@ -117,7 +117,6 @@ class OllamaMenuClient:
 
         1. **필수 섹션**:
         - "Hero_Header" (가중치: 10)는 반드시 포함됩니다.
-        - "Footers" (가중치: 90)는 항상 마지막 섹션으로 포함됩니다.
 
         2. **가중치 규칙**:
         - 가중치가 낮을수록 자주 선택되어야 합니다.
@@ -126,9 +125,7 @@ class OllamaMenuClient:
 
         3. **섹션 목록**:
         아래는 섹션 이름과 가중치입니다:
-        - Footers : 0
         - Hero_Header : 10
-        - Header : 10
         - Feature : 30
         - CTA : 30
         - Contact : 30
@@ -160,7 +157,6 @@ class OllamaMenuClient:
                 "5": "CTA",
                 "6": "Pricing",
                 "7": "Contact",
-                "8": "Footers"
             }}
         
 
