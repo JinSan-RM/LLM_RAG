@@ -116,7 +116,7 @@ class OllamaMenuClient:
         - 구성 규칙은 다음과 같습니다:
 
         1. **필수 섹션**:
-        - "Hero_Header" (가중치: 10)는 반드시 포함됩니다.
+        - "Hero" (가중치: 10)는 반드시 포함됩니다.
 
         2. **가중치 규칙**:
         - 가중치가 낮을수록 자주 선택되어야 합니다.
@@ -125,7 +125,7 @@ class OllamaMenuClient:
 
         3. **섹션 목록**:
         아래는 섹션 이름과 가중치입니다:
-        - Hero_Header : 10
+        - Hero : 10
         - Feature : 30
         - CTA : 30
         - Contact : 30
@@ -150,7 +150,7 @@ class OllamaMenuClient:
 
         예시(단순 참고용):
             "menu_structure": {{
-                "1": "Hero_Header",
+                "1": "Hero",
                 "2": "Feature",
                 "3": "Content",
                 "4": "Testimonial",
@@ -219,7 +219,7 @@ class OllamaMenuClient:
         다음 예시처럼 `menu_structure` 객체를 만들어, 각 섹션을 순서대로 키로 하고 값에 요약 데이터를 채워 넣어 주세요.
         - 예시:
                 menu_structure : {{
-                    "Hero_Header": "요약 데이터를 토대로 내용 작성",
+                    "Hero": "요약 데이터를 토대로 내용 작성",
                     "Feature": "요약 데이터를 토대로 내용 작성",
                     "Content": "요약 데이터를 토대로 내용 작성",
                     "Testimonial": "요약 데이터를 토대로 내용 작성",

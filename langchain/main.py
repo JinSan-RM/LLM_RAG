@@ -9,6 +9,8 @@ from utils.ollama.ollama_chat import OllamaChatClient
 from utils.ollama.land.ollama_menu import OllamaMenuClient
 from utils.ollama.land.ollama_summary import OllamaSummaryClient
 from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
+from utils.RAGChain import  MilvusHandle
+from utils.milvus_collection import MilvusDataHandler
 from models.models_conf import ModelParam
 # local lib
 # ------------------------------------------------------------------------ #
@@ -18,6 +20,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import time, random
 import torch, gc
+import pandas as pd
+from pymilvus  import Collection, connections
+
 
 app = FastAPI()
 
@@ -164,15 +169,15 @@ async def land_summary(request: LandPageRequest):
 
     # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
     ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=lambda x: int(x))]
-    section_structure_copy = ordered_new_keys
+    section_structure_copy = ordered_new_keys.copy()
     ordered_new_keys.insert(0, "Header")
     ordered_new_keys.append( "Footer")
     print(f"ordered_new_keys : {ordered_new_keys}")
 
     # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
     second_items = list(section_per_context.items())
-    second_items.insert(0, ('Header', section_structure_copy[:]))
-    second_items.append(('Footer', section_structure_copy[:]))
+    second_items.insert(0, ('Header', section_structure_copy))
+    second_items.append(('Footer', section_structure_copy))
     print(f"second_items : {second_items}")
 
     # 3. 순차적으로 매핑하기
@@ -227,8 +232,55 @@ async def  land_section_generate(request:landGen):
 
 
 
+# ===================================================================================
+# milvus
+# ===================================================================================
+@app.post('/openai_faq')
+def insert_faq():
+    try:
+        milvus_handler = MilvusDataHandler() 
+        # JSON 파일 경로
+        faq_data = '/app/블럭데이터.json'
+        print(f"FAQ Data Path: {faq_data}")
 
+        # JSON 데이터 로드
+        json_data = milvus_handler.load_json(faq_data)
+        print(f"Loaded JSON Data: {json_data}")
 
+        # 데이터 전처리
+        processed_data = milvus_handler.process_data(json_data)
+
+        # Milvus 컬렉션 생성
+        collection = milvus_handler.create_milvus_collection()
+
+        # 데이터 삽입
+        milvus_handler.insert_data_to_milvus(collection, processed_data)
+        return {"status": "success", "message": "Data inserted into Milvus!"}
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return {"status": "error", "message": str(e)}
+
+    
+@app.post('/query_search')
+def search_db():
+    # Milvus에 연결
+    connections.connect(alias="default", host="172.19.0.6", port="19530")
+
+    # 컬렉션 이름
+    collection_name = "block_collection"
+
+    # 컬렉션 객체 생성
+    collection = Collection(name=collection_name)
+    collection.load()
+
+    print(f"컬렉션 '{collection_name}'이 메모리에 로드되었습니다.")
+    results = collection.query(
+                        expr="", 
+                        output_fields=["template_id", "section_type", "emmet_tag", "additional_tags", "embedding", "popularity", "layout_type"], 
+                        limit=10
+                    )
+    for result in results:
+        print(result)
 
 
 
