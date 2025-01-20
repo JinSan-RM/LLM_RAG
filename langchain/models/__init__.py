@@ -1,0 +1,1 @@
+from .models_conf import KO_EN_MODEL_PATH, EN_KO_MODEL_PATH, ModelParam
