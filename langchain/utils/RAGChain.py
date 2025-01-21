@@ -41,9 +41,9 @@ class MilvusHandle:
         ]
         
         # 존재 유무 확인 후 컬렉션 있는지 체크 후 생성.
-        self.schema = CollectionSchema(fields=self.fields, description="FAQ embeddings")
-        if not utility.has_collection("faq"):
-            self.collection = Collection(name="faq", schema=self.schema)
+        self.schema = CollectionSchema(fields=self.fields, description="block_collection")
+        if not utility.has_collection("block_collection"):
+            self.collection = Collection(name="block_collection", schema=self.schema)
             # 텍스트 임베딩 데이터를 벡터간의 유사도로  조회 / cosine 유사도 기준으로 설정 
             index_params = {
                 "metric_type": "COSINE",
@@ -53,7 +53,7 @@ class MilvusHandle:
             self.collection.create_index(field_name="embedding", index_params=index_params)
             print("컬렉션 생성")
         else:
-            self.collection = Collection(name="faq")
+            self.collection = Collection(name="block_collection")
             print("컬렉션 이미 존재")
             
         self.collection.load()

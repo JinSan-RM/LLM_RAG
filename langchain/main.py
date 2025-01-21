@@ -176,8 +176,8 @@ async def land_summary(request: LandPageRequest):
 
     # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
     second_items = list(section_per_context.items())
-    second_items.insert(0, ('Header', section_structure_copy))
-    second_items.append(('Footer', section_structure_copy))
+    second_items.insert(0, ('Header', ', '.join(section_structure_copy)))
+    second_items.append(('Footer', ', '.join(section_structure_copy)))
     print(f"second_items : {second_items}")
 
     # 3. 순차적으로 매핑하기

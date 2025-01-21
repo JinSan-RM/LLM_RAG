@@ -1,7 +1,7 @@
 from config.config import OLLAMA_API_URL
 import requests, json, re
-
-
+from collections import defaultdict
+import difflib
 class OllamaBlockRecommend:
     
     def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model:str = ''):
@@ -53,7 +53,7 @@ class OllamaBlockRecommend:
         result_dict = {}
         for section_name, data_list in block_list.items():
             tag_slice = []
-            for block_id, tag_list in data_list.items():
+            for block_id, tag_list  in data_list.items(): #
                 tag_slice.append(tag_list)
                 if section_name in context:
                     ctx_value = context[section_name]
@@ -84,8 +84,14 @@ class OllamaBlockRecommend:
             raw_json = await self.send_request(prompt=prompt)
             print(f"raw_json bf: {raw_json}")
             b_id = self.find_key_by_value(mapping=data_list, target_value=raw_json)
-            raw_json = self.extract_emmet_tag(raw_json)
-            print(f"raw_json af: {raw_json}")
+            # b_id에 해당하는 값 찾기
+            if b_id is not None:
+                b_value = data_list.get(b_id)  # 또는 data_list[b_id] 형태로 접근할 수도 있습니다.
+                print(f"b_value: {b_value}")
+            else:
+                print("매칭되는 b_id가 없습니다.")
+            b_value = self.extract_emmet_tag(b_value)
+            print(f"raw_json af: {b_value}")
             repeat_count = 0
             while repeat_count < 3:
                 try:
@@ -93,9 +99,9 @@ class OllamaBlockRecommend:
                     # raw_json을  emmet 문법으로 뽑았는데, 이걸 다시 풀어서 쓸 수 HTML 구조로 뽑아야함.
                     section_dict = {}
                     parser = EmmetParser()
-                    print(raw_json)
-                    html = parser.parse_emmet(raw_json)
-                    print(f"raw_json : {raw_json} || html : {html}")
+                    print(b_value)
+                    html = parser.parse_emmet(b_value)
+                    print(f"raw_json : {b_value} || html : {html}")
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
                     너는 자료를 HTML 태그의 형식에 맞게 정리하는 역할을 할 거야.
@@ -136,8 +142,13 @@ class OllamaBlockRecommend:
                     section_dict['HTML_Tag'] = raw_json
                     section_dict['Block_id'] = b_id
                     section_dict['gen_content'] = gen_content
+                    
+                    test = self.gen_contents_parsing(gen_content)
+                    print(test,"<====test")
+                    
                     result_dict[f'{section_name}'] = section_dict
                     print(f"result_dict : {result_dict}")
+                    
                     break
                 except RuntimeError as r:
                     print(f"Runtime error: {r}")
@@ -148,17 +159,32 @@ class OllamaBlockRecommend:
                 
         return result_dict
     
+
     def find_key_by_value(self, mapping: dict, target_value: str):
         """
         주어진 딕셔너리(mapping)에서 target_value를 값(value)으로 가지는 
-        첫 번째 키(key)를 찾아 반환한다.
-        매칭되는 키가 없으면 None을 반환한다.
+        첫 번째 키(key)를 찾아 반환한다. 매칭되는 키가 없으면, 
+        가장 유사한 값을 찾고 그에 해당하는 키를 반환한다.
         """
+        # 정확히 일치하는 값 찾기
         for key, value in mapping.items():
             if value == target_value:
                 return key
-        return None
-    
+
+        # 가장 유사한 값을 찾기
+        closest_match = None
+        closest_score = -float('inf')  # Levenshtein 거리 점수, 큰 값일수록 유사도가 높음
+        for key, value in mapping.items():
+            # Levenshtein 거리 계산 (문자열 간 유사도를 0~1로 반환)
+            score = difflib.SequenceMatcher(None, value, target_value).ratio()
+            if score > closest_score:
+                closest_match = key
+                closest_score = score
+
+        print(f"closest_match: {closest_match}, closest_score: {closest_score}")
+        return closest_match if closest_match else None
+
+        
     def extract_emmet_tag(self, text):
         """
         주어진 문자열에서 "HTML_Tag": "..." 형태를 찾고,
@@ -191,6 +217,46 @@ class OllamaBlockRecommend:
         # 5) 최종 결과가 비어 있으면 None 반환
         return filtered if filtered else text
 
+    def gen_contents_parsing(self, data):
+        parsing_dict = {
+            "h1" : [],
+            "h2" : [],
+            "h3" : [],
+            "h5" : [],
+            "p" : [],
+            "li" : {
+                "h1" : [],
+                "h2" : [],
+                "h3" : [],
+                "p" : []
+            }
+        }
+
+        # 정규표현식 패턴
+        tag_pattern = r"<(h1|h2|h3|h5|p|li)>(.*?)</\1>"  # h1, h2, h3, h5, p, li 태그 매칭
+        li_pattern = r"<li>(.*?)</li>"  # li 태그 매칭
+
+        # 결과 저장 구조
+        parsing_dict = defaultdict(list)
+
+        # 모든 태그 매칭
+        matches = re.findall(tag_pattern, data, re.DOTALL)
+
+        # 태그별로 데이터를 저장
+        for tag, content in matches:
+            content = content.strip()
+
+            if tag == "li":  # li 태그일 경우 내부 태그 파싱
+                li_dict = defaultdict(list)
+                inner_matches = re.findall(tag_pattern, content, re.DOTALL)
+                for inner_tag, inner_content in inner_matches:
+                    li_dict[inner_tag].append(inner_content.strip())
+                parsing_dict["li"].append(dict(li_dict))
+            else:  # li가 아닌 다른 태그일 경우
+                parsing_dict[tag].append(content)
+
+
+        return data
     # ============================================================
     
 class EmmetParser:

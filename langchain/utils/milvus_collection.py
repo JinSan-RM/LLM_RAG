@@ -23,13 +23,15 @@ class MilvusDataHandler:
             return json.load(file)
 
     def extract_section_type(self, tags):
+        # Shaw_250121_여기서 "Multi_step" 뺄께요!!
         predefined_sections = [
-            "Hero", "Feature", "CTA", "Contact", "Pricing", "Stats", "Content", 
-            "Testimonial", "FAQ", "Logo", "Team", "Gallery", "Multi_step", 
+            "Hero_Header", "Feature", "CTA", "Contact", "Pricing", "Stats", "Content", 
+            "Testimonial", "FAQ", "Logo", "Team", "Gallery",
             "Timeline", "Comparison", "Countdown"
         ]
+        
         for section in predefined_sections:
-            if section.lower() in tags.lower():  # 태그에서 소문자로 검색
+            if section in tags:  # 태그에서 소문자로 검색
                 return section
         return "Unknown"  # 기본값
 
@@ -38,7 +40,7 @@ class MilvusDataHandler:
         Emmet 태그를 추출하고 원본 구조를 포함하여 반환.
         """
         # Emmet 태그 정의
-        emmet_elements = ["li", "h1", "h2", "h3", "p"]
+        emmet_elements = ["li", "h1", "h2", "h3", "h4", "h5", "p"]
 
         # 전체 태그 구조 유지
         full_structure = tags.strip()
@@ -51,7 +53,8 @@ class MilvusDataHandler:
         unique_tags = sorted(set(filtered_tags))
 
         # 결과를 딕셔너리로 반환
-        return full_structure, unique_tags 
+        extracted_tags = ", ".join(extracted_tags)  # 리스트를 문자열로 변환
+        return full_structure, extracted_tags 
         
 
     def extract_additional_tags(self, tags):
@@ -90,6 +93,7 @@ class MilvusDataHandler:
                 include_tag,
                 additional_tags,
                 embedding,
+                0,
                 0,  # 초기 popularity 값
                 ""  # layout_type은 현재 비어 있음
 
@@ -112,20 +116,21 @@ class MilvusDataHandler:
         # milvus DB connection 점검
         
         connections.connect(alias="default", host="172.19.0.6", port="19530")
-        if utility.has_collection('test'):
-            collection = Collection('test')
+        if utility.has_collection('block_collection'):
+            collection = Collection('block_collection')
             collection.drop()
             print("이미 있지만 다시 지웠다가 생성.")
 
         fields = [
             FieldSchema(name="template_id", dtype=DataType.VARCHAR, max_length=50, is_primary=True),
             FieldSchema(name="section_type", dtype=DataType.VARCHAR, max_length=50),
-            FieldSchema(name="emmet_tag", dtype=DataType.VARCHAR, max_length=100),
-            FieldSchema(name="include_tag", dtype=DataType.VARCHAR, max_length=100),
+            FieldSchema(name="emmet_tag", dtype=DataType.VARCHAR, max_length=500),
+            FieldSchema(name="include_tag", dtype=DataType.VARCHAR, max_length=500),
             FieldSchema(name="additional_tags", dtype=DataType.VARCHAR, max_length=200),
             FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536),
-            FieldSchema(name="popularity", dtype=DataType.INT64),
-            FieldSchema(name="layout_type", dtype=DataType.VARCHAR, max_length=50),
+            FieldSchema(name="AI_popularity", dtype=DataType.INT64),
+            FieldSchema(name="User_popularity", dtype=DataType.INT64),
+            FieldSchema(name="layout_type", dtype=DataType.VARCHAR, max_length=50)
         ]
 
         schema = CollectionSchema(fields, description="Block data for recommendations")
@@ -147,10 +152,10 @@ class MilvusDataHandler:
 
     def insert_data_to_milvus(self, collection, data):
         for item in data:
-            template_id, section_type, emmet_tag, include_tag, additional_tags, embedding, popularity, layout_type = item
+            template_id, section_type, emmet_tag, include_tag, additional_tags, embedding, AIpopularity, popularity, layout_type = item
             # print("\n", template_id, section_type, emmet_tag, additional_tags, embedding, popularity, layout_type, created_at , " \ninsert data\n")
             collection.insert([
-                [template_id], [section_type], [emmet_tag], [include_tag], [additional_tags], embedding, [popularity], [layout_type]
+                [template_id], [section_type], [emmet_tag], [include_tag], [additional_tags], embedding, [AIpopularity], [popularity], [layout_type]
             ])
         collection.flush()
 
