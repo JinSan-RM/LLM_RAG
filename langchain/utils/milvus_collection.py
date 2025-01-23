@@ -1,9 +1,8 @@
-import json, os, re
-import pandas as pd
+import json
+import os
+import re
 from openai import OpenAI
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
-from fastapi import FastAPI
-from datetime import datetime
 
 import logging
 
@@ -14,6 +13,10 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 
 OPENAI_KEY = os.environ['OPENAI_API_KEY']
+
+client = OpenAI(api_key=OPENAI_KEY)
+
+
 class MilvusDataHandler:
     def __init__(self):
         self.client = OpenAI(api_key=OPENAI_KEY)
@@ -25,11 +28,11 @@ class MilvusDataHandler:
     def extract_section_type(self, tags):
         # Shaw_250121_여기서 "Multi_step" 뺄께요!!
         predefined_sections = [
-            "Hero_Header", "Feature", "CTA", "Contact", "Pricing", "Stats", "Content", 
+            "Hero_Header", "Feature", "CTA", "Contact", "Pricing", "Stats", "Content",
             "Testimonial", "FAQ", "Logo", "Team", "Gallery",
             "Timeline", "Comparison", "Countdown"
         ]
-        
+
         for section in predefined_sections:
             if section in tags:  # 태그에서 소문자로 검색
                 return section
@@ -50,12 +53,10 @@ class MilvusDataHandler:
         filtered_tags = [tag for tag in extracted_tags if tag in emmet_elements]
 
         # 중복 제거
-        unique_tags = sorted(set(filtered_tags))
-
+        filtered_tags = sorted(set(filtered_tags))
         # 결과를 딕셔너리로 반환
         extracted_tags = ", ".join(extracted_tags)  # 리스트를 문자열로 변환
-        return full_structure, extracted_tags 
-        
+        return full_structure, extracted_tags
 
     def extract_additional_tags(self, tags):
         additional_patterns = ["sp", "bt", "img_"]
@@ -81,10 +82,9 @@ class MilvusDataHandler:
 
             # 태그 임베딩 생성
             embedding = [self.text_embedding(concatenated_tags)]
-        
 
             print(embedding)
-            
+
             # 데이터 구성
             processed_data.append([
                 template_id,
@@ -96,7 +96,6 @@ class MilvusDataHandler:
                 0,
                 0,  # 초기 popularity 값
                 ""  # layout_type은 현재 비어 있음
-
             ])
             # print("\n", processed_data)
 
@@ -110,11 +109,11 @@ class MilvusDataHandler:
         )
         # print(f"생성된 임베딩: {response.data[0].embedding}")
         return response.data[0].embedding
-    
+
     def create_milvus_collection(self):
         connections.disconnect(alias='default')
         # milvus DB connection 점검
-        
+
         connections.connect(alias="default", host="172.19.0.6", port="19530")
         if utility.has_collection('block_collection'):
             collection = Collection('block_collection')
@@ -133,30 +132,47 @@ class MilvusDataHandler:
             FieldSchema(name="layout_type", dtype=DataType.VARCHAR, max_length=50)
         ]
 
-        schema = CollectionSchema(fields, description="Block data for recommendations")
-        collection = Collection(name="block_collection", schema=schema)
-        
+        schema = CollectionSchema(
+            fields,
+            description="Block data for recommendations"
+            )
+        collection = Collection(
+            name="block_collection",
+            schema=schema
+            )
+
         self.create_index(collection)
 
         collection.load()
-        
+
         return collection
+
     def create_index(self, collection):
         index_params = {
             "index_type": "IVF_FLAT",  # 인덱스 유형: IVF_FLAT, IVF_SQ8, HNSW 등
             "metric_type": "L2",  # 거리 계산 방식: L2 (유클리디안 거리), IP (내적)
             "params": {"nlist": 128}  # 적절한 파라미터 설정
         }
-        collection.create_index(field_name="embedding", index_params=index_params)
+
+        collection.create_index(
+            field_name="embedding",
+            index_params=index_params
+            )
         print("Index created successfully!")
 
     def insert_data_to_milvus(self, collection, data):
         for item in data:
             template_id, section_type, emmet_tag, include_tag, additional_tags, embedding, AIpopularity, popularity, layout_type = item
-            # print("\n", template_id, section_type, emmet_tag, additional_tags, embedding, popularity, layout_type, created_at , " \ninsert data\n")
+
             collection.insert([
-                [template_id], [section_type], [emmet_tag], [include_tag], [additional_tags], embedding, [AIpopularity], [popularity], [layout_type]
+                [template_id],
+                [section_type],
+                [emmet_tag],
+                [include_tag],
+                [additional_tags],
+                embedding,
+                [AIpopularity],
+                [popularity],
+                [layout_type]
             ])
         collection.flush()
-
-

@@ -1,29 +1,34 @@
 from config.config import OLLAMA_API_URL
-import requests, json, re
-from collections import defaultdict
+import requests
+import json
+import re
 import difflib
+
+
 class OllamaBlockRecommend:
-    
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model:str = ''):
+
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model: str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
-    
+
     async def send_request(self, prompt: str) -> str:
         """
         공통 요청 처리 함수 : API 호출 및 응답 처리
-        
         Generate 버전전
         """
-        
+
         payload = {
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
         }
-        
+
         try:
-            response = requests.post(self.api_url, json=payload)
+            response = requests.post(self.api_url,
+                                     json=payload,
+                                     timeout=15
+                                    )
             response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
 
             full_response = response.text  # 전체 응답
@@ -36,13 +41,13 @@ class OllamaBlockRecommend:
                 except json.JSONDecodeError as e:
                     print(f"JSON decode error: {e}")
                     continue  # JSON 파싱 오류 시 건너뛰기
-                
+
             return all_text.strip() if all_text else "Empty response received"
 
         except requests.exceptions.RequestException as e:
             print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}")
-        
+            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
+
     async def generate_block_content(self, block_list: dict, context: dict):
         """
         랜딩 페이지 섹션을 생성하는 함수
@@ -51,9 +56,10 @@ class OllamaBlockRecommend:
         # 블록 리스트들을 받아와서 summary 데이터랑 합쳐서 가장 적합할 블록 추천해달라는 근데 섹션 전체에 각각 다.
         # 프롬프트
         result_dict = {}
+        ctx_value = None
         for section_name, data_list in block_list.items():
             tag_slice = []
-            for block_id, tag_list  in data_list.items(): #
+            for _, tag_list in data_list.items():
                 tag_slice.append(tag_list)
                 if section_name in context:
                     ctx_value = context[section_name]
@@ -80,7 +86,7 @@ class OllamaBlockRecommend:
             **반드시 태그 리스트 안의 데이터 중 하나만 골라서 그 값만 출력하세요.**
             **최종 출력은 오직 태그만 있어야 하며, 다른 형식(JSON, 코드 블록, 설명 등)이나 텍스트를 절대 포함하면 안 됩니다.**
             """
-            
+
             raw_json = await self.send_request(prompt=prompt)
             print(f"raw_json bf: {raw_json}")
             b_id = self.find_key_by_value(mapping=data_list, target_value=raw_json)
@@ -105,7 +111,7 @@ class OllamaBlockRecommend:
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
                     너는 자료를 HTML 태그의 형식에 맞게 정리하는 역할을 할 거야.
-                    
+
                     1. user가 자료와 HTML 태그를 줄거야. 그러면 자료를 HTML 태그의 특성에 맞춰서 자료를 정리해서 넣으면 돼.
                     2. 오로지 user가 제공한 HTML 태그들 만을 이용해. 다른 태그를 추가하거나, 설명하는 말을 쓰지마.
                     3. 내용은 태그 안에만 작성 가능하고, 태그 밖에는 작성하지 마.
@@ -116,15 +122,16 @@ class OllamaBlockRecommend:
                     8. 최종 출력은 오직 HTML만, 다른 형식이나 설명 문구 없이 내놓으세요.
                     9. 출력 언어는 한글로 해줘.
                     10. **<html> <head> <body> <div>** 이런 태그는 절대 사용하지 말아줘.
-                    
-                     
+                    11. **<h1></h1> 안에 내용은 10자 이하, <h2></h2> 안에 내용은 15자 이하, <h3></h3> 안에 내용은 20자 이하하, <h5></h5> 안에 내용은 10자 이하하, <p></p> 안에 내용은 30자 이하로** 생성해줘.
+
+
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
                     # 전체 섹션 리스트:
                     {block_list.keys()}
-                    
+
                     # 현재 섹션:
                     {section_name}
-                    
+
                     # HTML 구조 (이 구조는 변경 금지, 안에 입력 데이터 기반으로 내용을 채워넣으세요):
                     {html}
 
@@ -133,22 +140,20 @@ class OllamaBlockRecommend:
 
                     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
                     **HTML 구조를 기반으로 안에 내용을 입력데이터를 적절히 채워 넣어서 반환하세요.**
+                    **<h1></h1> 안에 내용은 10자 이하, <h2></h2> 안에 내용은 15자 이하, <h3></h3> 안에 내용은 20자 이하하, <h5></h5> 안에 내용은 10자 이하하, <p></p> 안에 내용은 30자 이하로** 생성해줘.
                     """
                     print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
 
                     gen_content = re.sub("\n", "", gen_content)
                     print(f"raw_json : {type(gen_content)} {len(gen_content)} / {gen_content}")
-                    section_dict['HTML_Tag'] = raw_json
+                    section_dict['HTML_Tag'] = b_value
                     section_dict['Block_id'] = b_id
                     section_dict['gen_content'] = gen_content
-                    
-                    test = self.gen_contents_parsing(gen_content)
-                    print(test,"<====test")
-                    
+
                     result_dict[f'{section_name}'] = section_dict
                     print(f"result_dict : {result_dict}")
-                    
+
                     break
                 except RuntimeError as r:
                     print(f"Runtime error: {r}")
@@ -156,14 +161,13 @@ class OllamaBlockRecommend:
                 except Exception as e:
                     print(f"Unexpected error: {e}")
                     repeat_count += 1
-                
+
         return result_dict
-    
 
     def find_key_by_value(self, mapping: dict, target_value: str):
         """
-        주어진 딕셔너리(mapping)에서 target_value를 값(value)으로 가지는 
-        첫 번째 키(key)를 찾아 반환한다. 매칭되는 키가 없으면, 
+        주어진 딕셔너리(mapping)에서 target_value를 값(value)으로 가지는
+        첫 번째 키(key)를 찾아 반환한다. 매칭되는 키가 없으면,
         가장 유사한 값을 찾고 그에 해당하는 키를 반환한다.
         """
         # 정확히 일치하는 값 찾기
@@ -184,12 +188,10 @@ class OllamaBlockRecommend:
         print(f"closest_match: {closest_match}, closest_score: {closest_score}")
         return closest_match if closest_match else None
 
-        
     def extract_emmet_tag(self, text):
         """
         주어진 문자열에서 "HTML_Tag": "..." 형태를 찾고,
         그 안의 값 중 Emmet 표기 부분(h1, h2, h3, p, li(...), etc)만 추출해서 반환합니다.
-        
         - "신뢰도: 100%" 등 불필요한 문구가 있으면 무시하고 제거합니다.
         - 사용자가 원하는 문자만 남기고 나머지는 모두 제거합니다.
         - 유효한 Emmet 문자열이 하나도 없으면 None을 반환합니다.
@@ -197,7 +199,7 @@ class OllamaBlockRecommend:
         # 2) 앞뒤에 있을 수 있는 별표(**) 제거
         #    예: '**h3_li(h3_p)*3**' → 'h3_li(h3_p)*3'
         raw_value = text.strip('**').strip()
-        raw_value = raw_value.replace("**","")
+        raw_value = raw_value.replace("**", "")
 
         # 3) 여러 줄이 있을 수 있으므로 일단 첫 줄만 취득
         #    (줄바꿈으로 split하여 첫 요소만)
@@ -206,10 +208,9 @@ class OllamaBlockRecommend:
         # 4) '신뢰도:', '기타 불필요 텍스트' 같은 것들이 섞여 있을 수 있으니
         #    여기서는 간단히 공백 기준으로 잘라서,
         #    허용된 Emmet 문자만 남기고 나머지는 전부 제거.
-        
+
         # a) 허용할 Emmet 문자를 정의 (알파벳, 숫자, 괄호, 밑줄, *, +, >, . 등)
         allowed_chars = set("hlip123456789_()*+")
-        
 
         # b) raw_value 내에서 허용된 문자만 살려서 재조합
         filtered = "".join(ch for ch in raw_value if ch in allowed_chars)
@@ -217,48 +218,9 @@ class OllamaBlockRecommend:
         # 5) 최종 결과가 비어 있으면 None 반환
         return filtered if filtered else text
 
-    def gen_contents_parsing(self, data):
-        parsing_dict = {
-            "h1" : [],
-            "h2" : [],
-            "h3" : [],
-            "h5" : [],
-            "p" : [],
-            "li" : {
-                "h1" : [],
-                "h2" : [],
-                "h3" : [],
-                "p" : []
-            }
-        }
-
-        # 정규표현식 패턴
-        tag_pattern = r"<(h1|h2|h3|h5|p|li)>(.*?)</\1>"  # h1, h2, h3, h5, p, li 태그 매칭
-        li_pattern = r"<li>(.*?)</li>"  # li 태그 매칭
-
-        # 결과 저장 구조
-        parsing_dict = defaultdict(list)
-
-        # 모든 태그 매칭
-        matches = re.findall(tag_pattern, data, re.DOTALL)
-
-        # 태그별로 데이터를 저장
-        for tag, content in matches:
-            content = content.strip()
-
-            if tag == "li":  # li 태그일 경우 내부 태그 파싱
-                li_dict = defaultdict(list)
-                inner_matches = re.findall(tag_pattern, content, re.DOTALL)
-                for inner_tag, inner_content in inner_matches:
-                    li_dict[inner_tag].append(inner_content.strip())
-                parsing_dict["li"].append(dict(li_dict))
-            else:  # li가 아닌 다른 태그일 경우
-                parsing_dict[tag].append(content)
-
-
-        return data
     # ============================================================
-    
+
+
 class EmmetParser:
     def parse_emmet(self, emmet_str):
         """
@@ -275,6 +237,7 @@ class EmmetParser:
             html_output += self.parse_part(part)
 
         return html_output.strip()
+
     def parse_part(self, part):
         """
         단일 태그 구조를 파싱하여 HTML로 변환
