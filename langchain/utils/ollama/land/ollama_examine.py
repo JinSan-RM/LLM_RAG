@@ -50,7 +50,7 @@ class OllamaExamineClient:
         """
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
-        너는 비속어, 욕을 검열한 뒤, 검열이 되면 "비속어"만 출력하는 
+        너는 비속어, 욕을 검열한 뒤, 검열이 되면 "비속어"만 출력하는 AI야.
 
         작업 순서:
         1. 입력 데이터를 확인한다.

@@ -10,6 +10,7 @@ from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
 from utils.milvus_collection import MilvusDataHandler
 from utils.ollama.land.ollama_contents_merge import OllamaDataMergeClient
 from utils.ollama.land.ollama_examine import OllamaExamineClient
+from utils.ollama.land.ollama_keyword import OllamaKeywordClient
 from models.models_conf import ModelParam
 # from utils.imagine_gen import AugmentHandle
 # from utils.ollama.ollama_chat import OllamaChatClient
@@ -74,7 +75,6 @@ class LandPageRequest(BaseModel):
     path2: str = ''
     path3: str = ''
     model: str = ''
-          
     block: dict = {}
     user_msg: str = ''
 
@@ -99,16 +99,25 @@ async def LLM_land_page_generate(request: LandPageRequest):
     """
     try:
         # ========================
-        #      model set 모듈
+        #    비속어 욕 체크 모듈
         # ========================
-        model_conf = ModelParam(request.model)
-        model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
+        examine_client = OllamaExamineClient(
+            model=request.model,
+            data=request.user_msg
+            )
+        examine = await examine_client.data_examine()
+        if examine in "비속어":
+            return "1"
         # ========================
         #         PDF 모듈
         # ========================
         pdf_handle = PDFHandle(request.path, request.path2, request.path3)
         pdf_data = pdf_handle.PDF_request()
-
+        # ========================
+        #      model set 모듈
+        # ========================
+        model_conf = ModelParam(request.model)
+        model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
         # ========================
         #      내용 요약 모듈
         # ========================
@@ -119,6 +128,24 @@ async def LLM_land_page_generate(request: LandPageRequest):
             final_summary_length=final_summary_length,
             max_tokens_per_chunk=max_tokens_per_chunk
             )
+        # ========================
+        #    비속어 욕 체크 모듈
+        # ========================
+        examine_client = OllamaExamineClient(
+            model=request.model,
+            data=summary
+            )
+        examine = await examine_client.data_examine()
+        if examine in "비속어":
+            return "1"
+
+        contents_client = OllamaDataMergeClient(
+            model=request.model,
+            user_msg=request.user_msg,
+            data=summary
+            )
+
+        summary = await contents_client.contents_merge()
         # ========================
         #      메뉴 생성 모듈
         # ========================
@@ -277,6 +304,16 @@ async def land_section_generate(request: landGen):
         block_list=request.block,
         context=request.section_context
         )
+
+    keyword_client = OllamaKeywordClient(model=request.model)
+    keyword = await keyword_client.section_keyword_create_logic(
+        request.section_context.keys(),
+        request.section_context.values()
+        )
+
+    first_key = next(iter(content))  # content의 첫 번째 키 추출
+    if first_key in content:
+        content[first_key]['keyword'] = keyword  # keyword 추가
     end = time.time()
     t = (end - start)
     print(f" running time : {t}")
