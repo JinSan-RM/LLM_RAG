@@ -7,6 +7,7 @@ from utils.helpers import languagechecker
 from utils.PDF2TXT import PDFHandle
 from utils.ollama.ollama_chat import OllamaChatClient
 from utils.ollama.land.ollama_menu import OllamaMenuClient
+from utils.ollama.land.ollama_keyword import OllamaKeywordClient
 from utils.ollama.land.ollama_summary import OllamaSummaryClient
 from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
 from utils.RAGChain import  MilvusHandle
@@ -124,7 +125,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
         #      블록 추천 모듈
         # ========================
         block_client = OllamaBlockRecommend(model=request.model)
-        result = await block_client.generate_block_content(summary=summary, block_list=request.block)
+        result = await block_client.generate_block_content(context=summary, block_list=request.block)
         print(f"result : {result}")
 
         return result
@@ -167,6 +168,18 @@ async def land_summary(request: LandPageRequest):
     menu_client = OllamaMenuClient(model=request.model)
     section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
 
+    # ========================
+    #      키워드 생성 모듈
+    # ========================
+    # keyword_client = OllamaKeywordClient(model=request.model)
+    # keyword_data = await keyword_client.section_keyword_create_logic(data=summary, section_per_context = section_per_context)
+
+    
+    # print("before_update : ", section_per_context)
+    # section_per_context.update(keyword_data)
+    # print("============================================")
+    # print("after_update : ", section_per_context)
+    
     # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
     ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=lambda x: int(x))]
     section_structure_copy = ordered_new_keys.copy()
@@ -176,8 +189,8 @@ async def land_summary(request: LandPageRequest):
 
     # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
     second_items = list(section_per_context.items())
-    second_items.insert(0, ('Header', ', '.join(section_structure_copy)))
-    second_items.append(('Footer', ', '.join(section_structure_copy)))
+    second_items.insert(0, ('Header', section_structure_copy))
+    second_items.append(('Footer', section_structure_copy))
     print(f"second_items : {second_items}")
 
     # 3. 순차적으로 매핑하기

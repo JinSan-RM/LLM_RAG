@@ -5,7 +5,7 @@ from typing import List
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 
 # Docker compose 파일의 environments에 적힌 openai api key 불러오기
-OPENAI_KEY = os.environ['OPENAI_API_KEY']
+# OPENAI_KEY = os.environ['OPENAI_API_KEY']
 
 
 # ============================

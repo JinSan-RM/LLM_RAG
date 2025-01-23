@@ -1,6 +1,6 @@
 import json, os, re
 import pandas as pd
-from openai import OpenAI
+# from openai import OpenAI
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 from fastapi import FastAPI
 from datetime import datetime
@@ -13,7 +13,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 
-OPENAI_KEY = os.environ['OPENAI_API_KEY']
+# OPENAI_KEY = os.environ['OPENAI_API_KEY']
 class MilvusDataHandler:
     def __init__(self):
         self.client = OpenAI(api_key=OPENAI_KEY)
