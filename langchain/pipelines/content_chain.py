@@ -24,25 +24,9 @@ class ContentChain:
         Returns:
             str: 최종 생성 결과
         """
-        print(f"run operation success \n value_type : {value_type}\n model : {model}")
+        print(f"run success \n value_type : {value_type}\n model : {model}")
         final_output = None
-        # if value_type == "general":
-        #     if discriminant:
-        #         # 한->영 번역
-        #         translated_text = self.ko_en_translator.translate(input_text)
-        #         # Ollama API 호출
-        #         generated_text = self.ollama_client.generate(model, input_text)
-        #         print("Generated Text:", generated_text)
-        #         # 영->한 번역
-        #         final_output = self.en_ko_translator.translate(generated_text)
-        #         return final_output
-        #     else:
-        #         # Ollama API 호출
-        #         generated_text = self.ollama_client.generate(model, input_text)
-        #         print("Generated Text:", generated_text)
-        #         # 영->한 번역
-        #         final_output = self.en_ko_translator.translate(generated_text)
-        #         return final_output
+
         if value_type == 'normal':
             prompt = f"""
             <|start_header_id|>system<|end_header_id|>
@@ -157,29 +141,6 @@ class ContentChain:
         else:
             print(f"Unsupported value_type: {value_type}")
             return final_output
-
-    # streaming 처리 방식
-    # def run(self, input_text, discriminant, model="llama3.2"):
-    #     """
-    #     Ollama API 기반 텍스트 생성 체인
-    #     Args:
-    #         input_text (str): 입력 텍스트
-    #         discriminant (bool): 한국어 여부
-    #         model (str): Ollama에서 사용할 모델 이름
-
-    #     Returns:
-    #         str: 최종 생성 결과
-    #     """
-    #     print("run operation success")
-    #     if discriminant:
-    #         # 한->영 -> 텍스트 생성 -> 영->한
-    #         translated_text = self.ko_en_translator.translate(input_text)
-    #         final_output = self._stream_generate_and_translate(model, translated_text, is_korean=True)
-    #     else:
-    #         # 영문 텍스트 바로 생성 -> 영->한
-    #         final_output = self._stream_generate_and_translate(model, input_text, is_korean=False)
-
-    #     return final_output
 
     def contents_run(self, model, input_text, menu):
         generated_text = self.ollama_client.PDF_Menu_Contents(
@@ -304,14 +265,3 @@ class ContentChain:
             return self.translate_with_formatting(text=data)
         else:
             return data
-    # def run(self, input_text, discriminant):
-    #     if discriminant:
-    #         # 한->영 -> 텍스트 생성 -> 영->한
-    #         translated_text = self.ko_en_translator.translate(input_text)
-    #         generated_text = self.text_generator.generate(self.prompt_template.format(text=translated_text))
-    #         final_output = self.en_ko_translator.translate(generated_text)
-    #     else:
-    #         # 영문 텍스트 바로 생성 -> 영->한
-    #         generated_text = self.text_generator.generate(self.prompt_template.format(text=input_text))
-    #         final_output = self.en_ko_translator.translate(generated_text)
-    #     return final_output

@@ -270,7 +270,10 @@ class OllamaMenuClient:
                 pydantic_menu_data = self.parse_menu_data_union(menu_dict)
                 # print(f"pydantic_menu_data : {pydantic_menu_data}")
 
-                section_context = await self.section_per_context(data, pydantic_menu_data)
+                section_context = await self.section_per_context(
+                    data,
+                    pydantic_menu_data
+                )
                 section_data = await self.process_menu_data(section_context)
                 print(f"section_context : {section_context}")
 

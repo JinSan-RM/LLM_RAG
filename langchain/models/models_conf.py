@@ -1,13 +1,15 @@
 KO_EN_MODEL_PATH = "../models/ko_en"
 EN_KO_MODEL_PATH = "../models/en_ko"
 
+
 class ModelParam():
-    
     def __init__(self, model: str):
         self.model = model
-        
-    
+
     def param_set(self):
+        model_max_token = None
+        final_summary_length = None
+        max_tokens_per_chunk = None
         if self.model == 'bllossom':
             model_max_token = 2048
             final_summary_length = 1000
@@ -28,5 +30,5 @@ class ModelParam():
             model_max_token = 2048
             final_summary_length = 1000
             max_tokens_per_chunk = 1000
-        
+
         return model_max_token, final_summary_length, max_tokens_per_chunk

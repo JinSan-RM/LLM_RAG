@@ -8,7 +8,10 @@ from utils.ollama.land.ollama_menu import OllamaMenuClient
 from utils.ollama.land.ollama_summary import OllamaSummaryClient
 from utils.ollama.land.ollama_block_recommand import OllamaBlockRecommend
 from utils.milvus_collection import MilvusDataHandler
+from utils.ollama.land.ollama_contents_merge import OllamaDataMergeClient
+from utils.ollama.land.ollama_examine import OllamaExamineClient
 from models.models_conf import ModelParam
+# from utils.imagine_gen import AugmentHandle
 # from utils.ollama.ollama_chat import OllamaChatClient
 
 # local lib
@@ -71,7 +74,9 @@ class LandPageRequest(BaseModel):
     path2: str = ''
     path3: str = ''
     model: str = ''
+          
     block: dict = {}
+    user_msg: str = ''
 
 
 # Example
@@ -94,16 +99,16 @@ async def LLM_land_page_generate(request: LandPageRequest):
     """
     try:
         # ========================
+        #      model set 모듈
+        # ========================
+        model_conf = ModelParam(request.model)
+        model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
+        # ========================
         #         PDF 모듈
         # ========================
         pdf_handle = PDFHandle(request.path, request.path2, request.path3)
         pdf_data = pdf_handle.PDF_request()
 
-        # ========================
-        #      model set 모듈
-        # ========================
-        model_conf = ModelParam(request.model)
-        model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
         # ========================
         #      내용 요약 모듈
         # ========================
@@ -117,19 +122,29 @@ async def LLM_land_page_generate(request: LandPageRequest):
         # ========================
         #      메뉴 생성 모듈
         # ========================
-        # menu_client = OllamaMenuClient(model=request.model)
-        # menu_structure = await menu_client.section_structure_create_logic(summary)
-        # ========================
-        #      블록 추천 모듈
-        # ========================
-        block_client = OllamaBlockRecommend(model=request.model)
-        result = await block_client.generate_block_content(
-            block_list=request.block,
-            context=summary
-            )
-        print(f"result : {result}")
+        menu_client = OllamaMenuClient(model=request.model)
+        section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
+        print(section_structure, section_per_context)
 
-        return result
+        # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
+        ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=int)]
+        section_structure_copy = ordered_new_keys.copy()
+        ordered_new_keys.insert(0, "Header")
+        ordered_new_keys.append("Footer")
+        print(f"ordered_new_keys : {ordered_new_keys}")
+
+        # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
+        second_items = list(section_per_context.items())
+        second_items.insert(0, ('Header', ', '.join(section_structure_copy)))
+        second_items.append(('Footer', ', '.join(section_structure_copy)))
+        print(f"second_items : {second_items}")
+
+        # 3. 순차적으로 매핑하기
+        new_dict = {}
+        for new_key, (_, value) in zip(ordered_new_keys, second_items):
+            new_dict[new_key] = value
+
+        return summary, new_dict
 
     except Exception as e:
         print(f"Error processing landing structure: {e}")
@@ -148,6 +163,16 @@ async def LLM_land_page_generate(request: LandPageRequest):
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
     start = time.time()
+    # ========================
+    #    비속어 욕 체크 모듈
+    # ========================
+    examine_client = OllamaExamineClient(
+        model=request.model,
+        data=request.user_msg
+        )
+    examine = await examine_client.data_examine()
+    if examine in "비속어":
+        return "1"
     # ========================
     #         PDF 모듈
     # ========================
@@ -168,7 +193,24 @@ async def land_summary(request: LandPageRequest):
         final_summary_length=final_summary_length,
         max_tokens_per_chunk=max_tokens_per_chunk
         )
+    # ========================
+    #    비속어 욕 체크 모듈
+    # ========================
+    examine_client = OllamaExamineClient(
+        model=request.model,
+        data=summary
+        )
+    examine = await examine_client.data_examine()
+    if examine in "비속어":
+        return "1"
 
+    contents_client = OllamaDataMergeClient(
+        model=request.model,
+        user_msg=request.user_msg,
+        data=summary
+        )
+
+    summary = await contents_client.contents_merge()
     # ========================
     #      메뉴 생성 모듈
     # ========================
@@ -197,7 +239,7 @@ async def land_summary(request: LandPageRequest):
     end = time.time()
     t = (end - start)
     print(f" running time : {t}")
-    return summary, new_dict
+    return "0", summary, new_dict
 
 # section context 데이터와 section structure 데이터를 기반으로
 # 섹션 별 태그에 적합한 블럭 추천
