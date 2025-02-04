@@ -50,7 +50,7 @@ class OllamaKeywordClient:
             json_match = re.search(r"\[.*\]", menu_data, re.DOTALL)
             if not json_match:
                 raise ValueError("JSON 형식을 찾을 수 없습니다.")
-            
+
             # JSON 텍스트 추출
             json_text = json_match.group()
 
@@ -81,6 +81,7 @@ class OllamaKeywordClient:
          - 각 키워드는 최대 3개의 단어로 이루어져있어.
          - 여기서 선정된 키워드는 모든 메뉴에 공통적으로 들어갈거야.
          - 오탈자가 없게 작성해줘.
+         - 영어로만 작성해줘.
          - 각 키워드는 최대 3개의 단어로 이루어져있어.
         4. **키워드 리스트** 이외에 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
 
@@ -93,6 +94,7 @@ class OllamaKeywordClient:
 
         <|start_header_id|>assistant<|end_header_id|>
         반드시 출력 형식의 데이터를 따라 **키워드 리스트** 형태로만 결과를 반환
+        반드시 출력 형식의 데이터는 모두 **영어**로만 반환
         """
         keyword_data = await self.send_request(prompt=prompt)
         print("Let's see keyword_data : ", keyword_data)
