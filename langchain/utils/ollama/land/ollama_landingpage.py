@@ -138,7 +138,7 @@ class OllamaLandingClient:
             print(f"Problematic JSON text: {json_text}")
             raise RuntimeError(f"JSON 파싱 실패: {e}")
         
-    async def generate_section(self, model: str,summary:str, section_name: str, section_num: int ):
+    async def generate_section(self, model: str, summary:str, section_name: str, section_num: int ):
         """
         랜딩 페이지 섹션을 생성하는 함수
         """

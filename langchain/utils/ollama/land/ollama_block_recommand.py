@@ -25,10 +25,11 @@ class OllamaBlockRecommend:
         }
 
         try:
-            response = requests.post(self.api_url,
-                                     json=payload,
-                                     timeout=15
-                                    )
+            response = requests.post(
+                self.api_url,
+                json=payload,
+                timeout=15
+            )
             response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
 
             full_response = response.text  # 전체 응답
@@ -108,22 +109,25 @@ class OllamaBlockRecommend:
                     print(b_value)
                     html = parser.parse_emmet(b_value)
                     print(f"raw_json : {b_value} || html : {html}")
+                    
+                    style = parser.font_size(section_name)
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
                     너는 자료를 HTML 태그의 형식에 맞게 정리하는 역할을 할 거야.
 
-                    1. user가 자료와 HTML 태그를 줄거야. 그러면 자료를 HTML 태그의 특성에 맞춰서 자료를 정리해서 넣으면 돼.
-                    2. 오로지 user가 제공한 HTML 태그들 만을 이용해. 다른 태그를 추가하거나, 설명하는 말을 쓰지마.
-                    3. 내용은 태그 안에만 작성 가능하고, 태그 밖에는 작성하지 마.
-                    4. 전체 섹션 리스트 중, 현재 섹션을 고려해서 내용을 작성해줘.
-                    5. 사용자가 입력한 자료를 하나의 섹션에 다 넣지 않아도 돼. 전체 섹션에 분배해서 들어갈거야.
-                    6. **사용자가 입력한 HTML 구조를 반드시 지켜줘.** 자료를 더 넣으려고 태그를 추가하지 마. 없으면 없는대로 쓸거야.
-                    7. **주석(<!-- -->), 설명, 빈 줄 등 어떤 추가 텍스트도 삽입하지 마세요**. 출력은 오직 수정된 HTML 조각만 있어야 합니다.
+                    아래 규칙들을 반드시 준수 할 것:
+                    1. user가 제공한 HTML 태그 구조를 그대로 유지할 것.
+                    2. 오직 제공된 HTML 태그 내부에만 내용을 작성할 것.
+                    3. 태그 외의 추가 텍스트(주석, 설명, 빈 줄 등)는 절대 삽입하지 말 것.
+                    4. 전체 섹션 리스트 중, 현재 섹션을 고려해서 내용을 작성할 것.
+                    5. **사용자가 입력한 HTML 구조를 반드시 지켜줘.** 자료를 더 넣으려고 태그를 추가하지 말 것.
+                    6. **주석(<!-- -->), 설명, 빈 줄 등 어떤 추가 텍스트도 삽입하지 마세요**. 출력은 오직 수정된 HTML 조각만 있어야 합니다.
+                    7. 최종 출력은 오직 HTML 조각이어야 하며, 다른 형식의 텍스트가 포함되면 안 됨.
                     8. 최종 출력은 오직 HTML만, 다른 형식이나 설명 문구 없이 내놓으세요.
                     9. 출력 언어는 한글로 해줘.
-                    10. **<html> <head> <body> <div>** 이런 태그는 절대 사용하지 말아줘.
-                    11. **<h1></h1> 안에 내용은 10자 이하, <h2></h2> 안에 내용은 15자 이하, <h3></h3> 안에 내용은 20자 이하하, <h5></h5> 안에 내용은 10자 이하하, <p></p> 안에 내용은 30자 이하로** 생성해줘.
-
+                    10. **<html> <head> <body> <div> <meta> <title>** 태그는 절대 사용하지마.
+                    {style}
+                    
 
                     <|eot_id|><|start_header_id|>user<|end_header_id|>
                     # 전체 섹션 리스트:
@@ -139,13 +143,15 @@ class OllamaBlockRecommend:
                     {ctx_value}
 
                     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-                    **HTML 구조를 기반으로 안에 내용을 입력데이터를 적절히 채워 넣어서 반환하세요.**
-                    **<h1></h1> 안에 내용은 10자 이하, <h2></h2> 안에 내용은 15자 이하, <h3></h3> 안에 내용은 20자 이하하, <h5></h5> 안에 내용은 10자 이하하, <p></p> 안에 내용은 30자 이하로** 생성해줘.
+                    **HTML 구조 기반으로 입력데이터 내용을 태그 규칙에 맞게 적절히 생성하여 채워 넣어서 반환할 것.**
+                    {style}
+                    **<html> <head> <body> <div> <meta> <title>** 태그는 절대 사용하지마.
                     """
                     print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
 
                     gen_content = re.sub("\n", "", gen_content)
+                    gen_content = parser.tag_sort(gen_data=gen_content)
                     print(f"raw_json : {type(gen_content)} {len(gen_content)} / {gen_content}")
                     section_dict['HTML_Tag'] = b_value
                     section_dict['Block_id'] = b_id
@@ -317,6 +323,42 @@ class EmmetParser:
         indent = '  ' * level
         return '\n'.join([indent + line if line.strip() else line for line in html_str.split('\n')])
 
+    def font_size(self, section_name):
+        h1, h2, h3, h5, p = 10, 20, 20, 20, 20
+        if section_name == 'Hero_Header':
+            h1, h2, h3, h5, p = 30, 15, 30, 10, 30
+        elif section_name == 'Feature' or section_name == 'Content':
+            h1, h2, h3, h5, p = 10, 20, 10, 10, 30
+        elif section_name == 'Testimonial' or section_name == 'Gallery':
+            h1, h2, h3, h5, p = 10, 15, 10, 10, 30
+        elif section_name == 'CTA':
+            h1, h2, h3, h5, p = 10, 15, 10, 10, 30
+        elif section_name == 'Pricing' or section_name == 'Contact' or section_name == 'Stat':
+            h1, h2, h3, h5, p = 10, 15, 10, 10, 20
+        elif section_name == 'Team':
+            h1, h2, h3, h5, p = 10, 20, 10, 10, 30
+        else:
+            h1, h2, h3, h5, p = 10, 20, 10, 10, 20
+        style = f'''
+        다음 규칙을 엄격히 지켜 HTML 내용을 작성해.
+        - <h1></h1> 태그 안의 내용은 반드시 {h1} 글자(띄어쓰기 포함) 이하로 작성할 것.  
+        - <h2></h2> 태그 안의 내용은 반드시 {h2} 글자 이하로 작성할 것.  
+        - <h3></h3> 태그 안의 내용은 반드시 {h3} 글자 이하로 작성할 것.
+        - <h5></h5> 태그 안의 내용은 반드시 {h5} 글자 이하로 작성할 것.
+        - <p></p> 태그 안의 내용은 반드시 {p} 글자 이하로 작성할 것.
+        '''
+        return style
+    
+    def tag_sort(self, gen_data):
+        # 1. DOCTYPE 선언 제거
+        cleaned = re.sub(r'<!DOCTYPE.*?>', '', gen_data, flags=re.IGNORECASE)
+        # 2. <html>, <head>, <body> 태그와 닫는 태그 제거
+        cleaned = re.sub(r'</?(html|head|body|div)(\s[^>]+)?>', '', cleaned, flags=re.IGNORECASE)
+        # 3. <title> 태그와 그 내부 내용, 닫는 태그까지 제거
+        cleaned = re.sub(r'<title.*?>.*?</title>', '', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        # 4. 앞뒤 공백 제거 후 반환
+        return cleaned.strip()
+        
 
 # class EmmetParser:
 #     def parse_emmet(self, emmet_str):

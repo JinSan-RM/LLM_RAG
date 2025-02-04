@@ -147,7 +147,6 @@ class OllamaMenuClient:
         - Logo : 60
         - Team : 60
         - Gallery : 60
-
         - Timeline : 60
         - Comparison : 60
         - Countdown : 60
@@ -163,10 +162,8 @@ class OllamaMenuClient:
                 "1": "Hero_Header",
                 "2": "Feature",
                 "3": "Content",
-                "4": "Testimonial",
-                "5": "CTA",
-                "6": "Pricing",
-                "7": "Contact",
+                "4": "CTA",
+                "5": "Pricing"
             }}
 
 
@@ -184,7 +181,6 @@ class OllamaMenuClient:
         - 섹션 이름이 중복되지 않도록 주의하세요.
         - 사용자 경험을 고려하여 주요 섹션(Feature, CTA, Contact)은 최소 1회 포함하세요.
         """
-        print(f"prompt len : {len(prompt)} / {prompt}")
         menu_data = await self.send_request(prompt=prompt)
         return menu_data
 

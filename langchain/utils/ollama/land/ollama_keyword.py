@@ -70,31 +70,32 @@ class OllamaKeywordClient:
     async def section_keyword_recommend(self, section: str, context: str):
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
-        당신은 웹사이트 랜딩 페이지의 각 섹션에 들어갈 이미지를 검색하는 전문 디자이너입니다.
-        구성된 랜딩 페이지의 각 섹션 구성에 알맞게 전체 데이터와 각 섹션 요약 데이터를를 고려하여 이미지를 검색할 영문 키워드를 2개 고르세요.
+        You are a professional designer who searches for images that will fit in each section of the website landing page.
+        Choose two **English keywords** to search for images, taking into account the full data and each section summary data for each section configuration of the configured landing page.
 
-        ### 규칙
-        1. **섹션**에 어울리는 키워드를 추출하여 주세요.
-            {section}
-        2. 아래의 키워드를 추출하는 이유는 이미지 검색 사이트에서 이미지가 잘 검색될 키워드를 찾는 것을 잊지마.
-        3. 데이터를 고려하여 이미지 검색에 유리한 키워드를 1개 지정해줘.
-         - 각 키워드는 최대 3개의 단어로 이루어져있어.
-         - 여기서 선정된 키워드는 모든 메뉴에 공통적으로 들어갈거야.
-         - 오탈자가 없게 작성해줘.
-         - 영어로만 작성해줘.
-         - 각 키워드는 최대 3개의 단어로 이루어져있어.
-        4. **키워드 리스트** 이외에 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
+        ###Rules
+        1. Please extract keywords that match the section.
+        {section}
+        2. The purpose of extracting these keywords is to find terms that perform well on image search sites.
+        3. Please consider the data and specify one keyword that is favorable for image search.
+            - Each keyword must consist of up to two words.
+            - The selected keywords will be common to all menus.
+            - Ensure there are no typos.
+            - Write in English only.
+            - Do not use any special characters, symbols, or underscores.
+            - Each keyword must consist of letters and spaces only (no numbers, punctuation, or special symbols).
+        4. Do not write any explanations, sentences, comments, or code blocks other than the keyword list.
 
-        5. 출력형식:
-        ['example', 'example2', 'example3']
+        5. Output format:
+        ['example', 'example2']
 
         <|eot_id|><|start_header_id|>user<|end_header_id|>
-        입력 데이터:
+        Input Data:
         {context}
 
         <|start_header_id|>assistant<|end_header_id|>
-        반드시 출력 형식의 데이터를 따라 **키워드 리스트** 형태로만 결과를 반환
-        반드시 출력 형식의 데이터는 모두 **영어**로만 반환
+        Always follow the data in the output format and return the results only in the form of **keyword list**
+        Be sure to return all data in the output format only in **English**
         """
         keyword_data = await self.send_request(prompt=prompt)
         print("Let's see keyword_data : ", keyword_data)
@@ -111,9 +112,35 @@ class OllamaKeywordClient:
                 )
             # JSON 데이터 파싱
             section_data_with_keyword = await self.process_menu_data(section_context)
-            print(section_data_with_keyword, "<====keyword")
+            section_data_with_keyword = await self.process_data(section_data_with_keyword)
             return section_data_with_keyword
 
         except Exception as e:  # 모든 예외를 잡고 싶다면
             print(f"Error processing landing structure: {e}")
             return "error"
+        
+    # 특수문자 제거 함수 (공백 유지)
+    def clean_keyword(self, keyword):
+        cleaned = re.sub(r'[^\w\s]', '', keyword)  # 단어 문자와 공백만 허용 (언더바 포함)
+        cleaned = re.sub(r'_', ' ', cleaned)  # 언더바를 공백으로 변환
+        cleaned = re.sub(r'-', ' ', cleaned)  # 언더바를 공백으로 변환
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()  # 여러 개의 공백을 하나로 줄이고 앞뒤 공백 제거
+        return cleaned
+    
+    # JSON 데이터 파싱 및 정리
+    async def process_data(self, section_context):
+
+        # 키워드 정리
+        if isinstance(section_context, dict):  # 딕셔너리 형태라면
+            section_context = {
+                key: self.clean_keyword(value) if isinstance(value, str) else value
+                for key, value in section_context.items()
+            }
+        elif isinstance(section_context, list):  # 리스트 형태라면
+            section_context = [
+                self.clean_keyword(item) if isinstance(item, str) else item
+                for item in section_context
+            ]
+
+        print(section_context, "<====keyword")
+        return section_context
