@@ -89,16 +89,13 @@ class OllamaBlockRecommend:
             """
 
             raw_json = await self.send_request(prompt=prompt)
-            print(f"raw_json bf: {raw_json}")
             b_id = self.find_key_by_value(mapping=data_list, target_value=raw_json)
             # b_id에 해당하는 값 찾기
             if b_id is not None:
                 b_value = data_list.get(b_id)  # 또는 data_list[b_id] 형태로 접근할 수도 있습니다.
-                print(f"b_value: {b_value}")
             else:
                 print("매칭되는 b_id가 없습니다.")
             b_value = self.extract_emmet_tag(b_value)
-            print(f"raw_json af: {b_value}")
             repeat_count = 0
             while repeat_count < 3:
                 try:
@@ -106,10 +103,8 @@ class OllamaBlockRecommend:
                     # raw_json을  emmet 문법으로 뽑았는데, 이걸 다시 풀어서 쓸 수 HTML 구조로 뽑아야함.
                     section_dict = {}
                     parser = EmmetParser()
-                    print(b_value)
                     html = parser.parse_emmet(b_value)
-                    print(f"raw_json : {b_value} || html : {html}")
-                    
+                    print(f"html architecture : \n{html}")
                     style = parser.font_size(section_name)
                     prompt = f"""
                     <|start_header_id|>system<|end_header_id|>
@@ -147,12 +142,10 @@ class OllamaBlockRecommend:
                     {style}
                     **<html> <head> <body> <div> <meta> <title>** 태그는 절대 사용하지마.
                     """
-                    print(f"len prompt : {len(prompt)}")
                     gen_content = await self.send_request(prompt=prompt)
 
                     gen_content = re.sub("\n", "", gen_content)
                     gen_content = parser.tag_sort(gen_data=gen_content)
-                    print(f"raw_json : {type(gen_content)} {len(gen_content)} / {gen_content}")
                     section_dict['HTML_Tag'] = b_value
                     section_dict['Block_id'] = b_id
                     section_dict['gen_content'] = gen_content
@@ -350,13 +343,22 @@ class EmmetParser:
         return style
     
     def tag_sort(self, gen_data):
-        # 1. DOCTYPE 선언 제거
-        cleaned = re.sub(r'<!DOCTYPE.*?>', '', gen_data, flags=re.IGNORECASE)
-        # 2. <html>, <head>, <body> 태그와 닫는 태그 제거
+        # 1. 마크다운 코드 블록 표시 제거 (예: ```html, ``` 등)
+        cleaned = re.sub(r'```(?:\w+)?', '', gen_data)
+        
+        # 2. 마크다운 강조 문구 제거 (예: ***feature*** 등)
+        cleaned = re.sub(r'\*{3}[^*]+\*{3}', '', cleaned)
+        
+        # 3. DOCTYPE 선언 제거
+        cleaned = re.sub(r'<!DOCTYPE.*?>', '', cleaned, flags=re.IGNORECASE)
+        
+        # 4. <html>, <head>, <body>, <div> 태그와 닫는 태그 제거
         cleaned = re.sub(r'</?(html|head|body|div)(\s[^>]+)?>', '', cleaned, flags=re.IGNORECASE)
-        # 3. <title> 태그와 그 내부 내용, 닫는 태그까지 제거
+        
+        # 5. <title> 태그와 그 내부 내용 및 닫는 태그 제거
         cleaned = re.sub(r'<title.*?>.*?</title>', '', cleaned, flags=re.IGNORECASE | re.DOTALL)
-        # 4. 앞뒤 공백 제거 후 반환
+        
+        # 6. 앞뒤 공백 제거 후 반환
         return cleaned.strip()
         
 

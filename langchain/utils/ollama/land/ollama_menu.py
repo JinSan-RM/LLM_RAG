@@ -118,7 +118,6 @@ class OllamaMenuClient:
 
     async def section_recommend(self, data: str):
         data = self.clean_data(data)
-        print(f"data: {len(data)} / {data}")
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
         - 당신은 웹사이트 랜딩 페이지를 구성하는 전문 디자이너입니다.
@@ -141,8 +140,8 @@ class OllamaMenuClient:
         - Contact : 30
         - Pricing : 30
         - Stats : 30
-        - Content : 50
-        - Testimonial : 60
+        - Content : 30
+        - Testimonial : 30
         - FAQ : 60
         - Logo : 60
         - Team : 60
@@ -243,7 +242,6 @@ class OllamaMenuClient:
         <|start_header_id|>assistant<|end_header_id|>
         반드시 **json** 형태로만 결과를 반환
         """
-        print(f"prompt len : {len(prompt)} / {prompt}")
         menu_data = await self.send_request(prompt=prompt)
         return menu_data
 
@@ -253,14 +251,12 @@ class OllamaMenuClient:
         """
         # menu_recommend 실행
         menu_data = await self.section_recommend(data)
-        print(f"menu_data : {menu_data}")
         repeat_count = 0
 
         while repeat_count < 3:  # 최대 3회 반복
             try:
                 # JSON 데이터 파싱
                 menu_dict = await self.process_menu_data(menu_data)
-                print(f"menu_dict : {menu_dict}")
 
                 # Pydantic 모델 생성
                 pydantic_menu_data = self.parse_menu_data_union(menu_dict)
@@ -271,7 +267,6 @@ class OllamaMenuClient:
                     pydantic_menu_data
                 )
                 section_data = await self.process_menu_data(section_context)
-                print(f"section_context : {section_context}")
 
                 return pydantic_menu_data, section_data
 
