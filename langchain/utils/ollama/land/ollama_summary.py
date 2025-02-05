@@ -69,11 +69,13 @@ class OllamaSummaryClient:
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
         - 입력된 데이터를 {desired_summary_length}자로 요약해주세요.
+        - 입력된 데이터의 언어를 토대로 요약해주세요.
         <|eot_id|><|start_header_id|>user<|end_header_id|>
         입력 데이터:
         {combined_text}
         <|start_header_id|>assistant<|end_header_id|>
         - 입력된 데이터를 {desired_summary_length}자로 요약해주세요.
+        - 입력된 데이터의 언어를 토대로 요약해주세요.
         """
         print(f"[summarize_chunk] Prompt prepared for summary. Length: {len(prompt)} characters")
         try:
@@ -165,7 +167,7 @@ class OllamaSummaryClient:
         summarized_chunks = []
         accumulated_summary_length = 0
         previous_summary = ""
-
+        print(final_summary_length, "<====final_summary_length")
         while remaining_data and accumulated_summary_length < final_summary_length:
             # 현재 청크 크기 계산
             current_chunk_size = max_tokens_per_chunk - (w * current_chunk_number)

@@ -30,5 +30,12 @@ class ModelParam():
             model_max_token = 2048
             final_summary_length = 1000
             max_tokens_per_chunk = 1000
-
+        elif self.model == 'phi4':
+            model_max_token = 4096
+            final_summary_length = 3000
+            max_tokens_per_chunk = 3000
+        else:
+            model_max_token = 4096
+            final_summary_length = 3000
+            max_tokens_per_chunk = 3000
         return model_max_token, final_summary_length, max_tokens_per_chunk

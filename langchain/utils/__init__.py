@@ -15,3 +15,4 @@ from .ollama.land.ollama_block_recommand import OllamaBlockRecommend, EmmetParse
 from .ollama.land.ollama_contents_merge import OllamaDataMergeClient
 from .ollama.land.ollama_examine import OllamaExamineClient
 from .ollama.land.ollama_keyword import OllamaKeywordClient
+from .ollama.land.ollama_usr_data_argument import OllamaUsrMsgClient
