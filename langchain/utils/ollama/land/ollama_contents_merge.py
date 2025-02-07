@@ -53,8 +53,7 @@ class OllamaDataMergeClient:
 
         아래 순서에 따라서 작업을 진행해줘.
 
-
-        1. 사용자 입력이 들어오면, 그걸 PDF 요약 데이터보다 우선적으로 생각해서 작업을 진행해줘.
+        1. 사용자 입력이 들어오면, 그걸 PDF 요약 데이터보다 강조해서 작업을 진행해줘.
 
         2. 사용자 입력와 PDF 요약 데이터를 살펴보면 아래 8가지 정보들이 포함되어 있을거야.
         만약 모자란 정보가 있다면 PDF 요약 데이터를 함께 고려하면서 너가 적당한 창의성을 발휘해서 작성해줘.
@@ -79,6 +78,7 @@ class OllamaDataMergeClient:
 
         <|eot_id|><|start_header_id|>assistant<|end_header_id|>
         사용자 입력을 우선적으로 포함하여 내용을 작성하고 나머지 내용은 PDF 요약데이터로 작성해줘.
+        내용을 작성할 땐, 두개가 고루 혼합되어 작성 되었으면 좋겠어.
         """
         result = await self.send_request(prompt=prompt)
         print(result, "<=====result")

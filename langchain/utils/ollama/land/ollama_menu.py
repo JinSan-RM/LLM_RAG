@@ -121,64 +121,52 @@ class OllamaMenuClient:
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
         - 당신은 웹사이트 랜딩 페이지를 구성하는 전문 디자이너입니다.
-        - 주어진 섹션 이름과 가중치를 기반으로, 랜딩 페이지를 구성할 섹션 4~6개의 조합을 만드세요.
+        - 주어진 섹션 이름을 기반으로, 랜딩 페이지를 구성할 섹션 4~6개의 조합을 만드세요.
         - 구성 규칙은 다음과 같습니다:
 
         1. **필수 섹션**:
-        - "Hero_Header" (가중치: 10)는 반드시 포함됩니다.
-
-        2. **가중치 규칙**:
-        - 가중치가 낮을수록 자주 선택되어야 합니다.
-        - 가중치가 높은 섹션은 채택 확률이 낮아야 합니다.
+        - "Hero"는 반드시 포함됩니다.
 
 
-        3. **섹션 목록**:
-        아래는 섹션 이름과 가중치입니다:
-        - Hero_Header : 10
-        - Feature : 30
-        - CTA : 30
-        - Contact : 30
-        - Pricing : 30
-        - Stats : 30
-        - Content : 30
-        - Testimonial : 30
-        - FAQ : 60
-        - Logo : 60
-        - Team : 60
-        - Gallery : 60
-        - Timeline : 60
-        - Comparison : 60
-        - Countdown : 60
+        2. **섹션 목록**:
+        아래는 섹션 이름입니다.
+        - 1번째 섹션 : [Hero]
+        - 2번째 섹션 : [Feature, Content]
+        - 3번째 섹션 : [CTA, Feature, Content, Gallery, Comparison, Logo]
+        - 4번째 섹션 : [Gallery, Comparison, Statistics, Timeline, Countdown, CTA]
+        - 5번째 섹션 : [Testimonial, Statistics, Pricing, FAQ, Timeline]
+        - 6번째 섹션 : [Contact, FAQ, Logo, Team, Testimonial, Pricing]
 
-       4. **출력 형식**:
+       3. **출력 형식**:
         - 반드시 JSON 형식을 사용하여 가중치의 순서에 따라 섹션을 순서대로 나열하세요.
-        - 섹션의 개수는 반드시 4~6개 사이여야 합니다.
+        - 섹션의 개수는 **반드시 4~6개** 사이여야 합니다.
+        - 각 섹션의 순서에 따라 알맞은 섹션들을 **섹션 목록의 리스트마다 하나를 자유롭게 선택할 것.**
         - 섹션 이름이 중복되지 않도록 주의하세요.
         - 아래 예시는 단순 참고용입니다. 동일하게 답변할 필요는 없으며, 자유롭게 구성하되 **JSON** 구조만 유지하면 됩니다.
+        - 오탈자에 주의하세요.
 
         예시(단순 참고용):
             "menu_structure": {{
-                "1": "Hero_Header",
-                "2": "Feature",
-                "3": "Content",
-                "4": "CTA",
-                "5": "Pricing"
+                "1": "section",
+                "2": "section",
+                "3": "section",
+                "4": "section",
+                "5": "section"
             }}
 
 
         5. **추가 조건**:
         - 각 조합은 입력 데이터(랜딩 페이지 목적, 타깃, 콘셉트 등)에 따라 **논리적**이어야 합니다.
-        - 사용자 경험을 고려하여 **주요 섹션(Feature, CTA, Contact)**은 최소 1회 이상 포함하세요.
-        - 출력 예시에 구애받지 않고 출력을 생성해주세요.
+        - 출력를 참고해서 다양하게 섹션을 구성해서 출력을 생성해주세요.
 
         <|eot_id|><|start_header_id|>user<|end_header_id|>
         입력 데이터:
         {data}
         <|start_header_id|>assistant<|end_header_id|>
         - 위 규칙을 충족하는 섹션 배열을 JSON 형태로 구성해주세요.
+        - 섹션의 개수는 6개를 초과해서는 안됩니다.
         - 각 조합은 입력 데이터 랜딩페이지의 목적에 따라 논리적이어야 합니다.
         - 섹션 이름이 중복되지 않도록 주의하세요.
-        - 사용자 경험을 고려하여 주요 섹션(Feature, CTA, Contact)은 최소 1회 포함하세요.
         """
         menu_data = await self.send_request(prompt=prompt)
         return menu_data
@@ -214,23 +202,22 @@ class OllamaMenuClient:
         1. **섹션 구조**는 다음과 같이 메뉴 이름(키) 목록을 가집니다:
         {menu}
         2. 입력 데이터({{data}})에서 필요한 내용을 발췌하여 각 섹션에 알맞게 배정하세요.
-         - 각 섹션마다 내용을 풍부하고 내용 전달할 수 있을 만한 양으로 **150자 정도**로 작성해줘.
+         - 각 섹션마다 내용을 풍부하고 내용 전달할 수 있을 만한 양으로 작성해줘.
          - 오탈자가 없게 작성해줘.
         3. **JSON 형식 이외의** 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
         4. 최종 출력은 반드시 **오직 JSON 구조**만 반환해야 합니다.
 
         ### 출력 형식
         다음 예시처럼 `menu_structure` 객체를 만들어, 각 섹션을 순서대로 키로 하고 값에 요약 데이터를 채워 넣어 주세요.
+        menu_structure의 key는 섹션 구조의 키 값입니다.
         - 예시:
                 menu_structure : {{
-                    "Hero_Header": "요약 데이터를 토대로 내용 작성",
-                    "Feature": "요약 데이터를 토대로 내용 작성",
-                    "Content": "요약 데이터를 토대로 내용 작성",
-                    "Testimonial": "요약 데이터를 토대로 내용 작성",
-                    "CTA": "요약 데이터를 토대로 내용 작성",
-                    "Pricing": "요약 데이터를 토대로 내용 작성",
-                    "Contact": "요약 데이터를 토대로 내용 작성",
-                    "Footers": "요약 데이터를 토대로 내용 작성"
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성"
                 }}
 
         <|eot_id|><|start_header_id|>user<|end_header_id|>

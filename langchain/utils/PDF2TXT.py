@@ -21,11 +21,13 @@ class PDFHandle():
             str: 추출 및 정리된 텍스트
         """
         total_text = ""
+        max_characters = 7500
 
         for pdf_file in pdf_list:
             doc = fitz.open(stream=pdf_file, filetype="pdf")
             num_pages = doc.page_count
             print(f"총 페이지 수: {num_pages}")
+            max_pages = min(num_pages, 15)
 
             def clean_text(text):
                 # 각 줄을 분리한 후 빈 줄을 제거하고 다시 합침
@@ -35,9 +37,9 @@ class PDFHandle():
                 cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
                 return cleaned_text
 
-            extracted_text = ""
+            # extracted_text = ""
             # 모든 페이지 텍스트 추출
-            for page_num in range(num_pages):
+            for page_num in range(max_pages):
                 page = doc[page_num]
                 text = page.get_text()
 
@@ -47,11 +49,18 @@ class PDFHandle():
                     # 추가 텍스트 정리
                     final_cleaned_text = self.clean_pdf_text(cleaned_text)
                     total_text += f"\n{final_cleaned_text}\n"
+                    
+                if len(total_text) >= max_characters:
+                    total_text = total_text[:max_characters]
+                    break
 
-                extracted_text += f"\n{text}\n"
-
-            total_text += extracted_text
             doc.close()
+            if len(total_text) >= max_characters:
+                break
+            #     extracted_text += f"\n{text}\n"
+
+            # total_text += extracted_text
+            # doc.close()
 
         # 최종 텍스트 정리
         final_text = self.clean_pdf_text(total_text)

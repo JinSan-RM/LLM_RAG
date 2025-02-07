@@ -11,6 +11,7 @@ from utils.milvus_collection import MilvusDataHandler
 from utils.ollama.land.ollama_contents_merge import OllamaDataMergeClient
 from utils.ollama.land.ollama_examine import OllamaExamineClient
 from utils.ollama.land.ollama_keyword import OllamaKeywordClient
+from utils.ollama.land.ollama_usr_data_argument import OllamaUsrMsgClient
 from models.models_conf import ModelParam
 # from utils.imagine_gen import AugmentHandle
 # from utils.ollama.ollama_chat import OllamaChatClient
@@ -71,7 +72,7 @@ async def generate_menu(path: str = '', path2: str = '', path3: str = ''):
 
 
 class LandPageRequest(BaseModel):
-    path: str
+    path: str = ''
     path2: str = ''
     path3: str = ''
     model: str = ''
@@ -118,6 +119,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
         # ========================
         model_conf = ModelParam(request.model)
         model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
+        print(model_max_token, final_summary_length, max_tokens_per_chunk)
         # ========================
         #      내용 요약 모듈
         # ========================
@@ -185,11 +187,17 @@ async def LLM_land_page_generate(request: LandPageRequest):
 # pdf 읽고 summary 생성
 # summary 기반으로 섹션 구조 추천
 # 섹션 구조에 알맞게 context 내용 나눠서. 데이터 전송
-
+valid_section_names = [
+    "Hero", "Feature", "Content", "CTA", "Gallery",
+    "Comparison", "Statistics", "Pricing", "Countdown",
+    "Timeline", "Contact", "FAQ", "Logo", "Team", "Testimonial"
+]
 
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
     start = time.time()
+    summary = ''
+    usr_data = ''
     # ========================
     #    비속어 욕 체크 모듈
     # ========================
@@ -200,26 +208,34 @@ async def land_summary(request: LandPageRequest):
     # examine = await examine_client.data_examine()
     # if examine in "비속어":
     #     return "1"
-    # ========================
-    #         PDF 모듈
-    # ========================
-    pdf_handle = PDFHandle(request.path, request.path2, request.path3)
-    pdf_data = pdf_handle.PDF_request()
+
+    
     # ========================
     #      model set 모듈
     # ========================
     model_conf = ModelParam(request.model)
     model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
+    print(model_max_token, final_summary_length, max_tokens_per_chunk)
+
+    if request.user_msg != '':
+        usr_msg_handle = OllamaUsrMsgClient(usr_msg=request.user_msg, model=request.model)
+        usr_data = await usr_msg_handle.usr_msg_process()
     # ========================
-    #      내용 요약 모듈
+    #         PDF 모듈
     # ========================
-    summary_client = OllamaSummaryClient(model=request.model)
-    summary = await summary_client.store_chunks(
-        data=pdf_data,
-        model_max_token=model_max_token,
-        final_summary_length=final_summary_length,
-        max_tokens_per_chunk=max_tokens_per_chunk
-        )
+    if request.path != '':    
+        pdf_handle = PDFHandle(request.path, request.path2, request.path3)
+        pdf_data = pdf_handle.PDF_request()
+        # ========================
+        #      내용 요약 모듈
+        # ========================
+        summary_client = OllamaSummaryClient(model=request.model)
+        summary = await summary_client.store_chunks(
+            data=pdf_data,
+            model_max_token=model_max_token,
+            final_summary_length=final_summary_length,
+            max_tokens_per_chunk=max_tokens_per_chunk
+            )
     # ========================
     #    비속어 욕 체크 모듈
     # ========================
@@ -230,10 +246,10 @@ async def land_summary(request: LandPageRequest):
     # examine = await examine_client.data_examine()
     # if examine in "비속어":
     #     return "1"
-
+    print(f"usr_data : {len(usr_data)} | {usr_data} \n summary : {len(summary)} | {summary}")
     contents_client = OllamaDataMergeClient(
         model=request.model,
-        user_msg=request.user_msg,
+        user_msg=usr_data,
         data=summary
         )
 
@@ -249,6 +265,7 @@ async def land_summary(request: LandPageRequest):
     section_structure_copy = ordered_new_keys.copy()
     ordered_new_keys.insert(0, "Header")
     ordered_new_keys.append("Footer")
+    ordered_new_keys[1] = "Hero"
 
     # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
     second_items = list(section_per_context.items())
@@ -261,6 +278,7 @@ async def land_summary(request: LandPageRequest):
         new_dict[new_key] = value
     end = time.time()
     t = (end - start)
+    print(f"summary : {summary} \n dict : {new_dict}")
     print(f" running time : {t}")
     return summary, new_dict
 

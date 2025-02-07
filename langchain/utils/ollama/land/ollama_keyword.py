@@ -81,7 +81,7 @@ class OllamaKeywordClient:
             - Each keyword must consist of up to two words.
             - The selected keywords will be common to all menus.
             - Ensure there are no typos.
-            - Write in English only.
+            - **Write in English only**.
             - Do not use any special characters, symbols, or underscores.
             - Each keyword must consist of letters and spaces only (no numbers, punctuation, or special symbols).
         4. Do not write any explanations, sentences, comments, or code blocks other than the keyword list.
@@ -121,11 +121,18 @@ class OllamaKeywordClient:
         
     # 특수문자 제거 함수 (공백 유지)
     def clean_keyword(self, keyword):
-        cleaned = re.sub(r'[^\w\s]', '', keyword)  # 단어 문자와 공백만 허용 (언더바 포함)
-        cleaned = re.sub(r'_', ' ', cleaned)  # 언더바를 공백으로 변환
-        cleaned = re.sub(r'-', ' ', cleaned)  # 언더바를 공백으로 변환
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()  # 여러 개의 공백을 하나로 줄이고 앞뒤 공백 제거
+        # CamelCase 단어의 경계에 공백 삽입 (소문자 뒤에 대문자가 오는 경우)
+        cleaned = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', keyword)
+        # 하이픈을 공백으로 변환
+        cleaned = re.sub(r'-', ' ', cleaned)
+        # 언더바를 공백으로 변환
+        cleaned = re.sub(r'_', ' ', cleaned)
+        # 단어 문자와 공백만 허용 (나머지 특수문자 제거)
+        cleaned = re.sub(r'[^\w\s]', '', cleaned)
+        # 필요시, 여러 개의 공백을 하나로 줄이고 앞뒤 공백 제거
+        # cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         return cleaned
+
     
     # JSON 데이터 파싱 및 정리
     async def process_data(self, section_context):
