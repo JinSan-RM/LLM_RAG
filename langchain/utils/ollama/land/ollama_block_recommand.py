@@ -58,12 +58,14 @@ class OllamaBlockRecommend:
         # 프롬프트
         result_dict = {}
         ctx_value = None
+        print(block_list,"<=====block_list")
         for section_name, data_list in block_list.items():
             tag_slice = []
             for _, tag_list in data_list.items():
                 tag_slice.append(tag_list)
                 if section_name in context:
                     ctx_value = context[section_name]
+            print(tag_slice,"<======tag_slice")
             prompt = f"""
             <|start_header_id|>system<|end_header_id|>
             1. {section_name} 섹션에 가장 잘 어울리는 태그 하나를 태그리스트트 중에서 선정하세요.
