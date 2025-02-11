@@ -1,6 +1,8 @@
 import requests
 import json
 from config.config import OLLAMA_API_URL
+import aiohttp
+import asyncio
 
 
 class OllamaUsrMsgClient:
@@ -9,38 +11,35 @@ class OllamaUsrMsgClient:
         self.temperature = temperature
         self.usr_msg = usr_msg
         self.model = model
-
+    
     async def send_request(self, prompt: str) -> str:
-        """
-        공통 요청 처리 함수: /chat API 호출 및 응답 처리
-        """
         payload = {
             "model": self.model,
             "prompt": prompt,
-            "temperature": self.temperature
+            "temperature": self.temperature,
         }
-        try:
-            response = requests.post(self.api_url, json=payload, timeout=10)
-            response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(self.api_url, json=payload, timeout=15) as response:
+                    response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+                    full_response = await response.text()  # 응답을 비동기적으로 읽기
+            except aiohttp.ClientError as e:
+                print(f"HTTP 요청 실패: {e}")
+                raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
 
-            full_response = response.text  # 전체 응답
-            lines = full_response.splitlines()
-            all_text = ""
-            for line in lines:
-                try:
-                    json_line = json.loads(line.strip())  # 각 줄을 JSON 파싱
-                    all_text += json_line.get("response", "")
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}")
-                    continue  # JSON 파싱 오류 시 건너뛰기
+        # 전체 응답을 줄 단위로 분할하고 JSON 파싱
+        lines = full_response.splitlines()
+        all_text = ""
+        for line in lines:
+            try:
+                json_line = json.loads(line.strip())
+                all_text += json_line.get("response", "")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                continue
 
-            return all_text.strip() if all_text else "Empty response received"
-
-        except requests.exceptions.Timeout:
-            print("The request timed out.")
-        except requests.exceptions.RequestException as e:
-            print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
+        return all_text.strip() if all_text else "Empty response received"
 
     async def usr_msg_process(self):
         prompt = f"""

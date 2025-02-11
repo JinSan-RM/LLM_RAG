@@ -2,6 +2,8 @@ from config.config import OLLAMA_API_URL
 import requests
 import json
 import re
+import aiohttp
+import asyncio
 
 
 class OllamaKeywordClient:
@@ -11,36 +13,33 @@ class OllamaKeywordClient:
         self.model = model
 
     async def send_request(self, prompt: str) -> str:
-        """
-        공통 요청 처리 함수: /generate API 호출 및 응답처리
-        """
         payload = {
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
-            "format": "json"
         }
-        try:
-            response = requests.post(self.api_url, json=payload, timeout=10)
-            response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(self.api_url, json=payload, timeout=15) as response:
+                    response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+                    full_response = await response.text()  # 응답을 비동기적으로 읽기
+            except aiohttp.ClientError as e:
+                print(f"HTTP 요청 실패: {e}")
+                raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
 
-            full_response = response.text  # 전체 응답
-            lines = full_response.splitlines()
-            all_text = ""
-            for line in lines:
-                try:
-                    json_line = json.loads(line.strip())  # 각 줄을 JSON 파싱
-                    all_text += json_line.get("response", "")
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}")
-                    continue  # JSON 파싱 오류 시 건너뛰기
+        # 전체 응답을 줄 단위로 분할하고 JSON 파싱
+        lines = full_response.splitlines()
+        all_text = ""
+        for line in lines:
+            try:
+                json_line = json.loads(line.strip())
+                all_text += json_line.get("response", "")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                continue
 
-            return all_text.strip() if all_text else "Empty response received"
-
-        except requests.exceptions.RequestException as e:
-            print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
-
+        return all_text.strip() if all_text else "Empty response received"
     async def process_menu_data(self, menu_data: str) -> list:
         """
         LLM의 응답에서 JSON 형식만 추출 및 정리 (리스트 형식으로)
@@ -106,14 +105,25 @@ class OllamaKeywordClient:
         data, summary, section을 이용해서 keyword를 생성하는 로직.
         """
         try:
-            section_context = await self.section_keyword_recommend(
-                section,
-                context
-                )
-            # JSON 데이터 파싱
-            section_data_with_keyword = await self.process_menu_data(section_context)
-            section_data_with_keyword = await self.process_data(section_data_with_keyword)
-            return section_data_with_keyword
+            if not isinstance(section, str):
+                section = list(section)[0]
+            
+            if section in ['Header', 'Footer']:
+                return []
+            repeat_count = 0
+            while repeat_count < 3:
+                try:
+                    section_context = await self.section_keyword_recommend(section, context)
+                    # JSON 데이터 파싱
+                    section_data_with_keyword = await self.process_menu_data(section_context)
+                    section_data_with_keyword = await self.process_data(section_data_with_keyword)
+                    return section_data_with_keyword
+                except RuntimeError as r:
+                    print(f"Runtime error: {r}")
+                    repeat_count += 1
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
+                    repeat_count += 1
 
         except Exception as e:  # 모든 예외를 잡고 싶다면
             print(f"Error processing landing structure: {e}")

@@ -4,7 +4,8 @@ import requests
 import json
 import re
 from typing import Dict, Union, List
-
+import asyncio
+import aiohttp
 
 class MenuDict(BaseModel):
     # 루트 모델 대신, 필드 이름을 하나 둔다
@@ -36,38 +37,20 @@ class OllamaMenuClient:
         self.model = model
 
     async def send_request(self, prompt: str) -> str:
-        """
-        공통 요청 처리 함수: /generate API 호출 및 응답처리
-        """
         payload = {
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
-            "format": "json"
         }
-        try:
-            response = requests.post(self.api_url, json=payload, timeout=10)
-            response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
-
-            full_response = response.text  # 전체 응답
-            lines = full_response.splitlines()
-            all_text = ""
-            for line in lines:
-                try:
-                    json_line = json.loads(line.strip())  # 각 줄을 JSON 파싱
-                    all_text += json_line.get("response", "")
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}")
-                    continue  # JSON 파싱 오류 시 건너뛰기
-
-            return all_text.strip() if all_text else "Empty response received"
-
-        except requests.exceptions.Timeout:
-            print("The request timed out.")
-        except requests.exceptions.RequestException as e:
-            print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
-
+        # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(self.api_url, json=payload, timeout=15) as response:
+                    response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+                    full_response = await response.text()  # 응답을 비동기적으로 읽기
+            except aiohttp.ClientError as e:
+                print(f"HTTP 요청 실패: {e}")
+                raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
     async def process_menu_data(self, menu_data: str) -> dict:
         """
         LLM의 응답에서 JSON 형식만 추출 및 정리

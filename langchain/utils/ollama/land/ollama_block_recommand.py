@@ -3,6 +3,8 @@ import requests
 import json
 import re
 import difflib
+import aiohttp
+import asyncio
 
 
 class OllamaBlockRecommend:
@@ -13,41 +15,33 @@ class OllamaBlockRecommend:
         self.model = model
 
     async def send_request(self, prompt: str) -> str:
-        """
-        공통 요청 처리 함수 : API 호출 및 응답 처리
-        Generate 버전전
-        """
-
         payload = {
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
         }
+        # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(self.api_url, json=payload, timeout=15) as response:
+                    response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+                    full_response = await response.text()  # 응답을 비동기적으로 읽기
+            except aiohttp.ClientError as e:
+                print(f"HTTP 요청 실패: {e}")
+                raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
 
-        try:
-            response = requests.post(
-                self.api_url,
-                json=payload,
-                timeout=15
-            )
-            response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        # 전체 응답을 줄 단위로 분할하고 JSON 파싱
+        lines = full_response.splitlines()
+        all_text = ""
+        for line in lines:
+            try:
+                json_line = json.loads(line.strip())
+                all_text += json_line.get("response", "")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                continue
 
-            full_response = response.text  # 전체 응답
-            lines = full_response.splitlines()
-            all_text = ""
-            for line in lines:
-                try:
-                    json_line = json.loads(line.strip())  # 각 줄을 JSON 파싱
-                    all_text += json_line.get("response", "")
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}")
-                    continue  # JSON 파싱 오류 시 건너뛰기
-
-            return all_text.strip() if all_text else "Empty response received"
-
-        except requests.exceptions.RequestException as e:
-            print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
+        return all_text.strip() if all_text else "Empty response received"
 
     async def generate_block_content(self, block_list: dict, context: dict):
         """
@@ -58,14 +52,27 @@ class OllamaBlockRecommend:
         # 프롬프트
         result_dict = {}
         ctx_value = None
-        print(block_list,"<=====block_list")
         for section_name, data_list in block_list.items():
+            if section_name in ['Header', 'Footer']:
+                # data_list가 {'b101': 'h1_p_p_p_p', ...} 형식이라면, 첫번째 키-값 쌍을 추출합니다.
+                first_item = next(iter(data_list.items()))
+                b_id, b_value = first_item
+                # 필요하다면 extract_emmet_tag로 처리
+                b_value = self.extract_emmet_tag(b_value)
+                # context에서 해당 섹션의 입력 데이터가 있다면 그대로 전달
+                ctx_value = context.get(section_name, "")
+                result_dict[section_name] = {
+                    'HTML_Tag': b_value,
+                    'Block_id': b_id,
+                    'gen_content': ctx_value  # 입력받은 컨텐츠를 그대로 전달
+                }
+                return result_dict
+
             tag_slice = []
             for _, tag_list in data_list.items():
                 tag_slice.append(tag_list)
                 if section_name in context:
                     ctx_value = context[section_name]
-            print(tag_slice,"<======tag_slice")
             prompt = f"""
             <|start_header_id|>system<|end_header_id|>
             1. {section_name} 섹션에 가장 잘 어울리는 태그 하나를 태그리스트트 중에서 선정하세요.
@@ -148,13 +155,16 @@ class OllamaBlockRecommend:
 
                     gen_content = re.sub("\n", "", gen_content)
                     gen_content = parser.tag_sort(gen_data=gen_content)
+                    
+                    if not parser.validate_html_structure(gen_content, expected_structure=html):
+                        repeat_count += 1
+                        raise ValueError("생성된 HTML 구조가 예상과 다릅니다. 재시도해주세요.")
                     section_dict['HTML_Tag'] = b_value
                     section_dict['Block_id'] = b_id
                     section_dict['gen_content'] = gen_content
 
                     result_dict[f'{section_name}'] = section_dict
                     print(f"result_dict : {result_dict}")
-
                     break
                 except RuntimeError as r:
                     print(f"Runtime error: {r}")
@@ -362,7 +372,32 @@ class EmmetParser:
         
         # 6. 앞뒤 공백 제거 후 반환
         return cleaned.strip()
+    def validate_html_structure(self, html_output: str, expected_structure: str) -> bool:
+        """
+        생성된 HTML 출력(html_output)이 예상 구조(expected_structure)의 태그들을 모두 포함하는지 검증합니다.
+        내용(text)은 무시하고, 오직 태그의 존재 여부만 확인합니다.
+
+        Args:
+            html_output (str): 실제 생성된 HTML 콘텐츠
+            expected_structure (str): 예상되는 HTML 구조(예: 미리 정의된 템플릿)
+
+        Returns:
+            bool: 생성된 HTML이 예상 구조대로면 True, 그렇지 않으면 False
+        """
+        # 예상 HTML 구조에서 모든 태그명을 추출합니다.
+        expected_tags = re.findall(r'</?([a-zA-Z][a-zA-Z0-9]*)\b', expected_structure)
+        # 중복 제거
+        expected_tags = list(set(expected_tags))
         
+        # 각 예상 태그가 생성된 HTML 내에 존재하는지 확인합니다.
+        for tag in expected_tags:
+            # 예: <ul>, <li>, <h1> 등 (속성은 무시)
+            pattern = re.compile(rf'<{tag}(\s[^>]*?)?>', re.IGNORECASE)
+            if not pattern.search(html_output):
+                print(f"검증 실패: {tag} 태그가 생성된 HTML에 없습니다.")
+                return False
+        return True
+            
 
 # class EmmetParser:
 #     def parse_emmet(self, emmet_str):
