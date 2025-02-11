@@ -172,7 +172,7 @@ async def land_summary(request: LandPageRequest):
     #      키워드 생성 모듈
     # ========================
     # keyword_client = OllamaKeywordClient(model=request.model)
-    # keyword_data = await keyword_client.section_keyword_create_logic(data=summary, section_per_context = section_per_context)
+    # keyword_data = await keyword_client.section_keyword_create_logic(data=summary, section_per_context = section_per_context, menu = section_structure)
 
     
     # print("before_update : ", section_per_context)
@@ -182,7 +182,10 @@ async def land_summary(request: LandPageRequest):
     
     # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
     
-    print("why it is more detail : ", section_per_context)
+    print("more detail about section_structure : ", section_structure)
+    print("==========================================")
+    print("more detail about section_per_context : ", section_per_context)
+    
     
     ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=lambda x: int(x))]
     section_structure_copy = ordered_new_keys.copy()

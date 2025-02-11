@@ -62,43 +62,50 @@ class OllamaKeywordClient:
             print(f"JSON 파싱 실패: {e}")
             raise RuntimeError("menu_data의 형식이 올바르지 않습니다.")
 
-    async def section_keyword_recommend(self, data: str, section_per_context:dict):
-        # reversed_menu_dict = {value: key for key, value in menu.items()}
+    async def section_keyword_recommend(self, data: str, section_per_context:dict, menu:dict):
+        reversed_menu_dict = {value: key for key, value in menu.items()}
         prompt = f"""
         <|start_header_id|>system<|end_header_id|>
         당신은 웹사이트 랜딩 페이지의 각 섹션에 들어갈 이미지를 검색하는 전문 디자이너입니다.
-        구성된 랜딩 페이지의 각 섹션 구성에 알맞게 입력 데이터({{data}})와 섹션 구조 및 요약 내용({{section_per_context}})을 고려하여 이미지를 검색할 영문 키워드를 2개 고르세요.
+        구성된 랜딩 페이지의 각 섹션 구성에 알맞게 전체 데이터와 각 섹션 요약 데이터를를 고려하여 이미지를 검색할 영문 키워드를 2개 고르세요.
 
         ### 규칙
-        1. **섹션 구조 및 요약 내용**은 다음과 같은 값을 가집니다:
-        {{section_per_context}}
-        2. 내용이 부족할 경우, 입력 데이터({{data}})를 함께 고려하여 1개의 단어로 이루어진 영문 키워드를 2개만 선정하세요.
-         - 이미지를 잘 찾을 수 있게 섹션별로 1개의 단어로 이루어진 영문 키워드를 2개씩 선정해줘.
-         - 각 키워드는 1개의 단어로 이뤄져있어. Ex)Flower
+        1. **섹션 구조**는 다음과 같이 메뉴 이름(키) 목록을 가집니다:
+        {reversed_menu_dict}
+        2. 아래의 키워드를 추출하는 이유는 이미지 검색 사이트에서 이미지가 잘 검색될 키워드를 찾는 것을 잊지마.
+        3. 전체 데이터를 고려하여 이미지 검색에 유리한 키워드를 1개 지정해줘.
+         - 각 키워드는 최대 3개의 단어로 이루어져있어.
+         - 여기서 선정된 키워드는 모든 메뉴에 공통적으로 들어갈거야.
          - 오탈자가 없게 작성해줘.
-        3. **JSON 형식 이외의** 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
-        4. 최종 출력은 반드시 **오직 JSON 구조**만 반환해야 합니다.
+        4. 각 섹션 요약 데이터를를 참고해서 이미지 검색에 유리한 키워드를 1개 선정해줘.
+         - 각 키워드는 최대 3개의 단어로 이루어져있어.
+         - 여기서 선정된 키워드는 각각의 메뉴에만 들어갈거야.
+         - 오탈자가 없게 작성해줘.
+        5. **JSON 형식 이외의** 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
+        6. 최종 출력은 반드시 **오직 JSON 구조**만 반환해야 합니다.
 
         ### 출력 형식
         다음 예시처럼 `keyword_structure` 객체를 만들어, 각 섹션을 순서대로 키로 하고 값에 요약 데이터를 채워 넣어 주세요.
-        - 예시:
-                keyword_structure : {{
-                    "Keyword_Hero": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_Feature": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_Content": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_Testimonial": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_CTA": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_Pricing": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_Contact": "1개의 단어로 이루어진 키워드 2개 작성",
-                    "Keyword_Footers": "1개의 단어로 이루어진 키워드 2개 작성"
-                }}
+        **아래는 예시이므로 절대 그대로 사용하지말고 2번 프로세스) 규칙을 준수하여 작성하세요**
+        - 예시_정보통신사업:
 
+                keyword_structure : {{
+                    "keyword_Hero": "정보통신, 금융",
+                    "keyword_Feature": "정보통신, 핀테크",
+                    "keyword_Content": "정보통신, 사람",
+                    "keyword_Testimonial": "정보통신, 돈",
+                    "keyword_CTA": "정보통신, 은행",
+                    "keyword_Pricing": "정보통신, 가격",
+                    "keyword_Contact": "정보통신, 전화",
+                }}
+                
         <|eot_id|><|start_header_id|>user<|end_header_id|>
-        입력 데이터:
+        전체 데이터:
         {data}
         
-        섹션 구조 및 요약 내용:
+        각 섹션 요약 데이터:
         {section_per_context}
+        
         <|start_header_id|>assistant<|end_header_id|>
         반드시 **json** 형태로만 결과를 반환
         """
@@ -109,14 +116,14 @@ class OllamaKeywordClient:
         return keyword_data
 
 
-    async def section_keyword_create_logic(self, data: str, section_per_context: dict):
+    async def section_keyword_create_logic(self, data: str, section_per_context: dict, menu: dict):
         """
         data, summary, section을 이용해서 keyword를 생성하는 로직.
         """
 
         try:
             
-            section_context = await self.section_keyword_recommend(data, section_per_context)
+            section_context = await self.section_keyword_recommend(data, section_per_context, menu)
             
             # JSON 데이터 파싱
             section_data_with_keyword = await self.process_menu_data(section_context)
