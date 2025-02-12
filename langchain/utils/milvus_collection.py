@@ -12,7 +12,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 
-OPENAI_KEY = os.environ['OPENAI_API_KEY']
+OPENAI_KEY = # os.environ['OPENAI_API_KEY']
 
 client = OpenAI(api_key=OPENAI_KEY)
 

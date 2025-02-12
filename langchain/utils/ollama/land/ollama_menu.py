@@ -129,13 +129,13 @@ class OllamaMenuClient:
 
 
         2. **섹션 목록**:
-        아래는 섹션 이름입니다.
+        아래는 각 섹션 순서에 들어갈 섹션 후보들의 이름입니다.
         - 1번째 섹션 : [Hero]
         - 2번째 섹션 : [Feature, Content]
-        - 3번째 섹션 : [CTA, Feature, Content, Gallery, Comparison, Logo]
-        - 4번째 섹션 : [Gallery, Comparison, Statistics, Timeline, Countdown, CTA]
-        - 5번째 섹션 : [Testimonial, Statistics, Pricing, FAQ, Timeline]
-        - 6번째 섹션 : [Contact, FAQ, Logo, Team, Testimonial, Pricing]
+        - 3번째 섹션 : [CTA, Feature, Content, Comparison, Logo]
+        - 4번째 섹션 : [Comparison, Statistics, CTA]
+        - 5번째 섹션 : [Testimonial, Statistics, Pricing, FAQ]
+        - 6번째 섹션 : [FAQ, Team, Testimonial, Pricing]
 
        3. **출력 형식**:
         - 반드시 JSON 형식을 사용하여 가중치의 순서에 따라 섹션을 순서대로 나열하세요.
@@ -206,6 +206,7 @@ class OllamaMenuClient:
          - 오탈자가 없게 작성해줘.
         3. **JSON 형식 이외의** 어떤 설명, 문장, 주석, 코드 블록도 작성하지 마세요.
         4. 최종 출력은 반드시 **오직 JSON 구조**만 반환해야 합니다.
+        5. 최종 출력은 반드시 예시와 같이 **1-depth의 JSON 구조**로 반환해야 합니다.
 
         ### 출력 형식
         다음 예시처럼 `menu_structure` 객체를 만들어, 각 섹션을 순서대로 키로 하고 값에 요약 데이터를 채워 넣어 주세요.
