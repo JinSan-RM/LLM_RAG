@@ -4,7 +4,9 @@ import requests
 import json
 import re
 from typing import Dict, Union, List
-
+import asyncio
+import aiohttp
+import ast
 
 class MenuDict(BaseModel):
     # 루트 모델 대신, 필드 이름을 하나 둔다
@@ -30,44 +32,40 @@ menu_union_adapter = TypeAdapter(MenuUnion)
 
 
 class OllamaMenuClient:
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.1, model: str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.05, model: str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
 
     async def send_request(self, prompt: str) -> str:
-        """
-        공통 요청 처리 함수: /generate API 호출 및 응답처리
-        """
         payload = {
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
-            "format": "json"
         }
-        try:
-            response = requests.post(self.api_url, json=payload, timeout=10)
-            response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(self.api_url, json=payload, timeout=40) as response:
+                    response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+                    full_response = await response.text()  # 응답을 비동기적으로 읽기
+            except aiohttp.ClientError as e:
+                print(f"HTTP 요청 실패: {e}")
+                raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
 
-            full_response = response.text  # 전체 응답
-            lines = full_response.splitlines()
-            all_text = ""
-            for line in lines:
-                try:
-                    json_line = json.loads(line.strip())  # 각 줄을 JSON 파싱
-                    all_text += json_line.get("response", "")
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}")
-                    continue  # JSON 파싱 오류 시 건너뛰기
+        # 전체 응답을 줄 단위로 분할하고 JSON 파싱
+        lines = full_response.splitlines()
+        all_text = ""
+        for line in lines:
+            try:
+                json_line = json.loads(line.strip())
+                all_text += json_line.get("response", "")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                continue
 
-            return all_text.strip() if all_text else "Empty response received"
-
-        except requests.exceptions.Timeout:
-            print("The request timed out.")
-        except requests.exceptions.RequestException as e:
-            print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
-
+        return all_text.strip() if all_text else "Empty response received"
+    
     async def process_menu_data(self, menu_data: str) -> dict:
         """
         LLM의 응답에서 JSON 형식만 추출 및 정리
@@ -93,29 +91,69 @@ class OllamaMenuClient:
             raise RuntimeError("menu_data의 형식이 올바르지 않습니다.") from e
 
     def parse_menu_data_union(self, data: dict) -> Dict[str, str]:
-        # 0) 만약 data가 비어 있다면, 원하는 기본값 / 빈 dict 등으로 처리
-        if not data:  # 즉, {}나 None, 혹은 빈 상태
+        """
+        입력 데이터가 아래와 같은 형식이어야 합니다.
+        - {"menu_structure": { "1": "Hero", "2": "Feature", ... }}
+        - 또는 {"menu_dict": { "1": "Hero", "2": "Feature", ... }}
+        - 또는 {"menu_structure": [ "Hero", "Feature", ... ]}
+        
+        만약 두 키 모두 없으면, data 자체를 {"menu_dict": data}로 래핑합니다.
+        그리고 각각의 경우에 따라 적절한 dict를 반환합니다.
+        """
+        # 0) 데이터가 비어 있다면 빈 dict 반환
+        if not data:
             print("Received an empty dictionary. Returning empty result.")
             return {}
 
-        # 1) 래핑 로직(필요 시)
+        # 1) "menu_dict"와 "menu_structure" 키가 모두 없다면, data를 "menu_dict"로 래핑
         if "menu_dict" not in data and "menu_structure" not in data:
             data = {"menu_dict": data}
 
-        # TypeAdapter.validate_python() 사용
-        parsed = menu_union_adapter.validate_python(data)
+        # 2) "menu_dict" 키가 있다면 처리
+        if "menu_dict" in data:
+            value = data["menu_dict"]
+            if isinstance(value, dict):
+                print("menu dict")
+                return value
+            elif isinstance(value, str):
+                try:
+                    value_parsed = ast.literal_eval(value)
+                    if isinstance(value_parsed, dict):
+                        print("menu dict (converted from str)")
+                        return value_parsed
+                    else:
+                        raise ValueError("menu_dict 문자열이 dict로 변환되지 않았습니다.")
+                except Exception as e:
+                    raise ValueError("menu_dict의 값은 dict 타입이어야 합니다.") from e
+            else:
+                raise ValueError("menu_dict의 값은 dict 타입이어야 합니다.")
 
-        if isinstance(parsed, MenuDict):
-            print("menu dict")
-            return parsed.menu_dict
-        elif isinstance(parsed, MenuDataDict):
-            print("menu data")
-            return parsed.menu_structure
-        elif isinstance(parsed, MenuDataList):
-            return {str(i+1): val for i, val in enumerate(parsed.menu_structure)}
+        # 3) "menu_structure" 키가 있다면 처리
+        elif "menu_structure" in data:
+            value = data["menu_structure"]
+            if isinstance(value, dict):
+                print("menu data")
+                return value
+            elif isinstance(value, list):
+                return {str(i+1): val for i, val in enumerate(value)}
+            elif isinstance(value, str):
+                try:
+                    value_parsed = ast.literal_eval(value)
+                    if isinstance(value_parsed, dict):
+                        print("menu data (converted from str)")
+                        return value_parsed
+                    elif isinstance(value_parsed, list):
+                        return {str(i+1): val for i, val in enumerate(value_parsed)}
+                    else:
+                        raise ValueError("menu_structure 문자열이 dict 또는 list로 변환되지 않았습니다.")
+                except Exception as e:
+                    raise ValueError("menu_structure의 값은 dict 또는 list 타입이어야 합니다.") from e
+            else:
+                raise ValueError("menu_structure의 값은 dict 또는 list 타입이어야 합니다.")
+
         else:
             raise ValueError("Unknown data format")
-
+        
     async def section_recommend(self, data: str):
         data = self.clean_data(data)
         prompt = f"""
@@ -151,7 +189,8 @@ class OllamaMenuClient:
                 "2": "section",
                 "3": "section",
                 "4": "section",
-                "5": "section"
+                "5": "section",
+                "6": "section"
             }}
 
 
@@ -164,6 +203,15 @@ class OllamaMenuClient:
         {data}
         <|start_header_id|>assistant<|end_header_id|>
         - 위 규칙을 충족하는 섹션 배열을 JSON 형태로 구성해주세요.
+        예시(단순 참고용):
+            "menu_structure": {{
+                "1": "section",
+                "2": "section",
+                "3": "section",
+                "4": "section",
+                "5": "section",
+                "6": "section"
+            }}
         - 섹션의 개수는 6개를 초과해서는 안됩니다.
         - 각 조합은 입력 데이터 랜딩페이지의 목적에 따라 논리적이어야 합니다.
         - 섹션 이름이 중복되지 않도록 주의하세요.
@@ -229,6 +277,15 @@ class OllamaMenuClient:
         {reversed_menu_dict}
         <|start_header_id|>assistant<|end_header_id|>
         반드시 **json** 형태로만 결과를 반환
+        - 예시:
+                menu_structure : {{
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성",
+                    "section": "데이터를 토대로 내용 작성"
+                }}
         """
         menu_data = await self.send_request(prompt=prompt)
         return menu_data
@@ -236,32 +293,190 @@ class OllamaMenuClient:
     async def section_structure_create_logic(self, data: str):
         """
         메뉴 데이터를 생성하고 Pydantic 모델을 사용해 처리하는 로직.
+        최종적으로 pydantic_menu_data와 section_data가 모두
+        {"1": "context", "2": "context", ..., "6": "context"} 형태여야 합니다.
         """
         # menu_recommend 실행
         menu_data = await self.section_recommend(data)
         repeat_count = 0
 
-        while repeat_count < 3:  # 최대 3회 반복
+        while repeat_count < 3:
             try:
-                # JSON 데이터 파싱
+                # 1. 메뉴 데이터 처리: JSON 파싱 및 자동 단일 단어 변환
                 menu_dict = await self.process_menu_data(menu_data)
-
-                # Pydantic 모델 생성
+                # 자동 변환: 각 값에서 쉼표가 있을 경우 첫 번째 단어만 남기도록 함
+                menu_dict = self.transform_to_single_word(menu_dict)
+                # if not self.validate_single_word_values(menu_dict):
+                #     raise ValueError("메뉴 데이터 값이 단일 단어로 이루어지지 않았습니다.")
+                
+                # 2. Pydantic 모델 생성
                 pydantic_menu_data = self.parse_menu_data_union(menu_dict)
-                # print(f"pydantic_menu_data : {pydantic_menu_data}")
-
-                section_context = await self.section_per_context(
-                    data,
-                    pydantic_menu_data
-                )
+                print(f"parse_menu_data_union pydantic_menu_data : {pydantic_menu_data}")
+                
+                # 3. 섹션 수 제한 (예: 최대 6개)
+                MAX_OTHER_SECTIONS = 6
+                other_sections = {k: v for k, v in pydantic_menu_data.items() if k != "Hero"}
+                if len(other_sections) > MAX_OTHER_SECTIONS:
+                    print("섹션 수가 최대치를 초과했습니다. 초과하는 섹션을 잘라냅니다.")
+                    trimmed_other = dict(list(other_sections.items())[:MAX_OTHER_SECTIONS])
+                    if "Hero" in pydantic_menu_data:
+                        trimmed_other["Hero"] = pydantic_menu_data["Hero"]
+                    pydantic_menu_data = trimmed_other
+                
+                # 4. 메뉴 데이터 내 순수 JSON만 추출 후 단일 단어로 간소화
+                # 이미 dict라면 JSON 문자열로 변환한 후 다시 추출합니다.
+                pydantic_menu_data = self.extract_menu_structure(json.dumps(pydantic_menu_data))
+                print(f"extract_menu_structure pydantic_menu_data : {pydantic_menu_data}")
+                pydantic_menu_data = self.simplify_section_structure(pydantic_menu_data)
+                print(f"simplify_section_structure pydantic_menu_data : {pydantic_menu_data}")
+                
+                
+                if not self.validate_section_data_structure(pydantic_menu_data):
+                    raise ValueError("pydantic_menu_data 형식이 올바르지 않습니다.")
+                
+                # 5. 섹션 컨텍스트 생성 및 처리
+                section_context = await self.section_per_context(data, pydantic_menu_data)
                 section_data = await self.process_menu_data(section_context)
-
+                print(f"BF section_data : {section_data}")
+                section_data = self.merge_section_fields(section_data)
+                print(f"AF section_data : {section_data}")
+                
+                if not self.validate_section_data_structure(section_data):
+                    repeat_count += 1
+                    raise ValueError("section_data 형식이 올바르지 않습니다.")
+                
                 return pydantic_menu_data, section_data
 
-            except Exception as e:  # 모든 예외를 잡고 싶다면
-                print(f"Error processing landing structure: {e}")
+            except Exception as e:
+                print(f"Error processing landing structure menu: {e}")
                 repeat_count += 1
                 menu_data = await self.section_recommend(data)
 
-        # 실패 시 처리
         return menu_data, data
+    
+    def simplify_section_structure(self, section_structure) -> dict:
+        """
+        section_structure가 문자열이면 JSON으로 파싱하고, 
+        dict 형태로 변환한 후 각 키의 값이 쉼표(,)로 구분된 경우 첫 번째 단어만 추출하여 반환합니다.
+        """
+        # 입력값이 문자열이면 JSON 파싱 시도
+        if isinstance(section_structure, str):
+            try:
+                section_structure = json.loads(section_structure)
+            except Exception as e:
+                raise ValueError(f"section_structure를 JSON으로 파싱할 수 없습니다: {e}")
+        # 이제 section_structure는 dict여야 함
+        if not isinstance(section_structure, dict):
+            raise ValueError("section_structure는 dict 타입이어야 합니다.")
+
+        simplified = {}
+        for key, value in section_structure.items():
+            if isinstance(value, str):
+                simplified[key] = value.split(",")[0].strip()
+            else:
+                simplified[key] = str(value).strip()
+        return simplified
+    
+    def transform_to_single_word(self, data: dict) -> dict:
+        """
+        각 value가 쉼표(,)로 구분된 경우, 첫 번째 단어만 추출하여 반환합니다.
+        """
+        if not isinstance(data, dict):
+            raise ValueError("입력 데이터는 dict 타입이어야 합니다.")
+        transformed = {}
+        for key, value in data.items():
+            if isinstance(value, str):
+                transformed[key] = value.split(",")[0].strip()
+            else:
+                transformed[key] = str(value).strip()
+        return transformed
+    
+    def validate_single_word_values(self, data: dict) -> bool:
+        """
+        각 value가 쉼표(,) 없이 단일 단어로만 이루어져 있는지 검증합니다.
+        """
+        if not isinstance(data, dict):
+            return False
+        for key, value in data.items():
+            # value가 문자열이 아니거나 쉼표가 포함되어 있으면 False
+            if not isinstance(value, str) or ',' in value:
+                return False
+        return True
+
+    
+    def validate_section_data_structure(self, section_data: dict) -> bool:
+        """
+        section_data가 {"1": "context", "2": "context", ...} 형태인지 검증합니다.
+        모든 키가 숫자로 이루어진 문자열인지 확인합니다.
+        """
+        if not isinstance(section_data, dict):
+            return False
+        # 모든 키가 숫자로만 구성되어 있는지 확인
+        for key in section_data.keys():
+            if not isinstance(key, str) or not key.isdigit():
+                return False
+        return True
+    
+    def extract_menu_structure(self, text: str) -> dict:
+        """
+        LLM 응답 문자열에서 코드 블록 내 "menu_structure": { ... } 부분만 추출하여 dict로 반환합니다.
+        만약 코드 블록이 없으면, 전체 텍스트에서 JSON을 파싱합니다.
+        """
+        # 1. 코드 블록 (```json ... ```) 내의 내용을 추출 (비탐욕적 매칭 사용)
+        pattern_code_block = r"```json\s*(\{.*?\})\s*```"
+        match = re.search(pattern_code_block, text, re.DOTALL)
+        if match:
+            json_text = match.group(1)
+        else:
+            # 2. 코드 블록이 없으면, "menu_structure": { ... } 패턴으로 추출 시도
+            pattern = r'"menu_structure"\s*:\s*(\{.*\})'
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                json_text = match.group(1)
+            else:
+                # 3. 만약 패턴이 전혀 없으면 전체 텍스트가 순수 JSON이라 가정하고 파싱 시도
+                json_text = text.strip()
+        
+        if not json_text:
+            raise ValueError("추출할 JSON 텍스트가 비어 있습니다.")
+        
+        try:
+            return json.loads(json_text)
+        except json.JSONDecodeError as e:
+            print(f"JSON 파싱 실패: {e}")
+            raise ValueError(f"추출된 JSON 형식이 올바르지 않습니다: {e}")
+
+    
+    def merge_section_fields(self, section_data: dict) -> dict:
+        """
+        section_data가 다음과 같이 중첩 구조로 되어 있을 때,
+        내부의 모든 문자열 값을 추출하여 하나의 스트링으로 병합합니다.
+        
+        예시:
+        Input: {"section": {"title": "Hello", "description": "World", "extra": {"note": "Additional"}}}
+        Output: {"section": "Hello World Additional"}
+        """
+        merged = {}
+        for key, value in section_data.items():
+            if isinstance(value, dict) or isinstance(value, list):
+                merged_value = self.extract_nested_strings(value)
+                merged[key] = merged_value
+            else:
+                merged[key] = str(value).strip()
+        return merged
+    
+    def extract_nested_strings(self, value) -> str:
+        """
+        재귀적으로 value 내부의 모든 문자열 값을 추출하여 하나의 문자열로 결합합니다.
+        - value가 dict이면, 모든 key의 값을 재귀 호출한 후 공백으로 결합합니다.
+        - value가 list이면, 각 요소에 대해 재귀 호출한 후 공백으로 결합합니다.
+        - 그 외에는 str()로 변환하여 반환합니다.
+        """
+        if isinstance(value, dict):
+            parts = [self.extract_nested_strings(v) for v in value.values()]
+            return " ".join(parts).strip()
+        elif isinstance(value, list):
+            parts = [self.extract_nested_strings(item) for item in value]
+            return " ".join(parts).strip()
+        else:
+            return str(value).strip()

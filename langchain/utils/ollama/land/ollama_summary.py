@@ -1,7 +1,9 @@
+import asyncio
 from config.config import OLLAMA_API_URL
 import requests
 import json
 from typing import List
+import aiohttp
 
 
 class OllamaSummaryClient:
@@ -12,37 +14,33 @@ class OllamaSummaryClient:
         self.model = model
 
     async def send_request(self, prompt: str) -> str:
-        """
-        공통 요청 처리 함수 : API 호출 및 응답 처리
-        Generate 버전전
-        """
-
         payload = {
             "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
         }
+        # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(self.api_url, json=payload, timeout=15) as response:
+                    response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+                    full_response = await response.text()  # 응답을 비동기적으로 읽기
+            except aiohttp.ClientError as e:
+                print(f"HTTP 요청 실패: {e}")
+                raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
 
-        try:
-            response = requests.post(self.api_url, json=payload, timeout=15)
-            response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        # 전체 응답을 줄 단위로 분할하고 JSON 파싱
+        lines = full_response.splitlines()
+        all_text = ""
+        for line in lines:
+            try:
+                json_line = json.loads(line.strip())
+                all_text += json_line.get("response", "")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                continue
 
-            full_response = response.text  # 전체 응답
-            lines = full_response.splitlines()
-            all_text = ""
-            for line in lines:
-                try:
-                    json_line = json.loads(line.strip())  # 각 줄을 JSON 파싱
-                    all_text += json_line.get("response", "")
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}")
-                    continue  # JSON 파싱 오류 시 건너뛰기
-
-            return all_text.strip() if all_text else "Empty response received"
-
-        except requests.exceptions.RequestException as e:
-            print(f"HTTP 요청 실패: {e}")
-            raise RuntimeError(f"Ollama API 요청 실패: {e}") from e
+        return all_text.strip() if all_text else "Empty response received"
 
     def split_into_chunks(self, data: str, max_length: int) -> List[str]:
         """
@@ -144,6 +142,29 @@ class OllamaSummaryClient:
         """
         return await self.send_request(prompt=prompt)
 
+
+    async def store_chunks_parallel(self, data: str, model_max_token: int, final_summary_length: int, max_tokens_per_chunk: int) -> str:
+        """
+        데이터를 청크로 분할하고, 각 청크를 병렬로 요약한 후, 모든 요약을 합쳐 최종 요약을 생성하는 함수.
+        이 방식은 각 청크가 독립적으로 요약되므로, 이전 요약을 컨텍스트로 사용하지 않습니다.
+        """
+        # 단순화를 위해 max_tokens_per_chunk를 청크 크기로 사용
+        chunks = self.split_into_chunks(data, max_tokens_per_chunk)
+        if not chunks:
+            return ""
+        
+        # 각 청크에 대해 원하는 요약 길이를 500자로 설정(필요에 따라 조정)
+        tasks = [self.summarize_chunk(chunk, desired_summary_length=500) for chunk in chunks]
+        # asyncio.gather를 사용하여 모든 작업을 동시에 실행합니다.
+        summarized_chunks = await asyncio.gather(*tasks)
+        
+        # 각 요약 결과를 합칩니다.
+        final_summary = ' '.join(summarized_chunks)
+        # 최종 요약 길이를 제한하려면:
+        if len(final_summary) > final_summary_length:
+            final_summary = final_summary[:final_summary_length]
+        return final_summary
+    
     async def store_chunks(self, data: str, model_max_token: int, final_summary_length: int, max_tokens_per_chunk: int) -> str:
         """
         대용량 데이터를 청크로 분할하고, 각 청크를 모델에 전달하여 요약한 후, 모든 요약을 합쳐 최종 요약을 생성하는 함수

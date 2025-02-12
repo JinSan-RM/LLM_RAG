@@ -25,6 +25,7 @@ from pydantic import BaseModel
 import time
 import torch
 import gc
+import json
 from pymilvus import Collection, connections
 # import random
 
@@ -162,7 +163,7 @@ async def LLM_land_page_generate(request: LandPageRequest):
         ordered_new_keys.append("Footer")
         print(f"ordered_new_keys : {ordered_new_keys}")
 
-        # 2. 두 번째 딕셔너리의 아이템 목록을 추출 (순서 유지)
+        # 2. 두 번째 딕셔너리(객체)의 아이템 목록을 추출 (순서 유지)
         second_items = list(section_per_context.items())
         second_items.insert(0, ('Header', ', '.join(section_structure_copy)))
         second_items.append(('Footer', ', '.join(section_structure_copy)))
@@ -209,13 +210,13 @@ async def land_summary(request: LandPageRequest):
     # if examine in "비속어":
     #     return "1"
 
-    
+
     # ========================
     #      model set 모듈
     # ========================
     model_conf = ModelParam(request.model)
     model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
-    print(model_max_token, final_summary_length, max_tokens_per_chunk)
+    print(f"request.user_msg : {request.user_msg} \n request.path : {request.path}")
 
     if request.user_msg != '':
         usr_msg_handle = OllamaUsrMsgClient(usr_msg=request.user_msg, model=request.model)
@@ -230,7 +231,7 @@ async def land_summary(request: LandPageRequest):
         #      내용 요약 모듈
         # ========================
         summary_client = OllamaSummaryClient(model=request.model)
-        summary = await summary_client.store_chunks(
+        summary = await summary_client.store_chunks_parallel(
             data=pdf_data,
             model_max_token=model_max_token,
             final_summary_length=final_summary_length,
@@ -252,7 +253,6 @@ async def land_summary(request: LandPageRequest):
         user_msg=usr_data,
         data=summary
         )
-
     summary = await contents_client.contents_merge()
     # ========================
     #      메뉴 생성 모듈
@@ -261,6 +261,7 @@ async def land_summary(request: LandPageRequest):
     section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
 
     # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
+    print(f"main section_structure : {section_structure}")
     ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=int)]
     section_structure_copy = ordered_new_keys.copy()
     ordered_new_keys.insert(0, "Header")
