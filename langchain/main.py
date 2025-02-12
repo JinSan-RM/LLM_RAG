@@ -25,6 +25,7 @@ from pydantic import BaseModel
 import time
 import torch
 import gc
+import json
 from pymilvus import Collection, connections
 # import random
 
@@ -215,7 +216,7 @@ async def land_summary(request: LandPageRequest):
     # ========================
     model_conf = ModelParam(request.model)
     model_max_token, final_summary_length, max_tokens_per_chunk = model_conf.param_set()
-    print(model_max_token, final_summary_length, max_tokens_per_chunk)
+    print(f"request.user_msg : {request.user_msg} \n request.path : {request.path}")
 
     if request.user_msg != '':
         usr_msg_handle = OllamaUsrMsgClient(usr_msg=request.user_msg, model=request.model)
@@ -258,10 +259,9 @@ async def land_summary(request: LandPageRequest):
     # ========================
     menu_client = OllamaMenuClient(model=request.model)
     section_structure, section_per_context = await menu_client.section_structure_create_logic(summary)
-    print(f"section_structure : {section_structure}")
-    print(f"section_per_context : {section_per_context}")
 
     # 1. 첫 번째 딕셔너리의 값들을 숫자 키 순서대로 추출
+    print(f"main section_structure : {section_structure}")
     ordered_new_keys = [section_structure[k] for k in sorted(section_structure, key=int)]
     section_structure_copy = ordered_new_keys.copy()
     ordered_new_keys.insert(0, "Header")
