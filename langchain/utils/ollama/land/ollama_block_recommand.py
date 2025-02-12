@@ -9,7 +9,7 @@ import asyncio
 
 class OllamaBlockRecommend:
 
-    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.25, model: str = ''):
+    def __init__(self, api_url=OLLAMA_API_URL+'api/generate', temperature=0.2, model: str = ''):
         self.api_url = api_url
         self.temperature = temperature
         self.model = model
@@ -23,7 +23,7 @@ class OllamaBlockRecommend:
         # aiohttp ClientSession을 사용하여 비동기 HTTP 요청 수행
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(self.api_url, json=payload, timeout=15) as response:
+                async with session.post(self.api_url, json=payload, timeout=30) as response:
                     response.raise_for_status()  # HTTP 에러 발생 시 예외 처리
                     full_response = await response.text()  # 응답을 비동기적으로 읽기
             except aiohttp.ClientError as e:
@@ -73,6 +73,8 @@ class OllamaBlockRecommend:
                 tag_slice.append(tag_list)
                 if section_name in context:
                     ctx_value = context[section_name]
+                    
+            print(f"tag_slice : {tag_slice}")
             prompt = f"""
             <|start_header_id|>system<|end_header_id|>
             1. {section_name} 섹션에 가장 잘 어울리는 태그 하나를 태그리스트트 중에서 선정하세요.
@@ -80,17 +82,17 @@ class OllamaBlockRecommend:
             3. 태그의 HTML 구조는 변경하지 말고 그대로 출력하세요.
             4. **주석(<!-- -->), 설명, 빈 줄 등 추가 텍스트나 요약본, 문장(해설, 코드 등)을 삽입하지 마세요.**
             5. **태그리스트 중 하나만** 최종 출력해야 하며, 다른 모든 형식(JSON, 코드 블록 등)은 절대 포함하지 마세요.
-            6. 예: {tag_slice[0]}
+            6. 예: {tag_slice}
             7. 만약 태그 리스트 중 하나가 아닌 다른 텍스트가 발견되면, 오류가 발생했다고 판단하고 **재시도**하세요.
             8. 출력예시를 따라 출력하세요.
 
             <|eot_id|><|start_header_id|>user<|end_header_id|>
 
-            # 태그 리스트:
+            **태그 리스트**:
             {tag_slice}
 
             출력예시:
-            {tag_slice[0]}
+            {tag_slice}
 
             <|eot_id|><|start_header_id|>assistant<|end_header_id|>
             **반드시 태그 리스트 안의 데이터 중 하나만 골라서 그 값만 출력하세요.**
