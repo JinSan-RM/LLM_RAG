@@ -170,7 +170,7 @@ class OllamaMenuClient:
         아래는 각 섹션 순서에 들어갈 섹션 후보들의 이름입니다.
         - 1번째 섹션 : [Hero]
         - 2번째 섹션 : [Feature, Content]
-        - 3번째 섹션 : [CTA, Feature, Content, Comparison, Logo]
+        - 3번째 섹션 : [CTA, Feature, Content, Comparison]
         - 4번째 섹션 : [Comparison, Statistics, CTA]
         - 5번째 섹션 : [Testimonial, Statistics, Pricing, FAQ]
         - 6번째 섹션 : [FAQ, Team, Testimonial, Pricing]
