@@ -1,6 +1,7 @@
 """This module handles openai requests."""
 from openai import OpenAI
-from configs.openai_config import OpenAIConfig
+from openai import AsyncOpenAI
+from src.configs.openai_config import OpenAIConfig
 # import openai
 # import tiktoken
 # from logger.ve_logger import VeLogger
@@ -23,30 +24,42 @@ class OpenAIService:
         """
         # Check Arguments
         if openai_config is None:
-            raise ValueError("Provide openai_config when initializing class.")
+            raise ValueError(
+                "Provide openai_config when initializing class."
+                )
 
         if openai_config.openai_api_key is None:
             raise ValueError(
                 "Provide OpenAI API key when initializing class. You can set the " \
                 "enviroment variable `OPENAI_API_KEY` to your OpeAI API key."
             )
-        if openai_config.openai_base_url is None:
+        if openai_config.openai_api_base is None:
             raise ValueError(
                 "Not Enter src/openai_config.py -> base url not found"
-            )
+                )
 
-        self.cilent = OpenAI(
+        # self.client = OpenAI(
+        #     api_key=openai_config.openai_api_key,
+        #     base_url=openai_config.openai_api_base
+        # )
+        self.client = AsyncOpenAI(
             api_key=openai_config.openai_api_key,
             base_url=openai_config.openai_api_base
         )
 
     async def completions(self, *args, **kwargs):
-        """Completion models method"""
-        return await self.cilent.completions.create(*args, **kwargs)
+        try:
+            print(f"Calling completions with args: {args}, kwargs: {kwargs}")
+            response = await self.client.completions.create(**kwargs)  # *args 제거
+            print(f"Completions response: {response}")
+            return response
+        except Exception as e:
+            print(f"OpenAI API call failed: {str(e)}")
+            raise
 
     async def chat_completions(self, *args, **kwargs):
         """Chat Completion models method"""
-        return await self.cilent.chat.completions.create(*args, **kwargs)
+        return await self.client.chat.completions.create(*args, **kwargs)
 
     # def _validate_model(self, model: str):
     #     """Validate model name"""
