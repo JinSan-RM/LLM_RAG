@@ -39,12 +39,12 @@ class OpenAIDataMergeClient:
             사용자 입력을 우선적으로 포함하여 내용을 작성하고 나머지 내용은 PDF 요약데이터로 작성해줘.
             내용을 작성할 땐, 두개가 고루 혼합되어 작성 되었으면 좋겠어.
             """
-            sampling_params = SamplingParams(max_tokens=4000)
+            sampling_params = SamplingParams(max_tokens=2000)
             request = {
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
                 "sampling_params": sampling_params,
                 "prompt": prompt,
-                "max_tokens": 4000,
+                "max_tokens": 1000,
                 "temperature": 0.1,
                 "top_p": 0.8
             }

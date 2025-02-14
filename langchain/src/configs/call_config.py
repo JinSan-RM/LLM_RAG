@@ -1,11 +1,6 @@
-import os
 from typing import Union, Optional, Dict
 from pydantic import BaseModel, validator, Field
-from pydantic.error_wrappers import ValidationError
-from bson import ObjectId
 
-class BlockContent(BaseModel):
-    root: Dict[str, str] = Field(default_factory=dict)
 
 class Completions(BaseModel):
     """Custom class for Completions data"""
@@ -29,7 +24,7 @@ class Completions(BaseModel):
     pdf_data2: Optional[str] = None
     pdf_data3: Optional[str] = None
     usr_msg: Optional[str] = None
-    block: Optional[Dict[str, BlockContent]] = Field(default_factory=dict)
+    block: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
 
     

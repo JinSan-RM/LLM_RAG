@@ -26,12 +26,12 @@ class OpenAISummaryClient:
     async def summarize_text(self, text: str, desired_summary_length: int) -> str:
         try:
             prompt = f"Summarize the following text in about {desired_summary_length} characters:\n\n{text}"
-            sampling_params = SamplingParams(max_tokens=4000)
+            sampling_params = SamplingParams(max_tokens=2000)
             request = {
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
                 "sampling_params": sampling_params,
                 "prompt": prompt,
-                "max_tokens": 4000,
+                "max_tokens": 2000,
                 "temperature": 0.1,
                 "top_p": 0.8
             }
@@ -79,7 +79,7 @@ class OpenAISummaryClient:
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
                 "sampling_params": sampling_params,
                 "prompt": prompt,
-                "max_tokens": 4000,
+                "max_tokens": 2000,
                 "temperature": 0.1,
                 "top_p": 0.8
             }
@@ -103,7 +103,7 @@ class OpenAISummaryClient:
         
     async def process_pdf(self):
         try:
-            summary = await self.summarize_text(self.pdf_data, 3000)
+            summary = await self.summarize_text(self.pdf_data, 2000)
             if not summary:
                 print("요약 생성 실패")
                 return ""

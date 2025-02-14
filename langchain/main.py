@@ -16,6 +16,11 @@ from models.models_conf import ModelParam
 # from utils.imagine_gen import AugmentHandle
 # from utils.ollama.ollama_chat import OllamaChatClient
 
+from src.configs.call_config import Completions
+from src.configs.openai_config import OpenAIConfig
+from src.openai.openai_api_call import OpenAIService
+from src.utils.batch_handler import BatchRequestHandler
+
 # local lib
 # ------------------------------------------------------------------------ #
 # outdoor lib
@@ -25,8 +30,9 @@ from pydantic import BaseModel
 import time
 import torch
 import gc
-import json
 from pymilvus import Collection, connections
+from typing import List
+import logging
 # import random
 
 
@@ -224,7 +230,7 @@ async def land_summary(request: LandPageRequest):
     # ========================
     #         PDF 모듈
     # ========================
-    if request.path != '':    
+    if request.path != '':
         pdf_handle = PDFHandle(request.path, request.path2, request.path3)
         pdf_data = pdf_handle.PDF_request()
         # ========================
@@ -397,28 +403,133 @@ def search_db():
 
 
 # ===================================================================================================
-# chat 방식 테스트
+# 로깅 설정
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-# @app.post("/chat_landpage_generate")
-# async def chat_landpage_generate(request: LandPageRequest):
-#     client = OllamaChatClient()
-#     section_options = ["Introduce", "Solution", "Features", "Social", "CTA", "Pricing", "About Us", "Team", "blog"]
-#     section_cnt = random.randint(6, 9)
-#     print(f"Selected section count: {section_cnt}")
+# Initialize services
+openai_config = OpenAIConfig()
+openai_service = OpenAIService(openai_config)
+batch_handler = BatchRequestHandler(openai_service)
 
-#     summary = await client.temp_store_chunks(model=request.model, data=request.input_text)
-#     # 섹션 고정 및 랜덤 채움
-#     section_dict = {1: "Header", 2: "Hero", section_cnt - 1: random.choice(["FAQ", "Map", "Youtube", "Contact", "Support"]), section_cnt: "Footer"}
-#     filled_indices = {1, 2, section_cnt - 1, section_cnt}
-#     for i in range(3, section_cnt):
-#         if i not in filled_indices:
-#             section_dict[i] = random.choice(section_options)
-#     landing_structure = dict(sorted(section_dict.items()))
-#     print(f"Generated landing structure: {landing_structure}")
-#     for section_num, section_name in landing_structure.items():
-#             print(f"Processing section {section_num}: {section_name}")
-#             time.sleep(0.5)
-#             # content = await content_client.generate_section(input_text=request.input_text, section_name=section_name)
-#             generated_content = await client.generate_section(model=request.model, summary=summary, section_name=section_name)
-#             print(f"content : {generated_content}")
-#     return generated_content
+
+@app.post("/batch_completions")
+async def batch_completions(requests: List[Completions]):
+    try:
+        # Convert Pydantic models to dictionaries
+        request_dicts = [req.dict() for req in requests]
+
+        # Process batch requests
+        response = await batch_handler.process_batch(request_dicts)
+
+        # Check if all requests failed
+        if response.get("successful_requests", 0) == 0:
+            raise HTTPException(
+                status_code=500,
+                detail="All batch requests failed"
+            )
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        ) from e
+
+import asyncio
+from src.openai.land.openai_usrmsgclient import OpenAIUsrMsgClient
+from src.openai.land.openai_summary import OpenAISummaryClient
+from src.openai.land.openai_contextmerge import OpenAIDataMergeClient
+
+@app.post("/land_usr_data_process_openai")
+async def openai_land_section_data_gen(requests: List[Completions]):
+    try:
+        start = time.time()
+        results = []
+
+        for req in requests:
+            usr_msg_result = ""
+            summary_result = ""
+
+            if req.usr_msg:
+                usr_msg_client = OpenAIUsrMsgClient(req.usr_msg, batch_handler)
+                usr_msg_result = await usr_msg_client.usr_msg_proposal()
+                results.append({"type": "usr_msg", "result": usr_msg_result})
+
+            if req.pdf_data1:
+                try:
+                    # pdf_handle = PDFHandle(req.path, req.path2, req.path3)
+                    # pdf_data = pdf_handle.PDF_request()
+                    pdf_data = ""
+                    pdf_data += req.pdf_data1
+                    pdf_data += req.pdf_data2 if req.pdf_data2 else ""
+                    pdf_data += req.pdf_data3 if req.pdf_data3 else ""
+                    summary_client = OpenAISummaryClient(pdf_data, batch_handler)
+                    summary_result = await summary_client.process_pdf()
+                    results.append({"type": "pdf_summary", "result": summary_result})
+                except Exception as e:
+                    print(f"Error in PDFHandle: {str(e)}")
+                    results.append({"type": "pdf_summary", "error": str(e)})
+                    continue
+
+            if usr_msg_result and summary_result:
+                # usr_msg와 pdf 둘 다 있는 경우
+                merge_client = OpenAIDataMergeClient(usr_msg_result, summary_result, batch_handler)
+                merge_result = await merge_client.contents_merge()
+                results.append({"type": "final_result", "result": merge_result})
+            elif usr_msg_result:
+                # usr_msg만 있는 경우
+                results.append({"type": "final_result", "result": usr_msg_result})
+            elif summary_result:
+                # pdf만 있는 경우
+                results.append({"type": "final_result", "result": summary_result})
+
+        response = {
+            "timestamp": time.time(),
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in results if "error" not in r),
+            "failed_requests": sum(1 for r in results if "error" in r),
+            "results": results
+        }
+
+        end = time.time()
+        print(f"Processing time: {end - start} seconds")
+        return response
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+from src.openai.land.openai_blockrecommend import OpenAIBlockRecommend
+@app.post("/land_section_recommend")
+async def openai_land_section_recommend(requests: List[Completions]):
+    try:
+        start = time.time()
+        
+        logger.debug(f"Received requests: {requests}")
+        
+        client = OpenAIBlockRecommend(batch_handler)
+        logger.debug(f"Initialized OpenAIBlockRecommend client")
+
+        block_lists = [req.block for req in requests]
+        logger.debug(f"Extracted block_lists: {block_lists}")
+
+        contexts = [req.section_context for req in requests]
+        logger.debug(f"Extracted contexts: {contexts}")
+
+        logger.debug("Starting generate_block_content_batch")
+        results = await client.generate_block_content_batch(block_lists, contexts)
+        logger.debug(f"Results from generate_block_content_batch: {results}")
+
+        end = time.time()
+        processing_time = end - start
+        logger.info(f"Processing time: {processing_time} seconds")
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        ) from e
