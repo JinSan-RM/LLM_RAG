@@ -50,8 +50,14 @@ class BatchRequestHandler:
                 try:
                     # OpenAI 요청 전 로깅
                     logger.debug(f"Sending OpenAI request {request_id}")
-
-                    response = await self.openai_service.completions(**request)
+                    print(f"request : {request}")
+                    if 'messages' in request:
+                        response = ""
+                        async for chunk in self.openai_service.chat_completions(**request):
+                            response += chunk
+                        return RequestResult(success=True, data={'choices': [{'message': {'content': response}}]})
+                    else:
+                        response = await self.openai_service.completions(**request)
                     logger.debug(f"Request {request_id} successful")
                     return RequestResult(success=True, data=response)
 
@@ -120,7 +126,7 @@ class BatchRequestHandler:
         }
         
         # 디버깅을 위한 상세 로그
-        logger.info(f"Batch processing complete. Success: {response['successful_requests']},"
+        logger.info(f"Batch processing complete. Success: {response['successful_requests']}, \n {response['results']}"
                    f"Failed: {response['failed_requests']}")
         
         if response["successful_requests"] == 0:

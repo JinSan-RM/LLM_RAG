@@ -1,6 +1,7 @@
 """This module contains configs for openai API"""
 import os
 
+
 class OpenAIConfig:
     """Necessary configs for OpenAI API.
 
