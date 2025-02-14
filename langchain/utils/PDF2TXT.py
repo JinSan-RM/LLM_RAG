@@ -8,9 +8,9 @@ from fastapi import HTTPException
 class PDFHandle():
 
     def __init__(self, path: str, path2: str = '', path3: str = ''):
-        self.path = path
-        self.path2 = path2
-        self.path3 = path3
+        self.path = path if path else ''
+        self.path2 = path2 if path2 else ''
+        self.path3 = path3 if path3 else ''
 
     def PDF2TEXT(self, pdf_list) -> str:
         """
@@ -64,6 +64,7 @@ class PDFHandle():
 
         # 최종 텍스트 정리
         final_text = self.clean_pdf_text(total_text)
+        print(f"final_text : {final_text}")
         return final_text
 
     def clean_pdf_text(self, text):

@@ -25,7 +25,9 @@ class Completions(BaseModel):
     best_of: int = 1
     logit_bias: Optional[dict] = None
     user: Optional[str] = None
-    pdf_data: Optional[str] = None
+    pdf_data1: Optional[str] = None
+    pdf_data2: Optional[str] = None
+    pdf_data3: Optional[str] = None
     usr_msg: Optional[str] = None
     block: Optional[Dict[str, BlockContent]] = Field(default_factory=dict)
     section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
