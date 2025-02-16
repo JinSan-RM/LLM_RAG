@@ -26,6 +26,7 @@ class Completions(BaseModel):
     usr_msg: Optional[str] = None
     block: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
+    selected_block: Optional[str] = None  
 
     
 class ChatCompletions(BaseModel):

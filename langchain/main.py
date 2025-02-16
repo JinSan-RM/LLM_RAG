@@ -375,7 +375,7 @@ def insert_faq():
 @app.post('/query_search')
 def search_db():
     # Milvus에 연결
-    connections.connect(alias="default", host="172.19.0.6", port="19530")
+    # connections.connect(alias="default", host="172.19.0.6", port="19530")
 
     # 컬렉션 이름
     collection_name = "block_collection"
@@ -500,15 +500,15 @@ async def openai_land_section_data_gen(requests: List[Completions]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-from src.openai.land.openai_blockrecommend import OpenAIBlockRecommend
+from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 @app.post("/land_section_recommend")
 async def openai_land_section_recommend(requests: List[Completions]):
     try:
         start = time.time()
-        
+
         logger.debug(f"Received requests: {requests}")
-        
-        client = OpenAIBlockRecommend(batch_handler)
+
+        client = OpenAIBlockSelector(batch_handler)
         logger.debug(f"Initialized OpenAIBlockRecommend client")
 
         block_lists = [req.block for req in requests]
@@ -518,7 +518,7 @@ async def openai_land_section_recommend(requests: List[Completions]):
         logger.debug(f"Extracted contexts: {contexts}")
 
         logger.debug("Starting generate_block_content_batch")
-        results = await client.generate_block_content_batch(block_lists, contexts)
+        results = await client.select_block_batch(block_lists, contexts)
         logger.debug(f"Results from generate_block_content_batch: {results}")
 
         end = time.time()
@@ -533,38 +533,98 @@ async def openai_land_section_recommend(requests: List[Completions]):
             status_code=500,
             detail=str(e)
         ) from e
-        
-        
-@app.post("/select_block")
-async def api_select_block(request: List[Completions]):
+
+# 이거 랜딩페이지 만들 수 있게 작업해야함.
+@app.post("/section_generate")
+async def generate_landing_sections(request: List[Completions]):
+    """
+    랜딩페이지 섹션 생성 API
+    
+    요청 예시:
+    {
+        "landing_purpose": "AI 솔루션 소개",
+        "target_audience": "IT 기업 임원",
+        "design_concept": "미니멀리스트",
+        "content_materials": ["기술문서", "고객사례"]
+    }
+    """
     try:
-        start = time.time()
-        logger.debug(f"Received request: {request}")
+        logger.info("섹션 생성 요청 수신")
+
         
-        result = await select_block(request.section_name, request.block_list)
+        # 1단계: 메뉴 구조 생성
+        menu_structure = await menu_client.section_recommend(combined_data)
         
-        end = time.time()
-        processing_time = end - start
-        logger.info(f"Processing time: {processing_time} seconds")
+        # 2단계: 섹션 컨텐츠 생성
+        section_contents = await menu_client.section_per_context(
+            combined_data, menu_structure["menu_structure"]
+        )
         
-        return result
+        return {
+            "menu_structure": menu_structure["menu_structure"],
+            "section_contents": section_contents["menu_structure"]
+        }
+        
+    except ValidationError as ve:
+        logger.error(f"검증 오류: {str(ve)}")
+        raise HTTPException(422, detail=str(ve))
     except Exception as e:
-        logger.error(f"Error occurred: {str(e)}", exc_info=True)
+        logger.error(f"처리 오류: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="섹션 생성 실패")    
+        
+from src.openai.land.openai_blockcontentgenerator import generate_content
+@app.post("/generate_content")
+async def openai_generate_content(requests: List[Completions]):
+    try:
+        logger.info(f"Received request for section: {requests.section_name}")
+        result = await generate_content(requests.section_name, requests.selected_block, request.context)
+        logger.info(f"Content generated successfully for section: {requests.section_name}")
+        return result
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/generate_content")
-async def api_generate_content(request: List[Completions]):
+@app.post("/land_and_generate")
+async def openai_land_and_generate(requests: List[Completions]):
+    """
+    통합 처리 Flow:
+    1. 블록 선택 → 2. 콘텐츠 생성
+    """
     try:
-        start = time.time()
-        logger.debug(f"Received request: {request}")
-        
-        result = await generate_content(request.section_name, request.selected_block, request.context)
-        
-        end = time.time()
-        processing_time = end - start
-        logger.info(f"Processing time: {processing_time} seconds")
-        
-        return result
+        start_time = time.time()
+        logger.debug(f"Received {len(requests)} requests")
+
+        # 1. 블록 선택 단계
+        client = OpenAIBlockSelector(batch_handler)
+        block_lists = [req.block for req in requests]
+        contexts = [req.section_context for req in requests]
+        selected_blocks = await client.select_block_batch(block_lists, contexts)
+
+        # 2. 콘텐츠 생성 단계
+        results = []
+        for idx, (req, selected_block) in enumerate(zip(requests, selected_blocks)):
+            logger.debug(f"Processing request {idx+1}/{len(requests)}")
+            content = await generate_content(
+                section_name=req.section_name,
+                selected_block=selected_block,
+                context=req.context
+            )
+            results.append({
+                "section": req.section_name,
+                "selected_block": selected_block,
+                "generated_content": content
+            })
+
+        processing_time = time.time() - start_time
+        logger.info(f"Total processing time: {processing_time:.2f}s")
+        return {"results": results}
+
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(400, detail=str(ve))
     except Exception as e:
-        logger.error(f"Error occurred: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Critical error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="Internal processing error") from e
