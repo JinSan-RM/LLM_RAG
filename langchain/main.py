@@ -533,3 +533,38 @@ async def openai_land_section_recommend(requests: List[Completions]):
             status_code=500,
             detail=str(e)
         ) from e
+        
+        
+@app.post("/select_block")
+async def api_select_block(request: List[Completions]):
+    try:
+        start = time.time()
+        logger.debug(f"Received request: {request}")
+        
+        result = await select_block(request.section_name, request.block_list)
+        
+        end = time.time()
+        processing_time = end - start
+        logger.info(f"Processing time: {processing_time} seconds")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate_content")
+async def api_generate_content(request: List[Completions]):
+    try:
+        start = time.time()
+        logger.debug(f"Received request: {request}")
+        
+        result = await generate_content(request.section_name, request.selected_block, request.context)
+        
+        end = time.time()
+        processing_time = end - start
+        logger.info(f"Processing time: {processing_time} seconds")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
