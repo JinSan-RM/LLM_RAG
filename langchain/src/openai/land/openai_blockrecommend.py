@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 import re
 import difflib
 
-class BlockSelector:
+class OpenAIBlockSelector:
     def __init__(self, batch_handler):
         self.batch_handler = batch_handler
 
