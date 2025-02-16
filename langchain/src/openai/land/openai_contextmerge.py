@@ -10,7 +10,7 @@ class OpenAIDataMergeClient:
 
     async def contents_merge(self) -> str:
         try:
-            prompt=f"""
+            """prompt=f
             System: 기업 사이트에 들어갈 개요를 만들어주는 전문가야.
 
             아래 순서에 따라서 작업을 진행해줘.
@@ -39,6 +39,39 @@ class OpenAIDataMergeClient:
             사용자 입력을 우선적으로 포함하여 내용을 작성하고 나머지 내용은 PDF 요약데이터로 작성해줘.
             내용을 작성할 땐, 두개가 고루 혼합되어 작성 되었으면 좋겠어.
             """
+            
+            prompt=f"""
+            You are An expert who creates an outline for a company's website.
+
+            Proceed with the work in the order below.
+
+            1. When user input comes in, proceed with the task by emphasizing it over the PDF summary data.
+
+            2. If you look at the user input and PDF summary data, it will contain the eight pieces of information below.
+            If there is insufficient information, please fill it out using appropriate creativity while considering the PDF summary data.
+
+                1) Business item: Specific product or service details
+                2) Slogan or catch phrase: Expressing the company's main vision or ideology in one sentence
+                3) Target customers: Characteristics and needs of major customer bases
+                4) Core value proposition: Unique value provided to customers
+                5) Product and service features: main functions and advantages
+                6) Business model: A series of processes that generate profits by providing differentiated value in products or services to potential customers.
+                7) Promotion and marketing strategy: How to introduce products or services to customers
+                
+            3. Do not write any descriptions, sentences, or comments other than the final output in String format.
+
+            4. Look at the input and choose the output language.
+
+            User input:
+            {self.usr_msg}
+
+            PDF summary data:
+            {self.pdf_data}
+
+            Write content that includes user input first, and write the remaining content as PDF summary data.
+            When writing content, I hope that the two are evenly mixed.
+            """
+            
             sampling_params = SamplingParams(max_tokens=2000)
             request = {
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
