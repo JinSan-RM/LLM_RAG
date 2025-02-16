@@ -19,10 +19,11 @@ class BlockSelector:
         else:
             raise RuntimeError(f"API 요청 실패: {response.error}")
 
-    async def select_block(self, section_name: str, block_list: Dict[str, str]) -> Dict[str, Any]:
+    async def select_block(self, section_context: str, block_list: Dict[str, str]) -> Dict[str, Any]:
         tag_slice = list(block_list.values())
-        prompt = f"""
-        System: 당신은 HTML 태그 선택을 돕는 AI 어시스턴트입니다. 다음 지침을 따르세요:
+        """prompt = f
+        System: 
+        당신은 HTML 태그 선택을 돕는 AI 어시스턴트입니다. 다음 지침을 따르세요:
         1. {section_name} 섹션에 어울리는 태그를 태그 리스트 중에서 선택하세요.
         2. 단 하나의 태그만 반환하세요.
         3. 태그 HTML 구조는 그대로 유지하세요.
@@ -32,6 +33,26 @@ class BlockSelector:
         User: 다음 태그 리스트에서 적절한 태그를 선택해주세요:
         {tag_slice}
         """
+        # 원래 section_name 인데 이걸 section_context로로 변경
+        # 왜냐면 이미 1차적으로 섹션이 정해진 것이기 떄문에, 컨텐츠를 잘 표현할 리스트를 찾는게 맞음
+        prompt = f"""
+        System: 
+        You are an AI assistant that helps you select HTML tags similar to the emmet format. 
+        
+        Instructions:
+        
+        1. Select a tag that best represents section_content from the tag_list in User input.
+        2. Select only one tag.
+        3. Return the selected tag as is.
+        4. Do not print any text other than the selected tag.
+        5. Check whether you selected one of the data in the tag list, or select it again and return it.
+        
+        User input: 
+        section_content : {section_context}
+        tag_list : {tag_slice}
+        
+        """        
+        
         
         raw_json = await self.send_request(prompt)
         b_id = self.find_key_by_value(block_list, raw_json)
