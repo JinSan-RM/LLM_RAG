@@ -95,6 +95,6 @@ class OpenAIDataMergeClient:
 
     def extract_text(self, result):
         if result.success and result.data.generations:
-            return result.data.generations[0][0].text.strip()
+            return result.data
         else:
             return "텍스트 생성 실패"

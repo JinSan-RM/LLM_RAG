@@ -286,13 +286,10 @@ class OpenAISummaryClient:
             
             if result.success:
             # Extract the summary from the response
-                if hasattr(result.data, 'generations') and result.data.generations:
-                    response_text = result.data.generations[0][0].text.strip()
-                    print(f"[DEBUG] Extracted summary: {response_text}")
-                    return response_text  # Return the generated summary
-                else:
-                    print("[ERROR] Missing 'generations' in LLMResult data.")
-                    return "[ERROR] Missing 'generations' in LLMResult data."
+                response = result
+                print(f"[DEBUG] Extracted summary: {response}")
+                return response  # Return the generated summary
+
             else:
                 # Log the error details if the request failed
                 print(f"[ERROR] Summary generation failed with error: {result.error}")

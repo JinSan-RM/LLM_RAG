@@ -1,8 +1,8 @@
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any
 import re
-import difflib
 from src.utils.emmet_parser import EmmetParser
+
 
 class OpenAIBlockContentGenerator:
     def __init__(self, batch_handler):
@@ -20,13 +20,16 @@ class OpenAIBlockContentGenerator:
                 "stream": False,
                 "logprobs": None
             }, request_id=0),
-            timeout=60  # 적절한 타임아웃 값 설정
+            timeout=120  # 적절한 타임아웃 값 설정
         )
         return response
-        
-    async def generate_content(self, selected_block: Dict[str, Any], section_context: str) -> Dict[str, Any]:
-        html = self.emmet_parser.parse_emmet(selected_block['HTML_Tag'])
-        style = self.emmet_parser.font_size(selected_block)
+
+    async def generate_content(self, select_block: Dict[str, Any], section_context: Dict[str, Any]) -> Dict[str, Any]:
+        html = self.emmet_parser.parse_emmet(next(iter(select_block.values())))
+        print(f"html : {html}")
+        print(f"next(iter(section_context.keys())) : {next(iter(section_context.keys()))}")
+        style = self.emmet_parser.font_size(next(iter(section_context.keys())))
+        print(f"style : {style}")
 
         prompt = f"""
         System:
@@ -62,18 +65,19 @@ class OpenAIBlockContentGenerator:
         }}
         ```
 
-        User: 
+        User:
         Section_context: {section_context}
         """
 
-        gen_content = await self.send_request(prompt)
-        gen_content = self.emmet_parser.tag_sort(gen_content)
-
-        if not self.emmet_parser.validate_html_structure(gen_content, html):
-            raise ValueError(f"생성된 HTML 구조가 예상과 다릅니다: {gen_content}")
+        result = await self.send_request(prompt)
+        gen_content = self.emmet_parser.tag_sort(result.data.generations[0][0].text.strip())
+        gen_content = re.sub(r'[\n\r\\\\/]', '', gen_content, flags=re.DOTALL)
+        result.data.generations[0][0].text = gen_content
+        # if not self.emmet_parser.validate_html_structure(gen_content, html):
+        #     raise ValueError(f"생성된 HTML 구조가 예상과 다릅니다: {gen_content}")
 
         return {
-            'HTML_Tag': selected_block['HTML_Tag'],
-            'Block_id': selected_block['Block_id'],
-            'gen_content': gen_content
+            'HTML_Tag': next(iter(select_block.values())),
+            'Block_id': next(iter(select_block.keys())),
+            'gen_content': result
         }

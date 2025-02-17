@@ -21,6 +21,15 @@ from src.configs.openai_config import OpenAIConfig
 from src.openai.openai_api_call import OpenAIService
 from src.utils.batch_handler import BatchRequestHandler
 
+from src.openai.land.openai_usrmsgclient import OpenAIUsrMsgClient
+from src.openai.land.openai_summary import OpenAISummaryClient
+from src.openai.land.openai_contextmerge import OpenAIDataMergeClient
+from src.openai.land.openai_sectiongenerator import OpenAISectionGenerator
+from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
+from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
+from src.openai.land.openai_keyword import OpenAIKeywordClient
+
+
 # local lib
 # ------------------------------------------------------------------------ #
 # outdoor lib
@@ -30,7 +39,7 @@ from pydantic import BaseModel
 import time
 import torch
 import gc
-from pymilvus import Collection, connections
+from pymilvus import Collection
 from typing import List
 import logging
 # import random
@@ -200,6 +209,7 @@ valid_section_names = [
     "Timeline", "Contact", "FAQ", "Logo", "Team", "Testimonial"
 ]
 
+
 @app.post("/land_summary_menu_generate")
 async def land_summary(request: LandPageRequest):
     start = time.time()
@@ -215,7 +225,6 @@ async def land_summary(request: LandPageRequest):
     # examine = await examine_client.data_examine()
     # if examine in "비속어":
     #     return "1"
-
 
     # ========================
     #      model set 모듈
@@ -437,13 +446,9 @@ async def batch_completions(requests: List[Completions]):
             detail=str(e)
         ) from e
 
-import asyncio
-from src.openai.land.openai_usrmsgclient import OpenAIUsrMsgClient
-from src.openai.land.openai_summary import OpenAISummaryClient
-from src.openai.land.openai_contextmerge import OpenAIDataMergeClient
 
-@app.post("/land_usr_data_process_openai")
-async def openai_land_section_data_gen(requests: List[Completions]):
+@app.post("/input_data_process")
+async def openai_input_data_process(requests: List[Completions]):
     try:
         start = time.time()
         results = []
@@ -486,31 +491,60 @@ async def openai_land_section_data_gen(requests: List[Completions]):
                 # pdf만 있는 경우
                 results.append({"type": "final_result", "result": summary_result})
 
+        end = time.time()
+        processing_time = end - start
         response = {
-            "timestamp": time.time(),
+            "timestamp": processing_time,
             "total_requests": len(requests),
             "successful_requests": sum(1 for r in results if "error" not in r),
             "failed_requests": sum(1 for r in results if "error" in r),
             "results": results
         }
 
-        end = time.time()
         print(f"Processing time: {end - start} seconds")
         return response
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
-@app.post("/land_section_recommend")
-async def openai_land_section_recommend(requests: List[Completions]):
+
+@app.post("/section_select")
+async def openai_section_select(requests: List[Completions]):
+    """Landing page section generation API"""
     try:
         start = time.time()
+        logger.info(f"Received section generation request: {requests}")
+        
+        generator = OpenAISectionGenerator(batch_handler)
+        
+        results = await generator.generate_landing_page(requests)
+        
+        end = time.time()
+        processing_time = end - start
+        logger.info(f"Processing time: {processing_time} seconds")
+        
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in results if all(r.values())),
+            "failed_requests": sum(1 for r in results if not all(r.values())),
+            "results": results
+        }
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in section generation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/block_select")
+async def openai_block_select(requests: List[Completions]):
+    try:
+        start = time.time()
+        blockselect_client = OpenAIBlockSelector(batch_handler=batch_handler)
 
         logger.debug(f"Received requests: {requests}")
-
-        client = OpenAIBlockSelector(batch_handler)
-        logger.debug(f"Initialized OpenAIBlockRecommend client")
 
         block_lists = [req.block for req in requests]
         logger.debug(f"Extracted block_lists: {block_lists}")
@@ -519,14 +553,21 @@ async def openai_land_section_recommend(requests: List[Completions]):
         logger.debug(f"Extracted contexts: {contexts}")
 
         logger.debug("Starting generate_block_content_batch")
-        results = await client.select_block_batch(block_lists, contexts)
+        results = await blockselect_client.select_block_batch(block_lists, contexts)
         logger.debug(f"Results from generate_block_content_batch: {results}")
 
         end = time.time()
         processing_time = end - start
         logger.info(f"Processing time: {processing_time} seconds")
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in results if "error" not in r),
+            "failed_requests": sum(1 for r in results if "error" in r),
+            "results": results
+        }
 
-        return results
+        return response
 
     except Exception as e:
         logger.error(f"Error occurred: {str(e)}", exc_info=True)
@@ -537,35 +578,37 @@ async def openai_land_section_recommend(requests: List[Completions]):
 
 # 이거 랜딩페이지 만들 수 있게 작업해야함.
 # FastAPI 엔드포인트
-from src.openai.land.openai_sectiongenerator import OpenAISectionGenerator
-@app.post("/section_generate")
-async def generate_landing_sections(requests: List[Completions]):
-    """랜딩 페이지 섹션 생성 API"""
+
+
+@app.post("/block_content_generate")
+async def openai_block_content_generate(requests: List[Completions]):
     try:
-        logger.info(f"Received section generation request: {requests}")
-        
-        generator = OpenAISectionGenerator(batch_handler)  # batch_handler는 전역 또는 의존성 주입으로 제공
-        result = await generator.generate_landing_page(requests)
-        
-        logger.info("Section generation completed successfully")
-        return result
-        
-    except ValueError as ve:
-        logger.error(f"Value error: {str(ve)}")
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="섹션 생성 실패")
-        
-from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
-@app.post("/generate_content")
-async def openai_generate_content(requests: List[Completions]):
-    try:
-        blockcontentclient = OpenAIBlockContentGenerator()
-        logger.info(f"Received request for section: {requests.selected_block}")
-        result = await blockcontentclient.generate_content(requests.selected_block, requests.section_context)
-        logger.info(f"Content generated successfully for section: {requests.section_name}")
-        return result
+        start = time.time()
+        blockcontentclient = OpenAIBlockContentGenerator(batch_handler=batch_handler)
+        keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
+        results = []
+        for req in requests:
+            logger.info(f"Received request for section: {req.select_block}")
+
+            content_result = await blockcontentclient.generate_content(req.select_block, req.section_context)
+            print("process half")
+            keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())))
+            logger.info(f"Content generated successfully for section: {req.select_block}")
+            combined_result = {
+                "content": content_result,
+                "keywords": keyword_result
+                }
+            results.append(combined_result)
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in results if "error" not in r),
+            "failed_requests": sum(1 for r in results if "error" in r),
+            "results": results
+        }
+        return response
     except ValueError as ve:
         logger.error(f"Validation error: {str(ve)}")
         raise HTTPException(status_code=400, detail=str(ve))
@@ -573,44 +616,3 @@ async def openai_generate_content(requests: List[Completions]):
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/land_and_generate")
-async def openai_land_and_generate(requests: List[Completions]):
-    """
-    통합 처리 Flow:
-    1. 블록 선택 → 2. 콘텐츠 생성
-    """
-    try:
-        start_time = time.time()
-        logger.debug(f"Received {len(requests)} requests")
-
-        # 1. 블록 선택 단계
-        client = OpenAIBlockSelector(batch_handler)
-        block_lists = [req.block for req in requests]
-        contexts = [req.section_context for req in requests]
-        selected_blocks = await client.select_block_batch(block_lists, contexts)
-
-        # 2. 콘텐츠 생성 단계
-        results = []
-        for idx, (req, selected_block) in enumerate(zip(requests, selected_blocks)):
-            logger.debug(f"Processing request {idx+1}/{len(requests)}")
-            content = await generate_content(
-                section_name=req.section_name,
-                selected_block=selected_block,
-                context=req.context
-            )
-            results.append({
-                "section": req.section_name,
-                "selected_block": selected_block,
-                "generated_content": content
-            })
-
-        processing_time = time.time() - start_time
-        logger.info(f"Total processing time: {processing_time:.2f}s")
-        return {"results": results}
-
-    except ValueError as ve:
-        logger.error(f"Validation error: {str(ve)}")
-        raise HTTPException(400, detail=str(ve))
-    except Exception as e:
-        logger.error(f"Critical error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="Internal processing error") from e

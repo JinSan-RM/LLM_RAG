@@ -25,9 +25,10 @@ class Completions(BaseModel):
     pdf_data3: Optional[str] = None
     usr_msg: Optional[str] = None
     block: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    select_block: Optional[Dict[str, str]] = Field(default_factory=dict)
     section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
-    selected_block: Optional[str] = None
     all_usr_data: Optional[str] = None
+
 
 class ChatCompletions(BaseModel):
     """Custom class for Chat Completions data"""

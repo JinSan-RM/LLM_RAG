@@ -90,6 +90,7 @@ class EmmetParser:
         return style
 
     def tag_sort(self, gen_data: str) -> str:
+        print(f"gen_data before re.sub: {gen_data}")
         cleaned = re.sub(r'``````', '', gen_data, flags=re.DOTALL)
         cleaned = re.sub(r'\*{3}[^*]+\*{3}', '', cleaned)
         cleaned = re.sub(r'<!DOCTYPE.*?>', '', cleaned, flags=re.IGNORECASE)
@@ -97,12 +98,13 @@ class EmmetParser:
         cleaned = re.sub(r'<title.*?>.*?</title>', '', cleaned, flags=re.IGNORECASE | re.DOTALL)
         return cleaned.strip()
 
-    def validate_html_structure(self, html_output: str, expected_structure: str) -> bool:
-        expected_tags = re.findall(r'</?([a-zA-Z][a-zA-Z0-9]*)\b', expected_structure)
-        expected_tags = list(set(expected_tags))
-        for tag in expected_tags:
-            pattern = re.compile(rf'<{tag}(\s[^>]*?)?>', re.IGNORECASE)
-            if not pattern.search(html_output):
-                print(f"검증 실패: {tag} 태그가 생성된 HTML에 없습니다.")
-                return False
-        return True
+    # def validate_html_structure(self, html_output: str, expected_structure: str) -> bool:
+    #     expected_tags = re.findall(r'</?([a-zA-Z][a-zA-Z0-9]*)\b', expected_structure)
+    #     expected_tags = list(set(expected_tags))
+    #     for tag in expected_tags:
+    #         print(f"tag : {tag}")
+    #         pattern = re.compile(rf'<{tag}(\s[^>]*?)?>', re.IGNORECASE)
+    #         if not pattern.search(html_output):
+    #             print(f"검증 실패: {tag} 태그가 생성된 HTML에 없습니다.")
+    #             return False
+    #     return True
