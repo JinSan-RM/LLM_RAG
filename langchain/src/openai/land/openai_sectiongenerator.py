@@ -77,16 +77,33 @@ class OpenAISectionGenerator:
             print(f"섹션 구조 섹션 생성 오류: {result.error}")
             return ""
 
-    async def create_section_contents(self, data: str, structure: dict):
+    async def create_section_contents(self, final_summary_data: str, structure: dict):
         prompt = f"""
-        Generate content for each section based on the following structure:
-        {json.dumps(structure, indent=2)}
-
-        Input data:
-        {data}
-
-        Provide brief content for each section in JSON format.
-        """
+			System:
+			You are a professional planner who organizes the content of your website landing page.
+			Write in the section content by summarizing/distributing the user's final summary data appropriately to the organization of each section of the Land page.
+			
+			#### Instructions ####
+			1. Check the final summary for necessary information and organize it appropriately for each section.
+			2. For each section, please write about 200 to 300 characters so that the content is rich and conveys the content.
+			3. Please write without typos.
+			4. Look at the input and choose the output language.
+			5. ensure that the output matches the JSON output example below.
+			
+			#### Example JSON Output ####
+	      menu_structure : {{
+	          "1st section from section list": "Content that Follow the instructions",
+	          "2nd section from section list": "Content that Follow the instructions"",
+	          "3rd section from section list": "Content that Follow the instructions"",
+	          "4th section from section list": "Content that Follow the instructions"",
+	          "5th section from section list": "Content that Follow the instructions"",
+	          "6th section from section list": "Content that Follow the instructions""
+	            }}
+			
+			User:
+			final summary = {final_summary_data}
+			section list = {json.dumps(structure, indent=2)}
+			"""
         
         request = {
             "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
