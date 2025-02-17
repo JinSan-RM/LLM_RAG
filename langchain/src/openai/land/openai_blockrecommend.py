@@ -74,18 +74,18 @@ class OpenAIBlockSelector:
                 """
         
         
-        raw_json = await self.send_request(prompt)
-        raw_json = self.extract_text(raw_json)
-        b_id = self.find_key_by_value(block_list, raw_json)
+        result = await self.send_request(prompt)
+        b_id = self.find_key_by_value(block_list, result.data.generations[0][0].text.strip())
         if b_id is None:
             raise ValueError(f"매칭되는 b_id가 없습니다: ")
         
         b_value = self.extract_emmet_tag(block_list[b_id])
-        
-        return {
-            'HTML_Tag': b_value,
-            'Block_id': b_id
+    
+        result.data.generations[0][0].text = {
+            'Block_id': b_id,
+            'HTML_Tag': b_value
         }
+        return result
 
     async def select_block_batch(self, section_names: List[str], block_lists: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         tasks = [
@@ -126,7 +126,7 @@ class OpenAIBlockSelector:
             "Block_id": b_id,
             "gen_content": ctx_value,
         }
-        
+
     def extract_text(self, result):
         if result.success and result.data.generations:
             return result.data

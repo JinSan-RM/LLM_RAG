@@ -263,10 +263,10 @@ class OpenAISummaryClient:
                 ]
 
         try:
-            
+
             # NOTE : 출력 확인해서 json_parser 사용. 아마 str으로 나올거여서 json_parser로 형식변환 해줘야 아래처럼 사용 가능할 듯듯
             json_parser = SimpleJsonOutputParser()
-            
+
             request = {
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
                 "messages": messages,
@@ -274,16 +274,12 @@ class OpenAISummaryClient:
                 "temperature": 0.1,
                 "top_p": 0.8
             }
-            print(f"[DEBUG] Sending request to LLM with payload:\n{json.dumps(request, indent=2)}")
-            
+
             result = await asyncio.wait_for(
                 self.batch_handler.process_single_request(request, 0),
                 timeout=120
             )
-            
-            print(f"summary LLMResult 구조: {type(result.data)}")
-            print(f"summary LLMResult 내용: {result.data}")
-            
+
             if result.success:
             # Extract the summary from the response
                 response = result
@@ -299,53 +295,36 @@ class OpenAISummaryClient:
             # Log any unexpected errors
             print(f"[ERROR] Unexpected error during summarization: {str(e)}")
             return f"[ERROR] Unexpected error during summarization: {str(e)}"
-            
-        
-        
+
     async def generate_proposal(self, summary: str):
         try:
-            """prompt = f
-            Create a website proposal based on the following summary:
-            {summary}
 
-            The proposal should include:
-            - Website name
-            - Keywords (7 items)
-            - Purpose (200 characters)
-            - Target audience (3 items)
-            - Core values (3 items)
-            - Main service
-            - Key achievements (5 items)
-
-            Provide the output in JSON format.
-            """
-            
             prompt = f"""
             System:
             Your task is to interpret and transform the content of an uploaded summary data into a website proposal. Analyze the data and fit it to the componants below.
 
-            Instructions: 
+            Instructions:
             Interpret the content to create a comprehensive, engaging a website proposal.
-            Write between 1500-2000 characters in summary for the website proposal on main language in summary. 
-            Ensure the script is logically structured with clear sections and transitions. Maintain all core information without summarizing. 
-            Avoid the hallucination and frame the script as an independent narrative. 
-            Do not use bullet points; ensure a smooth narrative flow. 
+            Write between 1500-2000 characters in summary for the website proposal on main language in summary.
+            Ensure the script is logically structured with clear sections and transitions. Maintain all core information without summarizing.
+            Avoid the hallucination and frame the script as an independent narrative.
+            Do not use bullet points; ensure a smooth narrative flow.
 
             Organize the script into json type: start with "key" and end with "value"
 
-            Output Format: 
-            "Identify business goals" : "'Description include Business goals you want to achieve through this website / Problems or inconveniences you are currently experiencing / Changes or effects expected through the website'", 
-            "Customize your target" : "Description include 'Who will mainly use it? / For what purpose do users visit? / Market trend analysis'", 
-            "Derive core functions" : "Description include 'Differentiating features compared to competitors / Need for integration with existing systems or services', 
+            Output Format:
+            "Identify business goals" : "'Description include Business goals you want to achieve through this website / Problems or inconveniences you are currently experiencing / Changes or effects expected through the website'",
+            "Customize your target" : "Description include 'Who will mainly use it? / For what purpose do users visit? / Market trend analysis'",
+            "Derive core functions" : "Description include 'Differentiating features compared to competitors / Need for integration with existing systems or services',
             "design requirements" : "Description include Colors that match the brand identity"
 
             ensure that the output mathces the JSON output example below.
             Example JSON Output:
-            \\\\\\`json {{ "Identify business goals": "description", "Customize your target" : "description",  "Derive core functions" : "Description", "design requirements" : "description"}}
+            json {{ "Identify business goals": "description", "Customize your target" : "description",  "Derive core functions" : "Description", "design requirements" : "description"}}
             
-            Content: 
+            Content:
             {summary}
-            """            
+            """
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                         "prompt": prompt,
@@ -365,7 +344,7 @@ class OpenAISummaryClient:
         
     async def process_pdf(self):
         try:
-            summary = await self.summarize_text(self.pdf_data, 2000)
+            summary = await self.summarize_text(self.pdf_data)
             if not summary:
                 print("요약 생성 실패")
                 return ""
@@ -389,17 +368,26 @@ class OpenAISummaryClient:
 #   기존 버전
 #========================================        
 
-    async def summarize_text(self, text: str, desired_summary_length: int) -> str:
+    async def summarize_text(self, text: str) -> str:
 
         try:
             prompt = f"""
             System:
-            Summarize the following text in about {desired_summary_length} characters.
-            
+            You are an expert at making Executive Summary from business plan contents in PDF.
+
+            #### Instructions ####
+            1. Read pdf text from User and summarize it, narratively.
+            2. For each section, please write about 1000 to 1500 characters so that the content is rich and conveys the content.
+            3. Look at the input and choose the output language.
+            4. ensure that the output matches the output example below.
+
+            #### Example Output ####
+            Executive Summary = "narrative summary of business plan"
+
             User:
-            {text}
+            pdf text = {text}    
             """
-            
+
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                         "prompt": prompt,
@@ -416,7 +404,7 @@ class OpenAISummaryClient:
         except asyncio.TimeoutError:
             print("요약 요청 시간 초과")
             return ""
+
         except Exception as e:
             print(f"요약 중 예상치 못한 오류: {str(e)}")
             return ""
-

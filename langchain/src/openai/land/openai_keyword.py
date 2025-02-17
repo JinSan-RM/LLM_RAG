@@ -22,7 +22,7 @@ class OpenAIKeywordClient:
             timeout=60  # 적절한 타임아웃 값 설정
         )
         return response
-    
+
     async def process_menu_data(self, menu_data: str) -> list:
         try:
             print(f"menu_data : {menu_data}")
@@ -41,7 +41,7 @@ class OpenAIKeywordClient:
         prompt = f"""
         System:
         You are a professional designer who make a search term to search images that will fit in each section of the website landing page.
-        
+
         #### Instructions ####
         1. To create search terms, first review the User section context.
         2. The search terms should be specific as possible, capturing the semantic essence of the content.
@@ -49,14 +49,15 @@ class OpenAIKeywordClient:
         4. Make 5 keywords in English about the content as the search term.
         5. Choose 3 unit search terms in English with 1 or 2 words.
         6. ensure that the output language is English.
-        
+
         #### Example Output ####
         keywords = ['example1', 'example2', 'example3']
-        
+
         User:
         section context = {context}
         """
         result = await self.send_request(prompt)
+        result.data.generations[0][0].text = self.extract_list(result.data.generations[0][0].text)
         if result.success:
             response = result
             print(f"Section structure response: {response}")
@@ -67,7 +68,6 @@ class OpenAIKeywordClient:
 
     async def section_keyword_create_logic(self, context: str):
         try:
-            print(context,"<=====context")
             repeat_count = 0
             while repeat_count < 3:
                 try:
@@ -105,3 +105,18 @@ class OpenAIKeywordClient:
             ]
         print(section_context, "<====keyword")
         return section_context
+
+    def extract_list(self, text):
+        # 줄바꿈, 캐리지 리턴, 백슬래시 제거
+        text = re.sub(r'[\n\r\\]', '', text)
+        
+        # 대괄호를 포함한 전체 리스트를 찾습니다.
+        list_match = re.search(r'\[.*?\]', text, re.DOTALL)
+        if list_match:
+            return list_match.group(0).strip()
+        else:
+            # 대괄호가 없는 경우, 콤마로 구분된 항목들을 대괄호로 감싸줍니다.
+            items = re.findall(r"'(.*?)'", text)
+            if items:
+                return f"""[{", ".join(f"'{item}'" for item in items)}]"""
+            return None

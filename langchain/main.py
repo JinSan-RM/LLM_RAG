@@ -472,7 +472,7 @@ async def openai_input_data_process(requests: List[Completions]):
                     pdf_data += req.pdf_data3 if req.pdf_data3 else ""
                     summary_client = OpenAISummaryClient(pdf_data, batch_handler)
                     # summary_result = await summary_client.summarize_chunked_texts(pdf_texts=pdf_data)
-                    summary_result = await summary_client.summarize_text(pdf_data, 1500)
+                    summary_result = await summary_client.summarize_text(pdf_data)
                     results.append({"type": "pdf_summary", "result": summary_result})
                 except Exception as e:
                     print(f"Error in PDFHandle: {str(e)}")
@@ -500,8 +500,7 @@ async def openai_input_data_process(requests: List[Completions]):
             "failed_requests": sum(1 for r in results if "error" in r),
             "results": results
         }
-
-        print(f"Processing time: {end - start} seconds")
+        print(f"response : {response}")
         return response
 
     except Exception as e:
@@ -513,7 +512,7 @@ async def openai_section_select(requests: List[Completions]):
     """Landing page section generation API"""
     try:
         start = time.time()
-        logger.info(f"Received section generation request: {requests}")
+        # logger.info(f"Received section generation request: {requests}")
         
         generator = OpenAISectionGenerator(batch_handler)
         
@@ -521,7 +520,7 @@ async def openai_section_select(requests: List[Completions]):
         
         end = time.time()
         processing_time = end - start
-        logger.info(f"Processing time: {processing_time} seconds")
+        # logger.info(f"Processing time: {processing_time} seconds")s
         
         response = {
             "timestamp": processing_time,
@@ -544,26 +543,26 @@ async def openai_block_select(requests: List[Completions]):
         start = time.time()
         blockselect_client = OpenAIBlockSelector(batch_handler=batch_handler)
 
-        logger.debug(f"Received requests: {requests}")
+        # logger.debug(f"Received requests: {requests}")
 
         block_lists = [req.block for req in requests]
-        logger.debug(f"Extracted block_lists: {block_lists}")
+        # logger.debug(f"Extracted block_lists: {block_lists}")
 
         contexts = [req.section_context for req in requests]
-        logger.debug(f"Extracted contexts: {contexts}")
+        # logger.debug(f"Extracted contexts: {contexts}")
 
-        logger.debug("Starting generate_block_content_batch")
+        # logger.debug("Starting generate_block_content_batch")
         results = await blockselect_client.select_block_batch(block_lists, contexts)
-        logger.debug(f"Results from generate_block_content_batch: {results}")
+        # logger.debug(f"Results from generate_block_content_batch: {results}")
 
         end = time.time()
         processing_time = end - start
-        logger.info(f"Processing time: {processing_time} seconds")
+        # logger.info(f"Processing time: {processing_time} seconds")
         response = {
             "timestamp": processing_time,
             "total_requests": len(requests),
-            "successful_requests": sum(1 for r in results if "error" not in r),
-            "failed_requests": sum(1 for r in results if "error" in r),
+            "successful_requests": sum(1 for r in results if not r.error),
+            "failed_requests": sum(1 for r in results if not r.error),
             "results": results
         }
 

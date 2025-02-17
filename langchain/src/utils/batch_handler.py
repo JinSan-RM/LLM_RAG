@@ -49,8 +49,8 @@ class BatchRequestHandler:
                 # Execute request with timeout
                 try:
                     # OpenAI 요청 전 로깅
-                    logger.debug(f"Sending OpenAI request {request_id}")
-                    print(f"request : {request}")
+                    # logger.debug(f"Sending OpenAI request {request_id}")
+                    # print(f"request : {request}")
                     if 'messages' in request:
                         response = ""
                         async for chunk in self.openai_service.chat_completions(**request):
@@ -58,11 +58,11 @@ class BatchRequestHandler:
                         return RequestResult(success=True, data={'choices': [{'message': {'content': response}}]})
                     else:
                         response = await self.openai_service.completions(**request)
-                    logger.debug(f"Request {request_id} successful")
+                    # logger.debug(f"Request {request_id} successful")
                     return RequestResult(success=True, data=response)
 
                 except TimeoutError:
-                    logger.error(f"Request {request_id} timed out")
+                    # logger.error(f"Request {request_id} timed out")
                     return RequestResult(
                         success=False,
                         error=f"Request timed out after {self.request_timeout}s",

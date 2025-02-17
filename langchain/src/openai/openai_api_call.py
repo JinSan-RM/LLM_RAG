@@ -74,7 +74,7 @@ class OpenAIService:
                 response = await self.stream_completion(**kwargs)
             else:
                 response = await asyncio.to_thread(self.llm.generate, [kwargs['prompt']])
-            print(f"Completions response: {response}")
+            # print(f"Completions response: {response}")
             return response
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")

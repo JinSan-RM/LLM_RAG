@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict
+import re
 import asyncio
 from src.utils.batch_handler import BatchRequestHandler
 
@@ -19,7 +19,7 @@ class OpenAISectionStructureGenerator:
                 "stream": False,
                 "logprobs": None
             }, request_id=0),
-            timeout=60  # 적절한 타임아웃 값 설정
+            timeout=120  # 적절한 타임아웃 값 설정
         )
         return response
     
@@ -83,17 +83,17 @@ class OpenAISectionContentGenerator:
         1. Check the final summary for necessary information and organize it appropriately for each section.
         2. For each section, please write about 200 to 300 characters so that the content is rich and conveys the content.
         3. Please write without typos.
-        4. Look at the input and choose the output language.
+        4. Look at the input and **follow the input language to the output**.
         5. ensure that the output matches the JSON output example below.
         
         #### Example JSON Output ####
         menu_structure : {{
-            "1st section from section list": "Content that Follow the instructions",
-            "2nd section from section list": "Content that Follow the instructions"",
-            "3rd section from section list": "Content that Follow the instructions"",
-            "4th section from section list": "Content that Follow the instructions"",
-            "5th section from section list": "Content that Follow the instructions"",
-            "6th section from section list": "Content that Follow the instructions""
+            "section": "Content that Follow the instructions",
+            "section": "Content that Follow the instructions",
+            "section": "Content that Follow the instructions",
+            "section": "Content that Follow the instructions",
+            "section": "Content that Follow the instructions",
+            "section": "Content that Follow the instructions"
               }}
         
         User:
@@ -135,9 +135,46 @@ class OpenAISectionGenerator:
         combined_data = f"User Message: {usr_msg}\nPDF Data: {pdf_data1}"
         
         section_structure = await self.structure_generator.create_section_structure(combined_data)
-        section_contents = await self.content_generator.create_section_contents(combined_data, section_structure)
+        structure = section_structure.data.generations[0][0].text.strip()
+        section_structure.data.generations[0][0].text = self.extract_json(structure)
+        
+        section_contents = await self.content_generator.create_section_contents(
+            combined_data,
+            section_structure.data.generations[0][0].text
+            )
+        contents = section_contents.data.generations[0][0].text.strip()
+        section_contents.data.generations[0][0].text = self.extract_json(contents)
         
         return {
             "section_structure": section_structure,
             "section_contents": section_contents
         }
+        
+    def extract_json(self, text):
+        # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
+        text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
+        json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+        else:
+            # Handle case where only opening brace is found
+            json_str = re.search(r'\{.*', text, re.DOTALL)
+            if json_str:
+                json_str = json_str.group() + '}'
+            else:
+                return None
+
+        # Balance braces if necessary
+        open_braces = json_str.count('{')
+        close_braces = json_str.count('}')
+        if open_braces > close_braces:
+            json_str += '}' * (open_braces - close_braces)
+
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            # Try a more lenient parsing approach
+            try:
+                return json.loads(json_str.replace("'", '"'))
+            except json.JSONDecodeError:
+                return None

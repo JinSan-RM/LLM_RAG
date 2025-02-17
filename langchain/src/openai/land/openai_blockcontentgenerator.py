@@ -1,6 +1,7 @@
 import asyncio
 from typing import Dict, Any
 import re
+import json
 from src.utils.emmet_parser import EmmetParser
 
 
@@ -71,13 +72,41 @@ class OpenAIBlockContentGenerator:
 
         result = await self.send_request(prompt)
         gen_content = self.emmet_parser.tag_sort(result.data.generations[0][0].text.strip())
-        gen_content = re.sub(r'[\n\r\\\\/]', '', gen_content, flags=re.DOTALL)
+        gen_content = self.extract_json(gen_content)
         result.data.generations[0][0].text = gen_content
         # if not self.emmet_parser.validate_html_structure(gen_content, html):
         #     raise ValueError(f"생성된 HTML 구조가 예상과 다릅니다: {gen_content}")
-
         return {
             'HTML_Tag': next(iter(select_block.values())),
             'Block_id': next(iter(select_block.keys())),
             'gen_content': result
         }
+
+    def extract_json(self, text):
+        # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
+        text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
+        json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+        else:
+            # Handle case where only opening brace is found
+            json_str = re.search(r'\{.*', text, re.DOTALL)
+            if json_str:
+                json_str = json_str.group() + '}'
+            else:
+                return None
+
+        # Balance braces if necessary
+        open_braces = json_str.count('{')
+        close_braces = json_str.count('}')
+        if open_braces > close_braces:
+            json_str += '}' * (open_braces - close_braces)
+
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            # Try a more lenient parsing approach
+            try:
+                return json.loads(json_str.replace("'", '"'))
+            except json.JSONDecodeError:
+                return None
