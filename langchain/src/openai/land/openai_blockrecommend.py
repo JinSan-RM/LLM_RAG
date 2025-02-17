@@ -53,6 +53,7 @@ class OpenAIBlockSelector:
         
         
         raw_json = await self.send_request(prompt)
+        raw_json = self.extract_text(raw_json)
         b_id = self.find_key_by_value(block_list, raw_json)
         if b_id is None:
             raise ValueError(f"매칭되는 b_id가 없습니다: ")
@@ -103,3 +104,9 @@ class OpenAIBlockSelector:
             "Block_id": b_id,
             "gen_content": ctx_value,
         }
+        
+    def extract_text(self, result):
+        if result.success and result.data.generations:
+            return result.data.generations[0][0].text.strip()
+        else:
+            return "텍스트 생성 실패"
