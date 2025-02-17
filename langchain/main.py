@@ -466,7 +466,8 @@ async def openai_land_section_data_gen(requests: List[Completions]):
                     pdf_data += req.pdf_data2 if req.pdf_data2 else ""
                     pdf_data += req.pdf_data3 if req.pdf_data3 else ""
                     summary_client = OpenAISummaryClient(pdf_data, batch_handler)
-                    summary_result = await summary_client.process_pdf()
+                    # summary_result = await summary_client.summarize_chunked_texts(pdf_texts=pdf_data)
+                    summary_result = await summary_client.summarize_text(pdf_data, 1500)
                     results.append({"type": "pdf_summary", "result": summary_result})
                 except Exception as e:
                     print(f"Error in PDFHandle: {str(e)}")
@@ -535,49 +536,34 @@ async def openai_land_section_recommend(requests: List[Completions]):
         ) from e
 
 # 이거 랜딩페이지 만들 수 있게 작업해야함.
+# FastAPI 엔드포인트
+from src.openai.land.openai_sectiongenerator import OpenAISectionGenerator
 @app.post("/section_generate")
-async def generate_landing_sections(request: List[Completions]):
-    """
-    랜딩페이지 섹션 생성 API
-    
-    요청 예시:
-    {
-        "landing_purpose": "AI 솔루션 소개",
-        "target_audience": "IT 기업 임원",
-        "design_concept": "미니멀리스트",
-        "content_materials": ["기술문서", "고객사례"]
-    }
-    """
+async def generate_landing_sections(requests: List[Completions]):
+    """랜딩 페이지 섹션 생성 API"""
     try:
-        logger.info("섹션 생성 요청 수신")
-
+        logger.info(f"Received section generation request: {requests}")
         
-        # 1단계: 메뉴 구조 생성
-        menu_structure = await menu_client.section_recommend(combined_data)
+        generator = OpenAISectionGenerator(batch_handler)  # batch_handler는 전역 또는 의존성 주입으로 제공
+        result = await generator.generate_landing_page(requests)
         
-        # 2단계: 섹션 컨텐츠 생성
-        section_contents = await menu_client.section_per_context(
-            combined_data, menu_structure["menu_structure"]
-        )
+        logger.info("Section generation completed successfully")
+        return result
         
-        return {
-            "menu_structure": menu_structure["menu_structure"],
-            "section_contents": section_contents["menu_structure"]
-        }
-        
-    except ValidationError as ve:
-        logger.error(f"검증 오류: {str(ve)}")
-        raise HTTPException(422, detail=str(ve))
+    except ValueError as ve:
+        logger.error(f"Value error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.error(f"처리 오류: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="섹션 생성 실패")    
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="섹션 생성 실패")
         
-from src.openai.land.openai_blockcontentgenerator import generate_content
+from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
 @app.post("/generate_content")
 async def openai_generate_content(requests: List[Completions]):
     try:
-        logger.info(f"Received request for section: {requests.section_name}")
-        result = await generate_content(requests.section_name, requests.selected_block, request.context)
+        blockcontentclient = OpenAIBlockContentGenerator()
+        logger.info(f"Received request for section: {requests.selected_block}")
+        result = await blockcontentclient.generate_content(requests.selected_block, requests.section_context)
         logger.info(f"Content generated successfully for section: {requests.section_name}")
         return result
     except ValueError as ve:

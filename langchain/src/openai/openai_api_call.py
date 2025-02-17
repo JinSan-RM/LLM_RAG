@@ -6,7 +6,7 @@ from langchain.callbacks.manager import AsyncCallbackManager, CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from src.configs.openai_config import OpenAIConfig
 import asyncio
-from vllm import LLM
+
 # import openai
 # import tiktoken
 # from logger.ve_logger import VeLogger
@@ -63,7 +63,8 @@ class OpenAIService:
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             openai_api_key=openai_config.openai_api_key,
             openai_api_base=openai_config.openai_api_base,
-            streaming=streaming
+            streaming=streaming,
+            max_tokens=2000
         )
         
     async def completions(self, **kwargs):

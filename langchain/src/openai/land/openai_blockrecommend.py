@@ -8,16 +8,19 @@ class OpenAIBlockSelector:
         self.batch_handler = batch_handler
 
     async def send_request(self, prompt: str) -> str:
-        request = {
-            "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-            "prompt": prompt,
-            "temperature": 0.1,
-        }
-        response = await self.batch_handler.process_single_request(request, request_id=0)
-        if response.success:
-            return response.data.generations.text.strip()
-        else:
-            raise RuntimeError(f"API 요청 실패: {response.error}")
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
+                "prompt": prompt,
+                "max_tokens": 1000,
+                "temperature": 0.1,
+                "top_p": 1.0,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=60  # 적절한 타임아웃 값 설정
+        )
+        return response
 
     async def select_block(self, section_context: str, block_list: Dict[str, str]) -> Dict[str, Any]:
         tag_slice = list(block_list.values())
@@ -37,27 +40,22 @@ class OpenAIBlockSelector:
         # 왜냐면 이미 1차적으로 섹션이 정해진 것이기 떄문에, 컨텐츠를 잘 표현할 리스트를 찾는게 맞음
         prompt = f"""
         System: 
-        You are an AI assistant that helps you select HTML tags similar to the emmet format. 
-        
-        Instructions:
-        
-        1. Select a tag that best represents section_content from the tag_list in User input.
-        2. Select only one tag.
-        3. Return the selected tag as is.
-        4. Do not print any text other than the selected tag.
-        5. Check whether you selected one of the data in the tag list, or select it again and return it.
-        
-        User input: 
-        section_content : {section_context}
-        tag_list : {tag_slice}
-        
-        """        
+        당신은 HTML 태그 선택을 돕는 AI 어시스턴트입니다. 다음 지침을 따르세요:
+        1. 섹션에 어울리는 태그를 태그 리스트 중에서 선택하세요.
+        2. 단 하나의 태그만 반환하세요.
+        3. 태그 HTML 구조는 그대로 유지하세요.
+        4. 다른 텍스트는 출력하지 마세요.
+        5. 반드시 태그 리스트 안의 데이터 중 하나만 골라 출력하세요.
+
+        User: 다음 태그 리스트에서 적절한 태그를 선택해주세요:
+        {block_list}
+        """
         
         
         raw_json = await self.send_request(prompt)
         b_id = self.find_key_by_value(block_list, raw_json)
         if b_id is None:
-            raise ValueError(f"매칭되는 b_id가 없습니다: {section_name}")
+            raise ValueError(f"매칭되는 b_id가 없습니다: ")
         
         b_value = self.extract_emmet_tag(block_list[b_id])
         

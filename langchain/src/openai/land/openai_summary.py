@@ -2,7 +2,6 @@ import asyncio
 import json
 import re
 from typing import List
-from vllm import SamplingParams
 
 import time
 import textwrap
@@ -102,37 +101,31 @@ class OpenAISummaryClient:
 #         return final_summary
         
         
-    async def chunking_text(self, content: str, chunk_size:int = 1000, chuck_overlap: int = 50) -> str:
+    def chunking_text(self, content: str, chunk_size: int = 1000, chunk_overlap: int = 50) -> List[str]:
+    
+
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,   # 한 Chunk의 최대 길이 글자 수를 의미미
-            chunk_overlap=chuck_overlap  # Chunk 간 오버랩 (중복 내용 포함)
+            chunk_overlap=chunk_overlap  # Chunk 간 오버랩 (중복 내용 포함)
         )
-        
         text_chunks = text_splitter.split_text(content)
         return text_chunks
 
-        
     async def summarize_chunked_texts(self, pdf_texts: str) -> str:
         try:
             # 0. 텍스트 청킹 수행
-            chunk_texts = self.chunking_text(self, 
-                                             pdf_texts,
-                                             chunk_size = 1000,
-                                             chuck_overlap = 50)
+            chunk_texts = self.chunking_text(pdf_texts)  # No need to await since it's now a regular function
             
             # 1. 각 청크별 요약 수행
             chunk_summaries = []
             for chunk in chunk_texts:
-                
-                # NOTE : 
                 summary = await self.summarize_text_with_CoD(
-                    content = chunk,
-                    content_category = "business report",
-                    entity_range = 3,
-                    max_words = 80,
-                    iterations = 3
-                    )
-                
+                    content=chunk,
+                    content_category="business report",
+                    entity_range=3,
+                    max_words=80,
+                    iterations=3
+                )
                 if summary:  # 빈 문자열이 아닌 경우만 추가
                     chunk_summaries.append(summary)
             
@@ -141,23 +134,68 @@ class OpenAISummaryClient:
                 print("모든 청크 요약에 실패했습니다.")
                 return ""
             
-            # 2. 모든 요약을 하나의 텍스트로 결합
+            # 2. 모든 요약 데이터 종합합
             combined_summaries = "\n\n".join(chunk_summaries)
             
             # 3. 최종 요약 수행
             final_summary = await self.summarize_text_with_CoD(
-                    content = combined_summaries,
-                    content_category = "business report",
-                    entity_range = 3,
-                    max_words = 500,
-                    iterations = 5
-                    )
+                content=combined_summaries,
+                content_category="business report",
+                entity_range=3,
+                max_words=500,
+                iterations=5
+            )
             
             return final_summary
 
         except Exception as e:
-            print(f"청크 요약 처리 중 오류 발생: {str(e)}")
-            return ""
+            print(f"Error during chunk summarization: {str(e)}")
+            return ""    
+    # async def summarize_chunked_texts(self, pdf_texts: str) -> str:
+    #     try:
+    #         # 0. 텍스트 청킹 수행
+    #         chunk_texts = self.chunking_text(pdf_texts,
+    #                                          chunk_size = 1000,
+    #                                          chuck_overlap = 50)
+            
+    #         # 1. 각 청크별 요약 수행
+    #         chunk_summaries = []
+    #         for chunk in chunk_texts:
+                
+    #             # NOTE : 
+    #             summary = await self.summarize_text_with_CoD(
+    #                 content = chunk,
+    #                 content_category = "business report",
+    #                 entity_range = 3,
+    #                 max_words = 80,
+    #                 iterations = 3
+    #                 )
+                
+    #             if summary:  # 빈 문자열이 아닌 경우만 추가
+    #                 chunk_summaries.append(summary)
+            
+    #         # 요약 결과가 없는 경우 처리
+    #         if not chunk_summaries:
+    #             print("모든 청크 요약에 실패했습니다.")
+    #             return ""
+            
+    #         # 2. 모든 요약을 하나의 텍스트로 결합
+    #         combined_summaries = "\n\n".join(chunk_summaries)
+            
+    #         # 3. 최종 요약 수행
+    #         final_summary = await self.summarize_text_with_CoD(
+    #                 content = combined_summaries,
+    #                 content_category = "business report",
+    #                 entity_range = 3,
+    #                 max_words = 500,
+    #                 iterations = 5
+    #                 )
+            
+    #         return final_summary
+
+    #     except Exception as e:
+    #         print(f"청크 요약 처리 중 오류 발생: {str(e)}")
+    #         return ""
 
 
     async def summarize_text_with_CoD(self, content: str, content_category: str = "business report", entity_range:int = 3, max_words:int = 80, iterations:int = 3) -> str:
@@ -167,7 +205,7 @@ class OpenAISummaryClient:
         # entity_range: String range of how many entities to pick from the content and add to the summary. Default 1-3.
         # max_words: Summary maximum length in words. Default 80.
         # iterations: Number of entity densification rounds. Total summaries is iterations+1. For 80 words, 3 iterations is ideal. Longer summaries could benefit from 4-5 rounds, and also possibly sliding the entity_range to, e.g., 1-4. Default: 3.
-
+    
         messages = [
                     {
                         "role": "system",
@@ -229,43 +267,42 @@ class OpenAISummaryClient:
             # NOTE : 출력 확인해서 json_parser 사용. 아마 str으로 나올거여서 json_parser로 형식변환 해줘야 아래처럼 사용 가능할 듯듯
             json_parser = SimpleJsonOutputParser()
             
-            sampling_params = SamplingParams(max_tokens=2000)
-        
             request = {
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-                "sampling_params": sampling_params,
-                "prompt": messages,
+                "messages": messages,
                 "max_tokens": 2000,
                 "temperature": 0.1,
                 "top_p": 0.8
             }
+            print(f"[DEBUG] Sending request to LLM with payload:\n{json.dumps(request, indent=2)}")
             
             result = await asyncio.wait_for(
-            self.batch_handler.process_single_request(request, 0),
-            timeout=120
+                self.batch_handler.process_single_request(request, 0),
+                timeout=120
             )
             
             print(f"summary LLMResult 구조: {type(result.data)}")
             print(f"summary LLMResult 내용: {result.data}")
             
             if result.success:
-                # if hasattr(result.data, 'generations') and result.data.generations:
-                cod_summary = result.data.generations[0][0].text.strip()
-                print(f" cod_summary : {cod_summary}")
-                cod_summary = str(cod_summary)
-                return cod_summary
-
+            # Extract the summary from the response
+                if hasattr(result.data, 'generations') and result.data.generations:
+                    response_text = result.data.generations[0][0].text.strip()
+                    print(f"[DEBUG] Extracted summary: {response_text}")
+                    return response_text  # Return the generated summary
+                else:
+                    print("[ERROR] Missing 'generations' in LLMResult data.")
+                    return "[ERROR] Missing 'generations' in LLMResult data."
             else:
-                print(f"summary 요약 생성 오류: {result.error}")
-                return "summary 요약 생성 오류: {result.error}"
+                # Log the error details if the request failed
+                print(f"[ERROR] Summary generation failed with error: {result.error}")
+                return f"[ERROR] Summary generation failed with error: {result.error}"
 
-        except asyncio.TimeoutError:
-            print("요약 요청 시간 초과")
-            return ""
         except Exception as e:
-            print(f"요약 중 예상치 못한 오류: {str(e)}")
-            return ""
-        
+            # Log any unexpected errors
+            print(f"[ERROR] Unexpected error during summarization: {str(e)}")
+            return f"[ERROR] Unexpected error during summarization: {str(e)}"
+            
         
         
     async def generate_proposal(self, summary: str):
@@ -312,29 +349,19 @@ class OpenAISummaryClient:
             Content: 
             {summary}
             """            
-            sampling_params = SamplingParams(max_tokens=4000)
-            request = {
-                "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-                "sampling_params": sampling_params,
-                "prompt": prompt,
-                "max_tokens": 2000,
-                "temperature": 0.1,
-                "top_p": 0.8
-            }
-            result = await asyncio.wait_for(
-                self.batch_handler.process_single_request(request, 0),
-                timeout=120
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                        "prompt": prompt,
+                        "max_tokens": 1000,
+                        "temperature": 0.7,
+                        "top_p": 1.0,
+                        "n": 1,
+                        "stream": False,
+                        "logprobs": None
+                    }, request_id=0),
+                timeout=60  # 적절한 타임아웃 값 설정
             )
-            print(f"proposal LLMResult 구조: {type(result.data)}")
-            print(f"proposal LLMResult 내용: {result.data}")
-            if result.success:
-                # if hasattr(result.data, 'generations') and result.data.generations:
-                response_text = result.data.generations[0][0].text.strip()
-                print(f" proposal response_text : {response_text}")
-                return response_text  # 생성된 텍스트를 직접 반환
-            else:
-                print(f"제안서 생성 오류: {result.error}")
-                return ""
+            return response
         except Exception as e:
             print(f"제안서 생성 중 예상치 못한 오류: {str(e)}")
             return ""
@@ -367,37 +394,28 @@ class OpenAISummaryClient:
 
     async def summarize_text(self, text: str, desired_summary_length: int) -> str:
 
-
         try:
-            prompt = f"Summarize the following text in about {desired_summary_length} characters:\n\n{text}"
+            prompt = f"""
+            System:
+            Summarize the following text in about {desired_summary_length} characters.
             
-            sampling_params = SamplingParams(max_tokens=2000)
+            User:
+            {text}
+            """
             
-            request = {
-                "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-                "sampling_params": sampling_params,
-                "prompt": prompt,
-                "max_tokens": 2000,
-                "temperature": 0.1,
-                "top_p": 0.8
-            }
-            
-            result = await asyncio.wait_for(
-            self.batch_handler.process_single_request(request, 0),
-            timeout=120
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                        "prompt": prompt,
+                        "max_tokens": 1000,
+                        "temperature": 0.7,
+                        "top_p": 1.0,
+                        "n": 1,
+                        "stream": False,
+                        "logprobs": None
+                    }, request_id=0),
+                timeout=60  # 적절한 타임아웃 값 설정
             )
-            
-            print(f"summary LLMResult 구조: {type(result.data)}")
-            print(f"summary LLMResult 내용: {result.data}")
-            if result.success:
-                # if hasattr(result.data, 'generations') and result.data.generations:
-                response_text = result.data.generations[0][0].text.strip()
-                print(f" summary response_text : {response_text}")
-                response_text = str(response_text)
-                return response_text  # 생성된 텍스트를 직접 반환
-            else:
-                print(f"summary 요약 생성 오류: {result.error}")
-                return ""
+            return response
         except asyncio.TimeoutError:
             print("요약 요청 시간 초과")
             return ""

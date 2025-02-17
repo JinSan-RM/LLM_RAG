@@ -1,11 +1,11 @@
 from langchain.prompts import PromptTemplate
 import asyncio
-from vllm import SamplingParams
 
 class OpenAIDataMergeClient:
     def __init__(self, usr_msg: str, pdf_data: str, batch_handler):
-        self.usr_msg = usr_msg
-        self.pdf_data = pdf_data
+        
+        self.usr_msg = self.extract_text(usr_msg)
+        self.pdf_data = self.extract_text(pdf_data)
         self.batch_handler = batch_handler
 
     async def contents_merge(self) -> str:
@@ -62,6 +62,8 @@ class OpenAIDataMergeClient:
 
             4. Look at the input and choose the output language.
 
+            5. The total output length characters should be more than 1000.
+            
             User input:
             {self.usr_msg}
 
@@ -71,31 +73,28 @@ class OpenAIDataMergeClient:
             Write content that includes user input first, and write the remaining content as PDF summary data.
             When writing content, I hope that the two are evenly mixed.
             """
-            
-            sampling_params = SamplingParams(max_tokens=2000)
-            request = {
-                "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-                "sampling_params": sampling_params,
-                "prompt": prompt,
-                "max_tokens": 1000,
-                "temperature": 0.1,
-                "top_p": 0.8
-            }
-            result = await asyncio.wait_for(
-            self.batch_handler.process_single_request(request, 0),
-            timeout=120
+            print(f"usr_msg : {self.usr_msg}")
+            print(f"pdf_data : {self.pdf_data}")
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                    "prompt": prompt,
+                    "max_tokens": 2000,
+                    "temperature": 0.7,
+                    "top_p": 1.0,
+                    "n": 1,
+                    "stream": False,
+                    "logprobs": None
+                }, request_id=0),
+                timeout=60  # 적절한 타임아웃 값 설정
             )
-
-            if result.success:
-                response_text = result.data.generations[0][0].text.strip()
-                print(f"merge response_text : {response_text}")
-                response_text = str(response_text)
-                return response_text  # 생성된 텍스트를 직접 반환
-
-            else:
-                print(f"Error in contents merge: {result.error}")
-                return ""
+            return response
         except asyncio.TimeoutError:
             print("Contents merge request timed out")
             return ""
 
+
+    def extract_text(self, result):
+        if result.success and result.data.generations:
+            return result.data.generations[0][0].text.strip()
+        else:
+            return "텍스트 생성 실패"

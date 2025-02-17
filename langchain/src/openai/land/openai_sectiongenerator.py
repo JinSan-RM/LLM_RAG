@@ -1,140 +1,77 @@
-# src/utils/batch_handler.py
-from dataclasses import dataclass
+import json
 import asyncio
-import time
-from typing import Dict, Any
-from asyncio import TimeoutError
-from src.openai.openai_api_call import OpenAIService
-from datetime import datetime
-import logging
+from typing import List, Dict
+from src.utils.batch_handler import BatchRequestHandler
 
-# 로깅 설정
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+class OpenAISectionGenerator:
+    def __init__(self, batch_handler: BatchRequestHandler):
+        self.batch_handler = batch_handler
 
-@dataclass
-class RequestResult:
-    success: bool
-    data: Any = None
-    error: str = None
-    error_details: Dict = None
+    async def generate_landing_page(self, requests):
+        results = []
+        for req in requests:
+            section_data = await self.generate_section(req.usr_msg, req.pdf_data1)
+            results.append(section_data)
+        return results
 
-class BatchRequestHandler:
-    def __init__(self, openai_service: OpenAIService, 
-                 max_concurrent_requests: int = 50,
-                 request_timeout: int = 30,
-                 requests_per_second: float = 20):  # 초당 요청 수 제한
-        self.openai_service = openai_service
-        self.semaphore = asyncio.Semaphore(max_concurrent_requests)
-        self.request_timeout = request_timeout
-        self.requests_per_second = requests_per_second
-        self.last_request_time = None  # 마지막 요청 시간
-
-    async def process_single_request(self, request: Dict[str, Any],
-                                   request_id: int) -> RequestResult:
-        try:
-            logger.debug(f"Processing request {request_id}: {request}")
-
-            async with self.semaphore:
-                # Rate limiting - wait if needed
-                now = time.time()
-                if self.last_request_time is not None:
-                    time_since_last = now - self.last_request_time
-                    min_interval = 1.0 / self.requests_per_second  # 요청 간 최소 간격
-                    if time_since_last < min_interval:
-                        await asyncio.sleep(min_interval - time_since_last)
-
-                self.last_request_time = time.time()
-
-                # Execute request with timeout
-                try:
-                    # OpenAI 요청 전 로깅
-                    logger.debug(f"Sending OpenAI request {request_id}")
-                    print(f"request : {request}")
-                    if 'messages' in request:
-                        response = ""
-                        async for chunk in self.openai_service.chat_completions(**request):
-                            response += chunk
-                        return RequestResult(success=True, data={'choices': [{'message': {'content': response}}]})
-                    else:
-                        response = await self.openai_service.completions(**request)
-                    logger.debug(f"Request {request_id} successful")
-                    return RequestResult(success=True, data=response)
-
-                except TimeoutError:
-                    logger.error(f"Request {request_id} timed out")
-                    return RequestResult(
-                        success=False,
-                        error=f"Request timed out after {self.request_timeout}s",
-                        error_details={"type": "timeout"}
-                    )
-                except Exception as e:
-                    logger.error(f"Request {request_id} failed with error: {str(e)}")
-                    return RequestResult(
-                        success=False,
-                        error=str(e),
-                        error_details={
-                            "type": type(e).__name__,
-                            "args": getattr(e, 'args', None)
-                        }
-                    )
-        except Exception as e:
-            logger.error(f"Unexpected error in request {request_id}: {str(e)}")
-            return RequestResult(
-                success=False,
-                error=str(e),
-                error_details={
-                    "type": "unexpected_error",
-                    "error_type": type(e).__name__,
-                    "args": getattr(e, 'args', None)
-                }
-            )
-
-    async def process_batch(self, requests: list) -> dict:
-        if not requests:
-            return {
-                "error": "No requests provided",
-                "status_code": 400
-            }
+    async def generate_section(self, usr_msg: str, pdf_data1: str):
+        combined_data = f"User Message: {usr_msg}\nPDF Data: {pdf_data1}"
         
-        logger.info(f"Processing batch of {len(requests)} requests")
+        section_structure = await self.create_section_structure(combined_data)
+        section_contents = await self.create_section_contents(combined_data, section_structure)
         
-        # Process all requests
-        tasks = [
-            self.process_single_request(req, idx)
-            for idx, req in enumerate(requests)
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Prepare detailed response
-        response = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "total_requests": len(requests),
-            "successful_requests": sum(1 for r in results if getattr(r, 'success', False)),
-            "failed_requests": sum(1 for r in results if not getattr(r, 'success', False)),
-            "results": [
-                {
-                    "request_id": idx,
-                    "success": getattr(result, 'success', False),
-                    "data": result.data if getattr(result, 'success', False) else None,
-                    "error": result.error if hasattr(result, 'error') else str(result),
-                    "error_details": result.error_details if hasattr(result, 'error_details') else None
-                }
-                for idx, result in enumerate(results)
-            ]
+        return {
+            "section_structure": section_structure,
+            "section_contents": section_contents
         }
+
+    async def create_section_structure(self, data: str):
+        prompt = f"""
+        Generate a website landing page section structure following these rules:
+        1. Hero section is mandatory.
+        2. Create 4-6 sections in total.
+        3. Possible sections: Hero, Feature, Content, CTA, Gallery, Comparison, Logo, Statistics, Testimonial, Pricing, FAQ, Contact, Team
+        4. Respond in JSON format.
+
+        Input data:
+        {data}
+        """
         
-        # 디버깅을 위한 상세 로그
-        logger.info(f"Batch processing complete. Success: {response['successful_requests']}, \n {response['results']}"
-                   f"Failed: {response['failed_requests']}")
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
+                "prompt": prompt,
+                "max_tokens": 1000,
+                "temperature": 0.7,
+                "top_p": 1.0,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=60  # 적절한 타임아웃 값 설정
+        )
+        return response
+
+    async def create_section_contents(self, data: str, structure: dict):
+        prompt = f"""
+        Generate content for each section based on the following structure:
+        {json.dumps(structure, indent=2)}
+
+        Input data:
+        {data}
+
+        Provide brief content for each section in JSON format.
+        """
         
-        if response["successful_requests"] == 0:
-            error_summary = "\n".join([
-                f"Request {r['request_id']}: {r['error']}"
-                for r in response["results"]
-                if not r['success']
-            ])
-            logger.error(f"All requests failed. Errors:\n{error_summary}")
-            
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
+                "prompt": prompt,
+                "max_tokens": 1000,
+                "temperature": 0.7,
+                "top_p": 1.0,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=60  # 적절한 타임아웃 값 설정
+        )
         return response
