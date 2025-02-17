@@ -39,17 +39,39 @@ class OpenAIBlockSelector:
         # 원래 section_name 인데 이걸 section_context로로 변경
         # 왜냐면 이미 1차적으로 섹션이 정해진 것이기 떄문에, 컨텐츠를 잘 표현할 리스트를 찾는게 맞음
         prompt = f"""
-        System: 
-        당신은 HTML 태그 선택을 돕는 AI 어시스턴트입니다. 다음 지침을 따르세요:
-        1. 섹션에 어울리는 태그를 태그 리스트 중에서 선택하세요.
-        2. 단 하나의 태그만 반환하세요.
-        3. 태그 HTML 구조는 그대로 유지하세요.
-        4. 다른 텍스트는 출력하지 마세요.
-        5. 반드시 태그 리스트 안의 데이터 중 하나만 골라 출력하세요.
+                System: 
+                You are an AI assistant that helps you select HTML tags. Please follow these instructions.
+                
+                #### Instructions ####
+                1. Read the section context from User.
+                2. Select a tag from the tag list that best express the section context.
+                3. Return only one tag.
+                4. Keep the structure given.
+                5. Do not print any other text.
+                6. Be sure to select only one of the data in the tag list to print.
 
-        User: 다음 태그 리스트에서 적절한 태그를 선택해주세요:
-        {block_list}
-        """
+                #### Explain Semantic Tag ####
+                h1: Represents the most important title of the web page. Typically only one is used per page, and it represents the topic or purpose of the page.
+                h2: Indicates the next most important heading after h1. It is mainly used to separate major sections of a page.
+                h3: A subheading of h2, indicating detailed topics within the section.
+                h5: It is located around h tags and briefly assists them.
+                p: A tag that defines a paragraph. Used to group plain text content.
+                li: Represents a list item. Mainly used within ul (unordered list) or ol (ordered list) tags.
+
+                #### Example 1 ####
+                Example_User:
+                section context: 제일철강은 고품질 철강 제조 및 판매를 주력으로 하는 기업으로서, 철강 제련 및 유통 사업을 전개하고자 합니다. 당사는 제조업체와 건설회사를 1차 목표 시장으로 설정하고, 중소 철강 가공업체로 시장을 확대하며, 장기적으로는 수출 시장 진출을 목표로 하고 있습니다.
+                tag list : ["h1_h2_p", "li(h2+h5+p)*2", "h5_h1_p"] 
+                
+                Example_Output:
+                {{"selected_tag": "li(h2+h5+p)*2"}}
+
+
+                User:
+                
+                section context = {section_context}
+                tag list = {block_list}
+                """
         
         
         raw_json = await self.send_request(prompt)
