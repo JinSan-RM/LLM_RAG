@@ -50,7 +50,7 @@ class OpenAIKeywordClient:
         5. Choose 3 unit search terms in English with 1 or 2 words.
         6. ensure that the output language is English.
 
-        #### Example Output ####
+        #### Output Format Example ####
         keywords = ['example1', 'example2', 'example3']
 
         User:

@@ -272,7 +272,7 @@ class OpenAISummaryClient:
                 "messages": messages,
                 "max_tokens": 2000,
                 "temperature": 0.1,
-                "top_p": 0.8
+                "top_p": 0.3
             }
 
             result = await asyncio.wait_for(
@@ -300,7 +300,7 @@ class OpenAISummaryClient:
         try:
 
             prompt = f"""
-            System:
+            [System]
             Your task is to interpret and transform the content of an uploaded summary data into a website proposal. Analyze the data and fit it to the componants below.
 
             Instructions:
@@ -322,15 +322,19 @@ class OpenAISummaryClient:
             Example JSON Output:
             json {{ "Identify business goals": "description", "Customize your target" : "description",  "Derive core functions" : "Description", "design requirements" : "description"}}
             
-            Content:
-            {summary}
+            [/System]
+            
+            [User]
+            summary = {summary}
+            [/User]
+            
             """
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                         "prompt": prompt,
                         "max_tokens": 1000,
                         "temperature": 0.7,
-                        "top_p": 1.0,
+                        "top_p": 0.3,
                         "n": 1,
                         "stream": False,
                         "logprobs": None
@@ -372,20 +376,25 @@ class OpenAISummaryClient:
 
         try:
             prompt = f"""
-            System:
+            [System]
             You are an expert at making Executive Summary from business plan contents in PDF.
 
             #### Instructions ####
             1. Read pdf text from User and summarize it, narratively.
             2. For each section, please write about 1000 to 1500 characters so that the content is rich and conveys the content.
-            3. Look at the input and choose the output language.
-            4. ensure that the output matches the output example below.
-
-            #### Example Output ####
+            3. Output language is Korean. But if most of pdf texts are write in English, Output language is also English.
+            4. ensure that the output matches the string format like Example Output below.
+            5. Never write System prompt in the ouput.
+            
+            #### Output Format Example ####
             Executive Summary = "narrative summary of business plan"
-
-            User:
+            
+            
+            [/System]
+            
+            [User]
             pdf text = {text}    
+            [/User]
             """
 
             response = await asyncio.wait_for(
@@ -393,7 +402,7 @@ class OpenAISummaryClient:
                         "prompt": prompt,
                         "max_tokens": 1000,
                         "temperature": 0.7,
-                        "top_p": 1.0,
+                        "top_p": 0.3,
                         "n": 1,
                         "stream": False,
                         "logprobs": None

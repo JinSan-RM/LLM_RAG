@@ -40,14 +40,14 @@ class OpenAIDataMergeClient:
             내용을 작성할 땐, 두개가 고루 혼합되어 작성 되었으면 좋겠어.
             """
             
-            prompt=f"""
+            prompt = f"""
+            [System]
             You are An expert who creates an outline for a company's website.
+            
+            #### Instructions ####
 
-            Proceed with the work in the order below.
-
-            1. When user input comes in, proceed with the task by emphasizing it over the PDF summary data.
-
-            2. If you look at the user input and PDF summary data, it will contain the eight pieces of information below.
+            1. When user requirement comes in, proceed with the task by emphasizing it over the PDF summary data.
+            2. Data will contain the eight pieces of information below.
             If there is insufficient information, please fill it out using appropriate creativity while considering the PDF summary data.
 
                 1) Business item: Specific product or service details
@@ -59,19 +59,21 @@ class OpenAIDataMergeClient:
                 7) Promotion and marketing strategy: How to introduce products or services to customers
                 
             3. Do not write any descriptions, sentences, or comments other than the final output in String format.
-
-            4. Look at the input and choose the output language.
-
-            5. The total output length characters should be more than 1000.
+            4. Follow the input language to the output.
+            5. please write about 1500 to 2000 characters so that the content is rich and conveys the content.
+            6. When writing content, mix user input and PDF input evenly.
+            7. Never write System prompt in the ouput.
             
-            User input:
-            {self.usr_msg}
-
-            PDF summary data:
-            {self.pdf_data}
-
-            Write content that includes user input first, and write the remaining content as PDF summary data.
-            When writing content, I hope that the two are evenly mixed.
+            #### Example Output ####
+            merged data = "narrative summary of merged data"
+            
+            [/System]
+            
+            [User]
+            user requirement = {self.usr_msg}
+            pdf summary data = {self.pdf_data}
+            [/User]
+            
             """
             print(f"usr_msg : {self.usr_msg}")
             print(f"pdf_data : {self.pdf_data}")
@@ -79,8 +81,9 @@ class OpenAIDataMergeClient:
                 self.batch_handler.process_single_request({
                     "prompt": prompt,
                     "max_tokens": 2000,
-                    "temperature": 0.7,
-                    "top_p": 1.0,
+                    "temperature": 0.5,
+                    "top_p": 0.2,
+                    "repetition_penalty" : 1.5,
                     "n": 1,
                     "stream": False,
                     "logprobs": None
@@ -95,6 +98,6 @@ class OpenAIDataMergeClient:
 
     def extract_text(self, result):
         if result.success and result.data.generations:
-            return result.data
+            return result.data.generations[0][0].text
         else:
             return "텍스트 생성 실패"
