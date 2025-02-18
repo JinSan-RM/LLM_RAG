@@ -447,7 +447,7 @@ async def batch_completions(requests: List[Completions]):
         ) from e
 
 
-@app.post("/input_data_process")
+@app.post("/api/input_data_process")
 async def openai_input_data_process(requests: List[Completions]):
     try:
         start = time.time()
@@ -507,7 +507,7 @@ async def openai_input_data_process(requests: List[Completions]):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/section_select")
+@app.post("/api/section_select")
 async def openai_section_select(requests: List[Completions]):
     """Landing page section generation API"""
     try:
@@ -537,7 +537,7 @@ async def openai_section_select(requests: List[Completions]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/block_select")
+@app.post("/api/block_select")
 async def openai_block_select(requests: List[Completions]):
     try:
         start = time.time()
@@ -579,7 +579,7 @@ async def openai_block_select(requests: List[Completions]):
 # FastAPI 엔드포인트
 
 
-@app.post("/block_content_generate")
+@app.post("/api/block_content_generate")
 async def openai_block_content_generate(requests: List[Completions]):
     try:
         start = time.time()
