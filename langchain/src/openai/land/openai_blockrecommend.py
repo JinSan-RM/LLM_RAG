@@ -87,6 +87,8 @@ class OpenAIBlockSelector:
             selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text.strip())
             selected_Html_tag_str = str(list(selected_Html_tag_json.values())[0])
         
+        if selected_Html_tag_str not in tag_slice:
+            selected_Html_tag_str = tag_slice[0]
         # NOTE 250219 : 여기는 좀 나중에 보자... 눈 빠지것다
         #               지금은 임시고, 여기 검증단계 살려야합니다아아
         # b_id = self.find_key_by_value(block_list_dict, selected_Html_tag_str)

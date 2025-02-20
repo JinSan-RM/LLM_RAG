@@ -34,10 +34,10 @@ class OpenAISectionStructureGenerator:
         
         - 1 section: ["Hero"]
         - 2 section: ["Feature", "Content"]
-        - 3 section: ["CTA", "Feature", "Content", "Gallery", "Comparison", "Logo"]
-        - 4 section: ["Gallery", "Comparison", "Statistics", "Timeline", "Countdown", "CTA"]
-        - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ", "Timeline"]
-        - 6 section: ["Contact", "FAQ", "Logo", "Team", "Testimonial", "Pricing"]
+        - 3 section: ["CTA", "Feature", "Content", "Comparison"]
+        - 4 section: ["Comparison", "Statistics", "Countdown", "CTA"]
+        - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ"]
+        - 6 section: ["FAQ", "Team", "Testimonial", "Pricing"]
         
         #### INSTRUCTIONS ####
         
@@ -94,7 +94,7 @@ class OpenAISectionContentGenerator:
 
         #### INSTRUCTIONS ####
         1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
-        2. FOR EACH SECTION, PLEASE WRITE ABOUT 200 TO 300 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+        2. FOR EACH SECTION, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
         3. PLEASE WRITE WITHOUT TYPOS.
         4. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
         5. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
@@ -107,12 +107,12 @@ class OpenAISectionContentGenerator:
 
         [Assistant_Example]
         section_content : {{
-        "Hero": "Content that Follow the instructions",
-        "section style": "Content that Follow the instructions",
-        "section style": "Content that Follow the instructions",
-        "section style": "Content that Follow the instructions",
-        "section style": "Content that Follow the instructions",
-        "section style": "Content that Follow the instructions"
+        "Hero": "Content that Follow the INSTRUCTIONS",
+        "section style": "Content that Follow the INSTRUCTIONS",
+        "section style": "Content that Follow the INSTRUCTIONS",
+        "section style": "Content that Follow the INSTRUCTIONS",
+        "section style": "Content that Follow the INSTRUCTIONS",
+        "section style": "Content that Follow the INSTRUCTIONS"
             }}
         [/Assistant_Example]
 
@@ -159,16 +159,45 @@ class OpenAISectionGenerator:
     # NOTE : merged된 데이터가 들어오면서 기존 2개를 합치던 방식이 1개로 바뀜
     async def generate_section(self, all_usr_data: str):
         combined_data = f"PDF summary data = {all_usr_data}"
+        allowed_values = {
+            "1 section": ["Hero"],
+            "2 section": ["Feature", "Content"],
+            "3 section": ["CTA", "Feature", "Content", "Comparison"],
+            "4 section": ["Comparison", "Statistics", "Countdown", "CTA"],
+            "5 section": ["Testimonial", "Statistics", "Pricing", "FAQ"],
+            "6 section": ["FAQ", "Team", "Testimonial", "Pricing"]
+        }
         cnt = 0
+        import random
         while cnt < 3:
             section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data)
+            
             section_structure = section_structure_LLM_result.data.generations[0][0].text.strip()
             # section_structure = await self.structure_generator.create_section_structure(combined_data)
             section_structure_LLM_result.data.generations[0][0].text = self.extract_json(section_structure)
+            updated_structure = {}
+            print(section_structure_LLM_result.data.generations[0][0].text,"<============section_structure_LLM_result.data.generations[0][0].text")
+            for section, value in section_structure_LLM_result.data.generations[0][0].text.items():
+                # 섹션 키를 'section_N' 형식으로 변환
+                section_key = f"section_{section.split()[0]}"
+                
+                print(section, value, allowed_values.get(section_key, "Not found"), "<======section, value, allowed_values")
+                
+                if section_key in allowed_values:
+                    if value not in allowed_values[section_key]:
+                        # 허용되지 않은 값일 경우 해당 섹션의 허용된 값 중 무작위 선택
+                        updated_structure[section_key] = random.choice(allowed_values[section_key])
+                    else:
+                        # 허용된 값일 경우 그대로 유지
+                        updated_structure[section_key] = value
+                else:
+                    # 정의되지 않은 섹션일 경우 무시 또는 기본값 설정
+                    print(f"Warning: Undefined section '{section}' encountered.")
+
             if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict):
                 cnt += 1
             else:
-                break
+                print("Updated structure:", updated_structure)
         
         
         # print("HEEEEERE : ", section_structure.data.generations[0][0].text , type(section_structure.data.generations[0][0].text))      
