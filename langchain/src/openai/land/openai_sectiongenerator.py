@@ -24,52 +24,60 @@ class OpenAISectionStructureGenerator:
         return response
     
     async def create_section_structure(self, final_summary_data: str):
+        
         prompt = f"""
         [System]
-        You are a professional designer who creates website landing pages.
-        Select the section list according to the Instructions and User input values below.
+        You are a professional designer who creates website landing page.
+        Combine the sections according to the Section style list, Instructions and User input.
         
-        #### Instructions ####
+        #### Section style list ####
         
-        Step 1. "Hero" is definitely included.
-        Step 2. The number of sections **must be between 4 and 6**.
-        Step 3. Each section should be chosen logically in the section list, taking into account the input data and the purpose of the landing page.
-        Step 4. Be careful not to duplicate section names.
-        Step 5. Be careful about typos.
-        Seep 6. ensure that the output mathces the JSON output example below.
+        - 1 section: ["Hero"]
+        - 2 section: ["Feature", "Content"]
+        - 3 section: ["CTA", "Feature", "Content", "Gallery", "Comparison", "Logo"]
+        - 4 section: ["Gallery", "Comparison", "Statistics", "Timeline", "Countdown", "CTA"]
+        - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ", "Timeline"]
+        - 6 section: ["Contact", "FAQ", "Logo", "Team", "Testimonial", "Pricing"]
         
-        #### Section lists ####
+        #### INSTRUCTIONS ####
         
-        - 1st section: [Hero]
-        - 2nd section: [Feature, Content]
-        - 3rd section: [CTA, Feature, Content, Gallery, Comparison, Logo]
-        - 4th section: [Gallery, Comparison, Statistics, Timeline, Countdown, CTA]
-        - 5th section: [Testimonial, Statistics, Pricing, FAQ, Timeline]
-        - 6th section: [Contact, FAQ, Logo, Team, Testimonial, Pricing]
-        
-        #### Example ####
-            "menu_structure": {{
-                "1": "section",
-                "2": "section",
-                "3": "section",
-                "4": "section",
-                "5": "section",
-                "6": "section"
-            }}
+        1. READ THE final summary data FROM USER.
+        2. THINK ABOUT WHAT KIND OF COMBINATION IS BEST FIT WITH THE final summary data.
+        3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
+        4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
+        5. BE CAREFUL ABOUT TYPOS.
+        6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
         
         [/System]
+
+        [User_Example]
+        final summary data = "final summary data"
+        [/User_Example]
+
+        [Assistant_Example]
+        "menu_structure": {{
+        "1 section": "Hero",
+        "2 section": "section style",
+        "3 section": "section style",
+        "4 section": "section style",
+        "5 section": "section style",
+        "6 section": "section style"
+        }}
+
+        [/Assistant_Example]
         
         [User]
         final summary data = {final_summary_data}
         [/User]
         """
-        
-        # NOTE : 테스트용
-        print("==========================")
-        print("final summary data : ", final_summary_data)
-        print("==========================")        
-        
+
         result = await self.send_request(prompt)
+        print("+++++++++++++++++++++++++++++++++++++++++")
+        print("section_list_result : ", result.data.generations[0][0].text.strip())
+        print("+++++++++++++++============++++++++++++++")
+        print("This is just result from LLM : ", result)
+
+             
         if result.success:
             response = result
             print(f"Section structure response: {response}")
@@ -83,50 +91,59 @@ class OpenAISectionContentGenerator:
         self.batch_handler = batch_handler
 
     async def create_section_contents(self, all_usr_data: str, structure: dict):
+        print("--------------------------------")
+        print("What is structure? : ", list(structure.values()))
+        
+        
         prompt = f"""
         [System]
         You are a professional planner who organizes the content of your website landing page.
-        Write in the section content by summarizing/distributing the user's final summary data appropriately to the organization of each section of the Land page.
-        
-        #### Instructions ####
-        1. Check the final summary for necessary information and organize it appropriately for each section.
-        2. For each section, please write about 200 to 300 characters so that the content is rich and conveys the content.
-        3. Please write without typos.
-        4. Look at the input and **follow the input language to the output**.
-        5. ensure that the output matches the JSON output example below.
-        
-        #### Example JSON Output ####
-        menu_structure : {{
-            "section": "Content that Follow the instructions",
-            "section": "Content that Follow the instructions",
-            "section": "Content that Follow the instructions",
-            "section": "Content that Follow the instructions",
-            "section": "Content that Follow the instructions",
-            "section": "Content that Follow the instructions"
-              }}
-        
+        Write in the section content by summarizing and distributing the user's final summary data.
+
+        #### INSTRUCTIONS ####
+        1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
+        2. FOR EACH SECTION, PLEASE WRITE ABOUT 200 TO 300 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+        3. PLEASE WRITE WITHOUT TYPOS.
+        4. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
+        5. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
         [/System]
-        
+
+        [User_Example]
+        final summary = "all_usr_data"
+        section list = "structure"
+        [/User_Example]
+
+        [Assistant_Example]
+        section_content : {{
+        "Hero": "Content that Follow the instructions",
+        "section style": "Content that Follow the instructions",
+        "section style": "Content that Follow the instructions",
+        "section style": "Content that Follow the instructions",
+        "section style": "Content that Follow the instructions",
+        "section style": "Content that Follow the instructions"
+            }}
+        [/Assistant_Example]
+
         [User]
         final summary = {all_usr_data}
         section list = {structure}
         [/User]
         """
-        
-        # NOTE : 테스트용
-        print("==========================")
-        print("structure : ", structure)
-        print("final summary : ", all_usr_data)
-        print("==========================")
-        
+
         request = {
             "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             "prompt": prompt,
             "temperature": 0.7,
             "top_p": 0.5
         }
-        
+
         result = await self.batch_handler.process_single_request(request, 0)
+        
+        print("+++++++++++++++++++++++++++++++++++++++++")
+        print("contents_list_result : ", result.data.generations[0][0].text.strip())
+        print("+++++++++++++++============++++++++++++++")
+        print("This is just Content result from LLM : ", result)
+        
         if result.success:
             response = result
             print(f"Section content response: {response}")
@@ -144,9 +161,9 @@ class OpenAISectionGenerator:
 
     async def generate_landing_page(self, requests):
         results = []
-        
+
         for req in requests:
-            
+
             section_data = await self.generate_section(req.all_usr_data)
             results.append(section_data)
         return results
@@ -154,32 +171,18 @@ class OpenAISectionGenerator:
     # NOTE : merged된 데이터가 들어오면서 기존 2개를 합치던 방식이 1개로 바뀜
     async def generate_section(self, all_usr_data: str):
         combined_data = f"PDF summary data = {all_usr_data}"
-        
-        # NOTE : 테스트용
-        print("==========================")
-        print("merge_result : ", combined_data)
-        print("==========================")        
-        
+
         section_structure = await self.structure_generator.create_section_structure(combined_data)
         structure = section_structure.data.generations[0][0].text.strip()
         section_structure.data.generations[0][0].text = self.extract_json(structure)
-        
-        # NOTE : 테스트용
-        print("==========================")
-        print("section_structure.data.generations[0][0].text : ", section_structure.data.generations[0][0].text)
-        print("==========================")  
-        
+
         section_contents = await self.content_generator.create_section_contents(
             combined_data,
             section_structure.data.generations[0][0].text
             )
         contents = section_contents.data.generations[0][0].text.strip()
         section_contents.data.generations[0][0].text = self.extract_json(contents)
-        # NOTE : 테스트용
-        print("==========================")
-        print("section_contents.data.generations[0][0].text : ", section_contents.data.generations[0][0].text)
-        print("==========================")
-        
+
         return {
             "section_structure": section_structure,
             "section_contents": section_contents

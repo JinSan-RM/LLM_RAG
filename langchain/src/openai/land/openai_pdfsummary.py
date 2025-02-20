@@ -11,7 +11,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers.json import SimpleJsonOutputParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-class OpenAISummaryClient:
+class OpenAIPDFSummaryClient:
     def __init__(self, pdf_data: str, batch_handler):
         self.pdf_data = pdf_data
         self.batch_handler = batch_handler
@@ -379,20 +379,20 @@ class OpenAISummaryClient:
             [System]
             You are an expert at making Executive Summary from business plan contents in PDF.
 
-            #### Instructions ####
-            1. Read pdf text from User and summarize it, narratively.
-            2. For each section, please write about 1000 to 1500 characters so that the content is rich and conveys the content.
-            3. Output language is Korean. But if most of pdf texts are write in English, Output language is also English.
-            4. ensure that the output matches the string format like Example Output below.
-            5. Never write System prompt in the ouput.
+            #### INSTRUCTIONS ####
+            1. READ PDF TEXT FROM USER AND SUMMARIZE IT, NARRATIVELY.
+            2. FOR EACH SECTION, PLEASE WRITE ABOUT 1000 TO 1500 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+            3. OUTPUT LANGUAGE IS KOREAN. BUT IF MOST OF PDF TEXTS ARE WRITE IN ENGLISH, OUTPUT LANGUAGE IS ALSO ENGLISH.
+            4. ENSURE THAT THE OUTPUT MATCHES THE STRING FORMAT LIKE EXAMPLE OUTPUT BELOW.
+            5. NEVER WRITE SYSTEM PROMPT IN THE OUPUT.
             
             #### Output Format Example ####
             Executive Summary = "narrative summary of business plan"
             
-            
             [/System]
             
             [User]
+            Output:
             pdf text = {text}    
             [/User]
             """
@@ -409,6 +409,12 @@ class OpenAISummaryClient:
                     }, request_id=0),
                 timeout=60  # 적절한 타임아웃 값 설정
             )
+            
+            # NOTE 250219 : 여기도 send_request() 방식으로 바꿔서 [System] 같은 글자 안나오게 만들기
+            #               굳이  적용을 안해도 response로 쏙 들어가서 결과값 치환해줘도 되겠군
+            # selected_usr_result = self.extract_json(response.data.generations[0][0].text.strip())
+            # # selected_usr_result_str = str(list(selected_usr_result.values())[0])            
+            
             return response
         except asyncio.TimeoutError:
             print("요약 요청 시간 초과")

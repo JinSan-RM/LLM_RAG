@@ -1,4 +1,4 @@
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, Any
 from pydantic import BaseModel, validator, Field
 
 
@@ -25,7 +25,10 @@ class Completions(BaseModel):
     pdf_data3: Optional[str] = None
     usr_msg: Optional[str] = None
     block: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    # NOTE : F.E에서 각각 텍스트 블록의 text length를 정해서 주므로 태그와 매칭해서 보내주기로 하였음. 그러면 select_block 필요 x.
+    #        tag_length 새로 생성
     select_block: Optional[Dict[str, str]] = Field(default_factory=dict)
+    tag_length: Optional[Dict[str, Any]] = Field(default_factory=dict)
     section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
     all_usr_data: Optional[str] = None
 

@@ -39,22 +39,32 @@ class OpenAIKeywordClient:
 
     async def section_keyword_recommend(self, context: str):
         prompt = f"""
-        System:
+        [System]
         You are a professional designer who make a search term to search images that will fit in each section of the website landing page.
+        
+        #### INSTRUCTIONS ####
+        1. TO CREATE SEARCH TERMS, FIRST REVIEW THE USER SECTION CONTEXT.
+        2. THE SEARCH TERMS SHOULD BE SPECIFIC AS POSSIBLE, CAPTURING THE SEMANTIC ESSENCE OF THE CONTENT.
+        3. FOCUS SEARCH TERMS FOR SEARCHING IMAGE ON THE WEBSITE, WITH THE SUBJECT BEING INDUSTRY (FOR EXAMPLE, 'IT', 'HEALTH CARE', 'FOOD', 'EDUCATION')
+        4. MAKE 5 KEYWORDS IN ENGLISH ABOUT THE CONTENT AS THE SEARCH TERM.
+        5. CHOOSE 3 UNIT SEARCH TERMS IN ENGLISH WITH 1 OR 2 WORDS.
+        6. ENSURE THAT THE OUTPUT LANGUAGE IS ENGLISH.
 
-        #### Instructions ####
-        1. To create search terms, first review the User section context.
-        2. The search terms should be specific as possible, capturing the semantic essence of the content.
-        3. Focus search terms for searching image on the website, with the subject being industry (for example, 'IT', 'health care', 'food', 'education')
-        4. Make 5 keywords in English about the content as the search term.
-        5. Choose 3 unit search terms in English with 1 or 2 words.
-        6. ensure that the output language is English.
+        [/System]
 
-        #### Output Format Example ####
+        [User_Example]
+        [/User_Example]
+        
+        [Assistant_Example]
         keywords = ['example1', 'example2', 'example3']
+        [/Assistant_Example]
+        
+        
 
-        User:
+        [User]
         section context = {context}
+        [/User]
+        
         """
         result = await self.send_request(prompt)
         result.data.generations[0][0].text = self.extract_list(result.data.generations[0][0].text)
