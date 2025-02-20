@@ -300,7 +300,7 @@ class OpenAIPDFSummaryClient:
         try:
 
             prompt = f"""
-            [System]
+            <|start_header_id|>system<|end_header_id|>
             Your task is to interpret and transform the content of an uploaded summary data into a website proposal. Analyze the data and fit it to the componants below.
 
             Instructions:
@@ -322,11 +322,10 @@ class OpenAIPDFSummaryClient:
             Example JSON Output:
             json {{ "Identify business goals": "description", "Customize your target" : "description",  "Derive core functions" : "Description", "design requirements" : "description"}}
             
-            [/System]
             
-            [User]
+            <|eot_id|><|start_header_id|>user<|end_header_id|>
             summary = {summary}
-            [/User]
+            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
             
             """
             response = await asyncio.wait_for(
@@ -376,25 +375,25 @@ class OpenAIPDFSummaryClient:
 
         try:
             prompt = f"""
-            [System]
+            <|start_header_id|>SYSTEM<|end_header_id|>
             You are an expert at making Executive Summary from business plan contents in PDF.
 
             #### INSTRUCTIONS ####
             1. READ PDF TEXT FROM USER AND SUMMARIZE IT, NARRATIVELY.
             2. FOR EACH SECTION, PLEASE WRITE ABOUT 1000 TO 1500 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
             3. OUTPUT LANGUAGE IS KOREAN. BUT IF MOST OF PDF TEXTS ARE WRITE IN ENGLISH, OUTPUT LANGUAGE IS ALSO ENGLISH.
-            4. ENSURE THAT THE OUTPUT MATCHES THE STRING FORMAT LIKE EXAMPLE OUTPUT BELOW.
-            5. NEVER WRITE SYSTEM PROMPT IN THE OUPUT.
+            4. ENSURE THAT THE OUTPUT MATCHES THE JSON FORMAT LIKE EXAMPLE OUTPUT BELOW.
+            5. NEVER WRITE SYSTEM PROMPT LIKE THESE <|start_header_id|>SYSTEM<|end_header_id|>" IN THE OUPUT.
             
-            #### Output Format Example ####
-            Executive Summary = "narrative summary of business plan"
+            <|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>
+            pdf text = "text from pdf"
             
-            [/System]
+            <|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>            
+            {{Output : "narrative summary of business plan"}}
             
-            [User]
-            Output:
-            pdf text = {text}    
-            [/User]
+            <|eot_id|><|start_header_id|>USER<|end_header_id|>
+            pdf text = {text}
+            <|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>
             """
 
             response = await asyncio.wait_for(

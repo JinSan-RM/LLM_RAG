@@ -12,7 +12,7 @@ class OpenAIDataMergeClient:
         try:
             
             prompt = f"""
-            [System]
+            <|start_header_id|>SYSTEM<|end_header_id|>
             you are an expert in writing business plans.
             Write a business plan using the user summary and PDF summary data.
             
@@ -32,25 +32,20 @@ class OpenAIDataMergeClient:
                 7) PROMOTION AND MARKETING STRATEGY: HOW TO INTRODUCE PRODUCTS OR SERVICES TO CUSTOMERS
                 
             4. DO NOT WRITE ANY EXPRESSION OTHER THAN THE FINAL OUTPUT.
-            5. PLEASE WRITE ABOUT 1000 TO 1500 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+            5. PLEASE WRITE ABOUT 500 TO 1000 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
             6. WHEN WRITING CONTENT, MIX USER INPUT AND PDF INPUT EVENLY.
-            7. NEVER REPEAT User-Assistant FOR FITTING THE OUTPUT CHARACTERS. JUST END GENERATE.
-            [/System]
-             
-             
-            [User_Example]
+            7. NEVER WRITE SYSTEM PROMPT LIKE THESE <|start_header_id|>SYSTEM<|end_header_id|>" IN THE OUPUT.
+            
+            <|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>
             user summary = "data from user"
             pdf summary data = "data from pdf"
-            [/User_Example]
             
-            [Assistant_Example]
-            merged data = "narrative summary of merged data"
-            [/Assistant_Example]
+            <|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>
+            {{Output : "narrative summary of merged data"}}
             
-            [User]
+            <|eot_id|><|start_header_id|>USER<|end_header_id|>
             user summary = {self.usr_msg}
             pdf summary data = {self.pdf_data}
-            [/User]
             
             """
             print(f"usr_msg : {self.usr_msg}")

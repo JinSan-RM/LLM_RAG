@@ -56,12 +56,12 @@ class OpenAISectionStructureGenerator:
 
         [Assistant_Example]
         "menu_structure": {{
-        "1 section": "Hero",
-        "2 section": "section style",
-        "3 section": "section style",
-        "4 section": "section style",
-        "5 section": "section style",
-        "6 section": "section style"
+        "section_1": "Hero",
+        "section_2": "section style",
+        "section_3": "section style",
+        "section_4": "section style",
+        "section_5": "section style",
+        "section_6": "section style"
         }}
 
         [/Assistant_Example]
@@ -160,12 +160,12 @@ class OpenAISectionGenerator:
     async def generate_section(self, all_usr_data: str):
         combined_data = f"PDF summary data = {all_usr_data}"
         allowed_values = {
-            "1 section": ["Hero"],
-            "2 section": ["Feature", "Content"],
-            "3 section": ["CTA", "Feature", "Content", "Comparison"],
-            "4 section": ["Comparison", "Statistics", "Countdown", "CTA"],
-            "5 section": ["Testimonial", "Statistics", "Pricing", "FAQ"],
-            "6 section": ["FAQ", "Team", "Testimonial", "Pricing"]
+            "section_1": ["Hero"],
+            "section_2": ["Feature", "Content"],
+            "section_3": ["CTA", "Feature", "Content", "Comparison"],
+            "section_4": ["Comparison", "Statistics", "Countdown", "CTA"],
+            "section_5": ["Testimonial", "Statistics", "Pricing", "FAQ"],
+            "section_6": ["FAQ", "Team", "Testimonial", "Pricing"]
         }
         cnt = 0
         import random
@@ -175,31 +175,31 @@ class OpenAISectionGenerator:
             section_structure = section_structure_LLM_result.data.generations[0][0].text.strip()
             # section_structure = await self.structure_generator.create_section_structure(combined_data)
             section_structure_LLM_result.data.generations[0][0].text = self.extract_json(section_structure)
+                
             updated_structure = {}
-            print(section_structure_LLM_result.data.generations[0][0].text,"<============section_structure_LLM_result.data.generations[0][0].text")
-            for section, value in section_structure_LLM_result.data.generations[0][0].text.items():
-                # 섹션 키를 'section_N' 형식으로 변환
-                section_key = f"section_{section.split()[0]}"
-                
-                print(section, value, allowed_values.get(section_key, "Not found"), "<======section, value, allowed_values")
-                
-                if section_key in allowed_values:
-                    if value not in allowed_values[section_key]:
+            section_structure = section_structure_LLM_result.data.generations[0][0].text
+
+
+            updated_structure = {}
+
+            for section, value in section_structure.items():
+                if section in allowed_values:
+                    if value not in allowed_values[section]:
                         # 허용되지 않은 값일 경우 해당 섹션의 허용된 값 중 무작위 선택
-                        updated_structure[section_key] = random.choice(allowed_values[section_key])
+                        print()
+                        updated_structure[section] = random.choice(allowed_values[section])
                     else:
                         # 허용된 값일 경우 그대로 유지
-                        updated_structure[section_key] = value
+                        updated_structure[section] = value
                 else:
-                    # 정의되지 않은 섹션일 경우 무시 또는 기본값 설정
                     print(f"Warning: Undefined section '{section}' encountered.")
 
+                    
+            section_structure_LLM_result.data.generations[0][0].text = updated_structure
             if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict):
                 cnt += 1
             else:
-                print("Updated structure:", updated_structure)
-        
-        
+                break
         # print("HEEEEERE : ", section_structure.data.generations[0][0].text , type(section_structure.data.generations[0][0].text))      
         # section_structure_LLM_result.data.generations[0][0].text = asdf
         cnt = 0
