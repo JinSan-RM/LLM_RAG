@@ -19,7 +19,7 @@ class OpenAISectionStructureGenerator:
                 "stream": False,
                 "logprobs": None
             }, request_id=0),
-            timeout=120  # 적절한 타임아웃 값 설정
+            timeout=300  # 적절한 타임아웃 값 설정
         )
         return response
     
@@ -32,23 +32,12 @@ class OpenAISectionStructureGenerator:
         
         #### Section style list ####
         
-        - 1 : ["Hero"]
-        - 2 : ["Feature", "Content"]
-        - 3 : ["CTA", "Feature", "Content", "Gallery", "Comparison", "Logo"]
-        - 4 : ["Gallery", "Comparison", "Statistics", "Timeline", "Countdown", "CTA"]
-        - 5 : ["Testimonial", "Statistics", "Pricing", "FAQ", "Timeline"]
-        - 6 : ["Contact", "FAQ", "Logo", "Team", "Testimonial", "Pricing"]
-        
-        #### Example Output ####
-        "menu_structure": {{
-        "1 ": "Hero",
-        "2 ": "section style",
-        "3 ": "section style",
-        "4 ": "section style",
-        "5 ": "section style",
-        "6 ": "section style"
-        }}
-
+        - 1 section: ["Hero"]
+        - 2 section: ["Feature", "Content"]
+        - 3 section: ["CTA", "Feature", "Content", "Gallery", "Comparison", "Logo"]
+        - 4 section: ["Gallery", "Comparison", "Statistics", "Timeline", "Countdown", "CTA"]
+        - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ", "Timeline"]
+        - 6 section: ["Contact", "FAQ", "Logo", "Team", "Testimonial", "Pricing"]
         
         #### INSTRUCTIONS ####
         
@@ -57,7 +46,7 @@ class OpenAISectionStructureGenerator:
         3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
         4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
         5. BE CAREFUL ABOUT TYPOS.
-        6. ENSURE THAT THE OUTPUT MATHCES WITH Example Output.
+        6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
         
         [/System]
 
@@ -67,12 +56,12 @@ class OpenAISectionStructureGenerator:
 
         [Assistant_Example]
         "menu_structure": {{
-        "1 ": "Hero",
-        "2 ": "section style",
-        "3 ": "section style",
-        "4 ": "section style",
-        "5 ": "section style",
-        "6 ": "section style"
+        "1 section": "Hero",
+        "2 section": "section style",
+        "3 section": "section style",
+        "4 section": "section style",
+        "5 section": "section style",
+        "6 section": "section style"
         }}
 
         [/Assistant_Example]
@@ -83,11 +72,6 @@ class OpenAISectionStructureGenerator:
         """
 
         result = await self.send_request(prompt)
-        print("+++++++++++++++++++++++++++++++++++++++++")
-        print("section_list_result : ", result.data.generations[0][0].text.strip())
-        print("+++++++++++++++============++++++++++++++")
-        print("This is just result from LLM : ", result)
-
              
         if result.success:
             response = result
@@ -101,10 +85,7 @@ class OpenAISectionContentGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
 
-    async def create_section_contents(self, all_usr_data: str, structure: dict):
-        print("--------------------------------")
-        print("What is structure? : ", list(structure.values()))
-        
+    async def create_section_contents(self, all_usr_data: str, structure: dict):        
         
         prompt = f"""
         [System]
@@ -112,8 +93,8 @@ class OpenAISectionContentGenerator:
         Write in the section content by summarizing and distributing the user's final summary data.
 
         #### INSTRUCTIONS ####
-        1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH section style.
-        2. FOR EACH section style, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+        1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
+        2. FOR EACH SECTION, PLEASE WRITE ABOUT 200 TO 300 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
         3. PLEASE WRITE WITHOUT TYPOS.
         4. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
         5. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
@@ -121,7 +102,7 @@ class OpenAISectionContentGenerator:
 
         [User_Example]
         final summary = "all_usr_data"
-        section list = "structure"
+        section list = "section structure"
         [/User_Example]
 
         [Assistant_Example]
@@ -145,15 +126,11 @@ class OpenAISectionContentGenerator:
             "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             "prompt": prompt,
             "temperature": 0.7,
-            "top_p": 0.5
+            "top_p": 0.3
         }
 
         result = await self.batch_handler.process_single_request(request, 0)
         
-        print("+++++++++++++++++++++++++++++++++++++++++")
-        print("contents_list_result : ", result.data.generations[0][0].text.strip())
-        print("+++++++++++++++============++++++++++++++")
-        print("This is just Content result from LLM : ", result)
         
         if result.success:
             response = result
@@ -184,24 +161,24 @@ class OpenAISectionGenerator:
         combined_data = f"PDF summary data = {all_usr_data}"
         cnt = 0
         while cnt < 3:
-            section_structure_result = await self.structure_generator.create_section_structure(combined_data)
-            section_structure = section_contents.data.generations[0][0].text.strip()
+            section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data)
+            section_structure = section_structure_LLM_result.data.generations[0][0].text.strip()
             # section_structure = await self.structure_generator.create_section_structure(combined_data)
-            section_structure_result.data.generations[0][0].text = self.extract_json(section_structure)
-            if not isinstance(section_structure.data.generations[0][0].text, dict):
+            section_structure_LLM_result.data.generations[0][0].text = self.extract_json(section_structure)
+            if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict):
                 cnt += 1
             else:
                 break
         
         
-        print("HEEEEERE : ", section_structure.data.generations[0][0].text , type(section_structure.data.generations[0][0].text))      
-        section_structure_json = section_structure.data.generations[0][0].text
+        # print("HEEEEERE : ", section_structure.data.generations[0][0].text , type(section_structure.data.generations[0][0].text))      
+        # section_structure_LLM_result.data.generations[0][0].text = asdf
         cnt = 0
         while cnt < 3:
             
             section_contents = await self.content_generator.create_section_contents(
                 combined_data,
-                section_structure_json
+                section_structure_LLM_result.data.generations[0][0].text
                 )
             contents = section_contents.data.generations[0][0].text.strip()
             section_contents.data.generations[0][0].text = self.extract_json(contents)
@@ -211,7 +188,7 @@ class OpenAISectionGenerator:
                 break
         
         return {
-            "section_structure": section_structure,
+            "section_structure": section_structure_LLM_result,
             "section_contents": section_contents
         }
         

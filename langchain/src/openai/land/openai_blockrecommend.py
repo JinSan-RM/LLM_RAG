@@ -19,7 +19,7 @@ class OpenAIBlockSelector:
                 "stream": False,
                 "logprobs": None
             }, request_id=0),
-            timeout=60  # 적절한 타임아웃 값 설정
+            timeout=300  # 적절한 타임아웃 값 설정
         )
         return response
 
@@ -28,11 +28,6 @@ class OpenAIBlockSelector:
         only_section_context = section_context[1]
         tag_slice = list(block_list[1].values())
         
-        print("++++++++++++++++++++++++++++++++++++++++")
-        print("section_context : ", section_context)
-        print("block_list : ", block_list)
-        print("tag_slice : ", tag_slice)
-        print("only_section_context : ", only_section_context)
 
         # 원래 section_name 인데 이걸 section_context로로 변경
         # 왜냐면 이미 1차적으로 섹션이 정해진 것이기 떄문에, 컨텐츠를 잘 표현할 리스트를 찾는게 맞음
@@ -84,15 +79,14 @@ class OpenAIBlockSelector:
         # 추후에는 find_key_by_value()과 extract_emmet_tag의 동작 방식 전환
         block_list_dict = {block_list[0]:block_list[1]}
         # print("check check : ", block_list)
-        print("What's going on :", result.data.generations[0][0].text.strip())
+
         # NOTE 250219 : 아래 함수를 사용하기 위해서 extract_json
-        selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text.strip())
-        selected_Html_tag_str = str(list(selected_Html_tag_json.values())[0])
+        if result.data.generations[0][0].text.strip() == None:
+            selected_Html_tag_str = tag_slice[0]
+        else:
+            selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text.strip())
+            selected_Html_tag_str = str(list(selected_Html_tag_json.values())[0])
         
-        print("What's going on 2 :", selected_Html_tag_str)
-        
-        print("type(block_list[1]) : ", type(block_list[1]))
-        print("block_list[1] : ", block_list[1])
         # NOTE 250219 : 여기는 좀 나중에 보자... 눈 빠지것다
         #               지금은 임시고, 여기 검증단계 살려야합니다아아
         # b_id = self.find_key_by_value(block_list_dict, selected_Html_tag_str)
@@ -111,8 +105,8 @@ class OpenAIBlockSelector:
             'HTML_Tag': selected_Html_tag_str # b_value
         }
         
-        print("++++++++++++++++++++++++++++++++++++++++")
-        print("result : ", result)
+        # print("++++++++++++++++++++++++++++++++++++++++")
+        # print("result : ", result)
         
         return result
 
@@ -141,11 +135,6 @@ class OpenAIBlockSelector:
             
             for n_temp_list, n_temp_block_list in zip(temp_section_list, temp_block_list):
                 
-                print("+++++++++++++++++++++++++++++++++")
-                print("type(n_temp_list) : ", type(n_temp_list))
-                print("n_temp_list : ", n_temp_list)
-                print("type(n_temp_block_list) : ", type(n_temp_block_list))
-                print("n_temp_block_list : ", n_temp_block_list)
                 select_block_result = await self.select_block(n_temp_list, n_temp_block_list)
                 select_block_results.append(select_block_result)
         

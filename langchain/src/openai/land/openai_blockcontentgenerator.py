@@ -27,9 +27,7 @@ class OpenAIBlockContentGenerator:
 
     async def generate_content(self, tag_length: Dict[str, Any], section_context: Dict[str, Any]) -> Dict[str, Any]:
         # NOTE 250220 : F.E에서 받은거 형식 넣기
-        
-        print("section_context_is_here : ", section_context)
-        print("tag_length_is_here : ", tag_length)
+    
         
         # html = self.emmet_parser.parse_emmet(next(iter(select_block.values())))
         # print(f"html : {html}")
@@ -98,9 +96,7 @@ class OpenAIBlockContentGenerator:
         """
 
         result = await self.send_request(prompt)
-        print("=============++++++++++==============")
-        print("This is resultttt : ", result)
-        print("result.data.generations[0][0].text.strip() : ", result.data.generations[0][0].text.strip())
+
         gen_content = self.emmet_parser.tag_sort(result.data.generations[0][0].text.strip())
         gen_content = self.extract_json(gen_content)
         result.data.generations[0][0].text = gen_content
