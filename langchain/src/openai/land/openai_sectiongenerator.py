@@ -32,12 +32,23 @@ class OpenAISectionStructureGenerator:
         
         #### Section style list ####
         
-        - 1 section: ["Hero"]
-        - 2 section: ["Feature", "Content"]
-        - 3 section: ["CTA", "Feature", "Content", "Gallery", "Comparison", "Logo"]
-        - 4 section: ["Gallery", "Comparison", "Statistics", "Timeline", "Countdown", "CTA"]
-        - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ", "Timeline"]
-        - 6 section: ["Contact", "FAQ", "Logo", "Team", "Testimonial", "Pricing"]
+        - 1 : ["Hero"]
+        - 2 : ["Feature", "Content"]
+        - 3 : ["CTA", "Feature", "Content", "Gallery", "Comparison", "Logo"]
+        - 4 : ["Gallery", "Comparison", "Statistics", "Timeline", "Countdown", "CTA"]
+        - 5 : ["Testimonial", "Statistics", "Pricing", "FAQ", "Timeline"]
+        - 6 : ["Contact", "FAQ", "Logo", "Team", "Testimonial", "Pricing"]
+        
+        #### Example Output ####
+        "menu_structure": {{
+        "1 ": "Hero",
+        "2 ": "section style",
+        "3 ": "section style",
+        "4 ": "section style",
+        "5 ": "section style",
+        "6 ": "section style"
+        }}
+
         
         #### INSTRUCTIONS ####
         
@@ -46,7 +57,7 @@ class OpenAISectionStructureGenerator:
         3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
         4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
         5. BE CAREFUL ABOUT TYPOS.
-        6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
+        6. ENSURE THAT THE OUTPUT MATHCES WITH Example Output.
         
         [/System]
 
@@ -56,12 +67,12 @@ class OpenAISectionStructureGenerator:
 
         [Assistant_Example]
         "menu_structure": {{
-        "1 section": "Hero",
-        "2 section": "section style",
-        "3 section": "section style",
-        "4 section": "section style",
-        "5 section": "section style",
-        "6 section": "section style"
+        "1 ": "Hero",
+        "2 ": "section style",
+        "3 ": "section style",
+        "4 ": "section style",
+        "5 ": "section style",
+        "6 ": "section style"
         }}
 
         [/Assistant_Example]
@@ -101,8 +112,8 @@ class OpenAISectionContentGenerator:
         Write in the section content by summarizing and distributing the user's final summary data.
 
         #### INSTRUCTIONS ####
-        1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
-        2. FOR EACH SECTION, PLEASE WRITE ABOUT 200 TO 300 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+        1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH section style.
+        2. FOR EACH section style, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
         3. PLEASE WRITE WITHOUT TYPOS.
         4. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
         5. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
@@ -171,18 +182,34 @@ class OpenAISectionGenerator:
     # NOTE : merged된 데이터가 들어오면서 기존 2개를 합치던 방식이 1개로 바뀜
     async def generate_section(self, all_usr_data: str):
         combined_data = f"PDF summary data = {all_usr_data}"
-
-        section_structure = await self.structure_generator.create_section_structure(combined_data)
-        structure = section_structure.data.generations[0][0].text.strip()
-        section_structure.data.generations[0][0].text = self.extract_json(structure)
-
-        section_contents = await self.content_generator.create_section_contents(
-            combined_data,
-            section_structure.data.generations[0][0].text
-            )
-        contents = section_contents.data.generations[0][0].text.strip()
-        section_contents.data.generations[0][0].text = self.extract_json(contents)
-
+        cnt = 0
+        while cnt < 3:
+            section_structure_result = await self.structure_generator.create_section_structure(combined_data)
+            section_structure = section_contents.data.generations[0][0].text.strip()
+            # section_structure = await self.structure_generator.create_section_structure(combined_data)
+            section_structure_result.data.generations[0][0].text = self.extract_json(section_structure)
+            if not isinstance(section_structure.data.generations[0][0].text, dict):
+                cnt += 1
+            else:
+                break
+        
+        
+        print("HEEEEERE : ", section_structure.data.generations[0][0].text , type(section_structure.data.generations[0][0].text))      
+        section_structure_json = section_structure.data.generations[0][0].text
+        cnt = 0
+        while cnt < 3:
+            
+            section_contents = await self.content_generator.create_section_contents(
+                combined_data,
+                section_structure_json
+                )
+            contents = section_contents.data.generations[0][0].text.strip()
+            section_contents.data.generations[0][0].text = self.extract_json(contents)
+            if not isinstance(section_contents.data.generations[0][0].text, dict):
+                cnt += 1
+            else:
+                break
+        
         return {
             "section_structure": section_structure,
             "section_contents": section_contents
@@ -190,6 +217,7 @@ class OpenAISectionGenerator:
         
     def extract_json(self, text):
         # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
+        print("Herere!!!!! : ", text)
         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
         if json_match:
