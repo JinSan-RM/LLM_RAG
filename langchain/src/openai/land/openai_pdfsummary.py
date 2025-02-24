@@ -371,8 +371,7 @@ class OpenAIPDFSummaryClient:
 #   기존 버전
 #========================================        
 
-    async def summarize_text(self, text: str) -> str:
-
+    async def summarize_text(self, text: str, max_tokens: int = 1000) -> str:
         try:
             prompt = f"""
             <|start_header_id|>SYSTEM<|end_header_id|>
@@ -383,7 +382,7 @@ class OpenAIPDFSummaryClient:
             2. FOR EACH SECTION, PLEASE WRITE ABOUT 1000 TO 1500 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
             3. OUTPUT LANGUAGE IS KOREAN. BUT IF MOST OF PDF TEXTS ARE WRITE IN ENGLISH, OUTPUT LANGUAGE IS ALSO ENGLISH.
             4. ENSURE THAT THE OUTPUT MATCHES THE JSON FORMAT LIKE EXAMPLE OUTPUT BELOW.
-            5. NEVER WRITE SYSTEM PROMPT LIKE THESE <|start_header_id|>SYSTEM<|end_header_id|>" IN THE OUPUT.
+            5. NEVER WRITE SYSTEM PROMPT LIKE THESE <|start_header_id|>SYSTEM<|end_header_id|> IN THE OUPUT.
             
             <|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>
             pdf text = "text from pdf"
@@ -398,27 +397,92 @@ class OpenAIPDFSummaryClient:
 
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
-                        "prompt": prompt,
-                        "max_tokens": 1000,
-                        "temperature": 0.7,
-                        "top_p": 0.3,
-                        "n": 1,
-                        "stream": False,
-                        "logprobs": None
-                    }, request_id=0),
-                timeout=60  # 적절한 타임아웃 값 설정
+                    "prompt": prompt,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.7,
+                    "top_p": 0.3,
+                    "n": 1,
+                    "stream": False,
+                    "logprobs": None
+                }, request_id=0),
+                timeout=60
             )
-            
-            # NOTE 250219 : 여기도 send_request() 방식으로 바꿔서 [System] 같은 글자 안나오게 만들기
-            #               굳이  적용을 안해도 response로 쏙 들어가서 결과값 치환해줘도 되겠군
-            # selected_usr_result = self.extract_json(response.data.generations[0][0].text.strip())
-            # # selected_usr_result_str = str(list(selected_usr_result.values())[0])            
-            
-            return response
+
+            print(f"response : {response}")
+            # 응답 처리
+            if response.success and response.data:
+                extracted_text = self.extract_text(response)
+                # 상위 호출과 호환성을 위해 generations 구조로 변환
+                print(f"[DEBUG] Summarized text: {extracted_text}")
+                return response
+            else:
+                print(f"[ERROR] Summary generation failed: {response.error}")
+                response.data = {"generations": [{"text": "텍스트 생성 실패"}]}
+                return response
+
         except asyncio.TimeoutError:
             print("요약 요청 시간 초과")
-            return ""
-
+            response = type('MockResponse', (), {'success': False, 'data': {"generations": [{"text": "요약 요청 시간 초과"}]}})()
+            return response
         except Exception as e:
             print(f"요약 중 예상치 못한 오류: {str(e)}")
-            return ""
+            response = type('MockResponse', (), {'success': False, 'data': {"generations": [{"text": f"오류: {str(e)}"}]}})()
+            return response
+
+    def extract_text(self, result):
+        if result.success and result.data.generations:
+            json_data = self.extract_json(result.data.generations[0][0].text)
+            result.data.generations[0][0].text = json_data
+            return result
+        return "텍스트 생성 실패"
+
+    def extract_json(self, text):
+        text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
+        
+        def clean_data(text):
+            headers_to_remove = [
+                "<|start_header_id|>system<|end_header_id|>",
+                "<|start_header_id|>SYSTEM<|end_header_id|>",
+                "<|start_header_id|>", "<|end_header_id|>",
+                "<|start_header_id|>user<|end_header_id|>",
+                "<|start_header_id|>assistant<|end_header_id|>",
+                "<|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>",
+                "<|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>",
+                "<|eot_id|><|start_header_id|>USER<|end_header_id|>",
+                "<|eot_id|>",
+                "<|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>",
+                "ASSISTANT",
+                "USER",
+                "SYSTEM",
+                "<|end_header_id|>",
+                "<|start_header_id|>"
+                "ASSISTANT_EXAMPLE",
+                "USER_EXAMPLE"
+            ]
+            cleaned_text = text
+            for header in headers_to_remove:
+                cleaned_text = cleaned_text.replace(header, '')
+            pattern = r'<\|.*?\|>'
+            cleaned_text = re.sub(pattern, '', cleaned_text)
+            return cleaned_text.strip()
+        
+        text = clean_data(text)
+        
+        # JSON 객체를 찾음
+        json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            open_braces = json_str.count('{')
+            close_braces = json_str.count('}')
+            if open_braces > close_braces:
+                json_str += '}' * (open_braces - close_braces)
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                try:
+                    return json.loads(json_str.replace("'", '"'))
+                except json.JSONDecodeError:
+                    return text  # JSON 파싱 실패 시 원본 텍스트 반환
+        else:
+            # JSON이 없으면 정리된 텍스트 반환
+            return text.strip()

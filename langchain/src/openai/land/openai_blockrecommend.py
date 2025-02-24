@@ -8,11 +8,11 @@ class OpenAIBlockSelector:
     def __init__(self, batch_handler):
         self.batch_handler = batch_handler
 
-    async def send_request(self, prompt: str) -> str:
+    async def send_request(self, prompt: str, max_tokens: int = 50) -> str:
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
                 "prompt": prompt,
-                "max_tokens": 1000,
+                "max_tokens": max_tokens,
                 "temperature": 0.1,
                 "top_p": 0.1,
                 "n": 1,
@@ -23,7 +23,10 @@ class OpenAIBlockSelector:
         )
         return response
 
-    async def select_block(self, section_context: str, block_list: Dict[str, str]) -> Dict[str, Any]:
+    async def select_block(self,
+                           section_context: str,
+                           block_list: Dict[str, str],
+                           max_tokens: int = 50) -> Dict[str, Any]:
         
         only_section_context = section_context[1]
         tag_slice = list(block_list[1].values())
@@ -73,7 +76,7 @@ class OpenAIBlockSelector:
                 [/User]
                 """
         
-        result = await self.send_request(prompt)
+        result = await self.send_request(prompt, max_tokens)
         
         # NOTE 250219 : 기존 형식 맞추기위해서 다시 dict 형식으로 전환
         # 추후에는 find_key_by_value()과 extract_emmet_tag의 동작 방식 전환
@@ -112,7 +115,11 @@ class OpenAIBlockSelector:
         
         return result
 
-    async def select_block_batch(self, section_names_n_contents: List[str], section_names_n_block_lists: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    async def select_block_batch(
+        self,
+        section_names_n_contents: List[str],
+        section_names_n_block_lists: List[Dict[str, str]],
+        max_tokens: int = 50) -> List[Dict[str, Any]]:
         
         # print("+++++++++++++++++++++++++++++++++")
         # print("type(section_names_n_contents) : ", type(section_names_n_contents))
@@ -137,7 +144,7 @@ class OpenAIBlockSelector:
             
             for n_temp_list, n_temp_block_list in zip(temp_section_list, temp_block_list):
                 
-                select_block_result = await self.select_block(n_temp_list, n_temp_block_list)
+                select_block_result = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
                 select_block_results.append(select_block_result)
         
         # NOTE 250220: batch 방식은 추후 적용

@@ -9,7 +9,7 @@ class OpenAIUsrMsgClient:
         self.usr_msg = str(usr_msg)
             
 
-    async def usr_msg_proposal(self):
+    async def usr_msg_proposal(self, max_tokens: int = 500):
         try:
             prompt = f"""
             [SYSTEM]
@@ -32,7 +32,7 @@ class OpenAIUsrMsgClient:
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                     "prompt": prompt,
-                    "max_tokens": 2000,  # 1000~1500자 출력 위해 충분히 설정
+                    "max_tokens": max_tokens,  # 1000~1500자 출력 위해 충분히 설정
                     "temperature": 0.7,
                     "top_p": 0.9,  # 더 자연스러운 출력 위해 조정
                     "repetition_penalty": 1.2,
@@ -44,7 +44,6 @@ class OpenAIUsrMsgClient:
                 timeout=60
             )
             response.data.generations[0][0].text = self.extract_text(response)
-            print(f"result: {response.data.generations[0][0].text}")
             return response
         except asyncio.TimeoutError:
             print("User message proposal request timed out")
@@ -86,7 +85,8 @@ class OpenAIUsrMsgClient:
                 "<|end_header_id|>",
                 "<|start_header_id|>",
                 "ASSISTANT_EXAMPLE",
-                "USER_EXAMPLE"
+                "USER_EXAMPLE",
+                "[]"
             ]
             cleaned_text = text
             for header in headers_to_remove:
@@ -94,10 +94,8 @@ class OpenAIUsrMsgClient:
             pattern = r'<\|.*?\|>'
             cleaned_text = re.sub(pattern, '', cleaned_text)
             return cleaned_text.strip()
-        
+
         text = clean_data(text)
-        print(f"cleaned text: {text}")
-        
         # JSON 객체를 찾음
         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
         if json_match:

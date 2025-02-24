@@ -68,12 +68,13 @@ class OpenAIService:
         )
         
     async def completions(self, **kwargs):
+        max_tokens = kwargs.get("max_tokens", self.llm.max_tokens)
         try:
             print(f"Calling completions with kwargs: {kwargs}")
             if self.streaming:
                 response = await self.stream_completion(**kwargs)
             else:
-                response = await asyncio.to_thread(self.llm.generate, [kwargs['prompt']])
+                response = await asyncio.to_thread(self.llm.generate, [kwargs['prompt']], max_tokens=max_tokens)
             # print(f"Completions response: {response}")
             return response
         except Exception as e:

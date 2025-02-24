@@ -8,11 +8,11 @@ class OpenAISectionStructureGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
 
-    async def send_request(self, prompt: str) -> str:
+    async def send_request(self, prompt: str, max_tokens: int = 200) -> str:
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
                 "prompt": prompt,
-                "max_tokens": 1000,
+                "max_tokens": max_tokens,
                 "temperature": 0.1,
                 "top_p": 0.1,
                 "n": 1,
@@ -23,7 +23,7 @@ class OpenAISectionStructureGenerator:
         )
         return response
     
-    async def create_section_structure(self, final_summary_data: str):
+    async def create_section_structure(self, final_summary_data: str, max_tokens: int = 200):
         
         prompt = f"""
         [System]
@@ -71,7 +71,7 @@ class OpenAISectionStructureGenerator:
         [/User]
         """
 
-        result = await self.send_request(prompt)
+        result = await self.send_request(prompt, max_tokens)
              
         if result.success:
             response = result
@@ -85,7 +85,7 @@ class OpenAISectionContentGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
 
-    async def create_section_contents(self, all_usr_data: str, structure: dict):        
+    async def create_section_contents(self, all_usr_data: str, structure: dict, max_tokens: int = 1800):        
         
         prompt = f"""
         [System]
@@ -125,6 +125,7 @@ class OpenAISectionContentGenerator:
         request = {
             "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             "prompt": prompt,
+            "max_tokens": max_tokens,
             "temperature": 0.7,
             "top_p": 0.3
         }
@@ -147,17 +148,17 @@ class OpenAISectionGenerator:
         self.structure_generator = OpenAISectionStructureGenerator(batch_handler)
         self.content_generator = OpenAISectionContentGenerator(batch_handler)
 
-    async def generate_landing_page(self, requests):
+    async def generate_landing_page(self, requests, max_tokens: int = 200):
         results = []
 
         for req in requests:
 
-            section_data = await self.generate_section(req.all_usr_data)
+            section_data = await self.generate_section(req.all_usr_data, max_tokens)
             results.append(section_data)
         return results
 
     # NOTE : merged된 데이터가 들어오면서 기존 2개를 합치던 방식이 1개로 바뀜
-    async def generate_section(self, all_usr_data: str):
+    async def generate_section(self, all_usr_data: str, max_tokens: int = 200):
         combined_data = f"PDF summary data = {all_usr_data}"
         allowed_values = {
             "section_1": ["Hero"],
@@ -170,7 +171,7 @@ class OpenAISectionGenerator:
         cnt = 0
         import random
         while cnt < 3:
-            section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data)
+            section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data, max_tokens)
             
             section_structure = section_structure_LLM_result.data.generations[0][0].text.strip()
             # section_structure = await self.structure_generator.create_section_structure(combined_data)
@@ -207,7 +208,8 @@ class OpenAISectionGenerator:
             
             section_contents = await self.content_generator.create_section_contents(
                 combined_data,
-                section_structure_LLM_result.data.generations[0][0].text
+                section_structure_LLM_result.data.generations[0][0].text,
+                max_tokens=1800
                 )
             contents = section_contents.data.generations[0][0].text.strip()
             section_contents.data.generations[0][0].text = self.extract_json(contents)

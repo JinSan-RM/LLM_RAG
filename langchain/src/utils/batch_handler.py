@@ -32,8 +32,19 @@ class BatchRequestHandler:
 
     async def process_single_request(self, request: Dict[str, Any],
                                    request_id: int) -> RequestResult:
+        """단일 요청을 처리하는 메서드
+        
+        Args:
+            request: 요청 데이터 (max_tokens 포함 가능)
+            request_id: 요청 ID
+        
+        Returns:
+            RequestResult: 처리 결과
+        """
         try:
             logger.debug(f"Processing request {request_id}: {request}")
+            max_tokens = request.get("max_tokens", "default")  # 디버깅용으로 max_tokens 확인
+            logger.debug(f"Request {request_id} using max_tokens: {max_tokens}")
 
             async with self.semaphore:
                 # Rate limiting - wait if needed
@@ -57,7 +68,10 @@ class BatchRequestHandler:
                             response += chunk
                         return RequestResult(success=True, data={'choices': [{'message': {'content': response}}]})
                     else:
-                        response = await self.openai_service.completions(**request)
+                        response = await asyncio.wait_for(
+                            self.openai_service.completions(**request),
+                            timeout=self.request_timeout
+                        )
                     # logger.debug(f"Request {request_id} successful")
                     return RequestResult(success=True, data=response)
 

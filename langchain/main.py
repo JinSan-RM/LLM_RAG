@@ -421,6 +421,14 @@ openai_config = OpenAIConfig()
 openai_service = OpenAIService(openai_config)
 batch_handler = BatchRequestHandler(openai_service)
 
+MAX_TOKENS_USR_MSG_PROPOSAL = 500
+MAX_TOKENS_SUMMARIZE_TEXT = 1000
+MAX_TOKENS_CONTENTS_MERGE = 1500
+MAX_TOKENS_CREATE_SECTION_STRUCTURE = 200
+MAX_TOKENS_CREATE_SECTION_CONTENTS = 1800
+MAX_TOKENS_SELECT_BLOCK = 50
+MAX_TOKENS_GENERATE_CONTENTS = 1000
+MAX_TOKENS_SECTION_KEYWORD_RECOMMEND = 100
 
 @app.post("/batch_completions")
 async def batch_completions(requests: List[Completions]):
@@ -454,49 +462,56 @@ async def openai_input_data_process(requests: List[Completions]):
         results = []
 
         for req in requests:
-            usr_msg_result = ""
-            summary_result = ""
-
+            usr_msg_result = None  # 초기값을 None으로 변경
+            summary_result = None  # 초기값을 None으로 변경
+            summary = None
+            usr_msg = None
+            # usr_msg 처리
             if req.usr_msg:
                 usr_msg_client = OpenAIUsrMsgClient(req.usr_msg, batch_handler)
-                usr_msg_result = await usr_msg_client.usr_msg_proposal()
+                usr_msg_result = await usr_msg_client.usr_msg_proposal(max_tokens=MAX_TOKENS_USR_MSG_PROPOSAL)
                 results.append({"type": "usr_msg_argument", "result": usr_msg_result})
-                print("==========111111111===========")
-                print("usr_msg_result : ", usr_msg_result)
+
+            # PDF 요약 처리
             if req.pdf_data1:
                 try:
-                    # pdf_handle = PDFHandle(req.path, req.path2, req.path3)
-                    # pdf_data = pdf_handle.PDF_request()
-                    pdf_data = ""
-                    pdf_data += req.pdf_data1
-                    pdf_data += req.pdf_data2 if req.pdf_data2 else ""
-                    pdf_data += req.pdf_data3 if req.pdf_data3 else ""
+                    pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "")
                     summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler)
-                    # summary_result = await summary_client.summarize_chunked_texts(pdf_texts=pdf_data)
-                    summary_result = await summary_client.summarize_text(pdf_data)
+                    summary_result = await summary_client.summarize_text(pdf_data, max_tokens=MAX_TOKENS_SUMMARIZE_TEXT)
                     results.append({"type": "pdf_summary", "result": summary_result})
-                    print("==========22222222===========")
-                    print("summary_result : ", summary_result)
-                
                 except Exception as e:
                     print(f"Error in PDFHandle: {str(e)}")
                     results.append({"type": "pdf_summary", "error": str(e)})
                     continue
 
-            if usr_msg_result and summary_result:
-                # usr_msg와 pdf 둘 다 있는 경우
-                merge_client = OpenAIDataMergeClient(usr_msg_result, summary_result, batch_handler)
-                merge_result = await merge_client.contents_merge()
-                print("==========333333333===========")
-                print("merge_result : ", merge_result)
+            try:
+                print("merge process start")
+                if usr_msg_result and summary_result:
+                    # usr_msg_result에서 텍스트 추출
+                    if hasattr(usr_msg_result.data, 'generations'):
+                        usr_msg = usr_msg_result.data.generations[0][0].text
+                    else:
+                        usr_msg = str(usr_msg_result.data)
+
+                    # summary_result에서 텍스트 추출
+                    if isinstance(summary_result.data, dict) and 'generations' in summary_result.data:
+                        summary = summary_result.data['generations'][0]['text']
+                    else:
+                        summary = str(summary_result.data)
+                    merge_client = OpenAIDataMergeClient(usr_msg, summary, batch_handler)
+                    merge_result = await merge_client.contents_merge(max_tokens=MAX_TOKENS_CONTENTS_MERGE)
+                    print("response merge data: ", type(merge_result), merge_result)
+                    print("==========333333333===========")
+                        
+                    results.append({"type": "final_result", "result": merge_result})
                 
-                results.append({"type": "final_result", "result": merge_result})
-            elif usr_msg_result:
-                # usr_msg만 있는 경우
-                results.append({"type": "final_result", "result": usr_msg_result})
-            elif summary_result:
-                # pdf만 있는 경우
-                results.append({"type": "final_result", "result": summary_result})
+                elif usr_msg_result and usr_msg_result.data.generations[0][0].text:
+                    results.append({"type": "final_result", "result": usr_msg_result})
+                elif summary_result and summary_result.data.generations[0][0].text:
+                    results.append({"type": "final_result", "result": summary_result})
+            except Exception as e:
+                print(f"merge process error: {e}")
+                results.append({"type": "final_result", "error": str(e)})
 
         end = time.time()
         processing_time = end - start
@@ -512,7 +527,7 @@ async def openai_input_data_process(requests: List[Completions]):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
+    
 # NOTE 250219: API 이름 바꾸기 논의
 # @app.post("/api/section_select_n_content_generate")
 @app.post("/api/section_select")
@@ -524,7 +539,7 @@ async def openai_section_select(requests: List[Completions]):
         
         generator = OpenAISectionGenerator(batch_handler)
         
-        results = await generator.generate_landing_page(requests)
+        results = await generator.generate_landing_page(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
         
         end = time.time()
         processing_time = end - start
@@ -561,7 +576,7 @@ async def openai_block_select(requests: List[Completions]):
 
         # logger.debug("Starting generate_block_content_batch")
         final_results = []        
-        select_block_result = await blockselect_client.select_block_batch(contexts, block_lists)
+        select_block_result = await blockselect_client.select_block_batch(contexts, block_lists, max_tokens=MAX_TOKENS_SELECT_BLOCK)
         # logger.debug(f"Results from generate_block_content_batch: {results}")
         final_results.append(select_block_result)
         
@@ -603,7 +618,7 @@ async def openai_block_content_generate(requests: List[Completions]):
             # logger.info(f"Received request for section: {req.select_block}")
             logger.info(f"Received request for section: {req.tag_length}")
             
-            content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context)
+            content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=MAX_TOKENS_GENERATE_CONTENTS)
             print("process half")
             keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())))
             logger.info(f"Content generated successfully for section: {req.select_block}")
