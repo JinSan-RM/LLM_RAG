@@ -620,7 +620,7 @@ async def openai_block_content_generate(requests: List[Completions]):
             
             content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=MAX_TOKENS_GENERATE_CONTENTS)
             print("process half")
-            keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())))
+            keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
             logger.info(f"Content generated successfully for section: {req.select_block}")
             combined_result = {
                 "content": content_result,
