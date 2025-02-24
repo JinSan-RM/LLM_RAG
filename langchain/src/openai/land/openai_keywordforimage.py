@@ -304,6 +304,12 @@ class OpenAIKeywordClient:
         Section_context: {context}
         """
         result = await self.send_request(prompt)
+        
+        print("=========== KEYWORD_FOR_IMAGE ===========")
+        print(f"extracted_text_keyword_for_image : {result.data.generations[0][0].text}")
+        print(f"All_response_of_keyword_for_image : {result}")
+        print("======================================")        
+        
         if isinstance(result, str):  # 에러 메시지 처리
             print(f"[ERROR] Request returned error: {result}")
             return result

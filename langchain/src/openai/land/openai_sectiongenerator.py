@@ -72,7 +72,12 @@ class OpenAISectionStructureGenerator:
         """
 
         result = await self.send_request(prompt, max_tokens)
-             
+        
+        print("=========== SECTION_STRUCTURE_GENERATOR ===========")
+        print(f"extracted_text_section_structure_generator : {result.data.generations[0][0].text}")
+        print(f"All_response_of_section_structure_generator : {result}")
+        print("======================================")
+        
         if result.success:
             response = result
             print(f"Section structure response: {response}")
@@ -132,6 +137,10 @@ class OpenAISectionContentGenerator:
 
         result = await self.batch_handler.process_single_request(request, 0)
         
+        print("=========== SECTION_CONTENTS_GENERATOR ===========")
+        print(f"extracted_text_section_contents_generator : {result.data.generations[0][0].text}")
+        print(f"All_response_of_section_contents_generator : {result}")
+        print("======================================")
         
         if result.success:
             response = result
@@ -225,7 +234,7 @@ class OpenAISectionGenerator:
         
     def extract_json(self, text):
         # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
-        print("Herere!!!!! : ", text)
+        # print("Herere!!!!! : ", text)
         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
         if json_match:

@@ -466,16 +466,21 @@ async def openai_input_data_process(requests: List[Completions]):
             summary_result = None  # 초기값을 None으로 변경
             summary = None
             usr_msg = None
+            
+            print("+++++++++++ API/INPUT_DATA_PROCESS +++++++++++")
+            
             # usr_msg 처리
             if req.usr_msg:
+                print(f"usr_msg_input_data_process : {req.usr_msg}")
                 usr_msg_client = OpenAIUsrMsgClient(req.usr_msg, batch_handler)
-                usr_msg_result = await usr_msg_client.usr_msg_proposal(max_tokens=MAX_TOKENS_USR_MSG_PROPOSAL)
+                usr_msg_result = await usr_msg_client.usr_msg_proposal(max_tokens=MAX_TOKENS_USR_MSG_PROPOSAL) 
                 results.append({"type": "usr_msg_argument", "result": usr_msg_result})
 
             # PDF 요약 처리
             if req.pdf_data1:
                 try:
                     pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "")
+                    print(f"pdf_data1_input_data_process : {pdf_data}")
                     summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler)
                     summary_result = await summary_client.summarize_text(pdf_data, max_tokens=MAX_TOKENS_SUMMARIZE_TEXT)
                     results.append({"type": "pdf_summary", "result": summary_result})
@@ -483,7 +488,8 @@ async def openai_input_data_process(requests: List[Completions]):
                     print(f"Error in PDFHandle: {str(e)}")
                     results.append({"type": "pdf_summary", "error": str(e)})
                     continue
-
+                
+            print("++++++++++++++++++++++++++++++++++++++++++")
             try:
                 print("merge process start")
                 if usr_msg_result and summary_result:
@@ -538,6 +544,10 @@ async def openai_section_select(requests: List[Completions]):
         # logger.info(f"Received section generation request: {requests}")
         
         generator = OpenAISectionGenerator(batch_handler)
+        print("+++++++++++ API/SECTION_SELECT +++++++++++")
+        for req in requests:
+            print(f"all_usr_data_section_select : {req.all_usr_data}")
+        print("++++++++++++++++++++++++++++++++++++++++++")
         
         results = await generator.generate_landing_page(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
         
@@ -573,6 +583,11 @@ async def openai_block_select(requests: List[Completions]):
 
         contexts = [req.section_context for req in requests]
         # logger.debug(f"Extracted contexts: {contexts}")
+
+        print("+++++++++++ API/BLOCK_SELCECT +++++++++++")
+        print(f"block_lists_block_select : {block_lists}")
+        print(f"contexts_block_select : {contexts}")
+        print("++++++++++++++++++++++++++++++++++++++++++")
 
         # logger.debug("Starting generate_block_content_batch")
         final_results = []        
@@ -618,10 +633,15 @@ async def openai_block_content_generate(requests: List[Completions]):
             # logger.info(f"Received request for section: {req.select_block}")
             logger.info(f"Received request for section: {req.tag_length}")
             
+            print("+++++++++++ API/BLOCK_CONTENT_GENERATE +++++++++++")
+            print(f"block_lists_block_content_generate : {req.tag_length}")
+            print(f"contexts_block_content_generate : {req.section_context}")
+            print("++++++++++++++++++++++++++++++++++++++++++")            
+            
             content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=MAX_TOKENS_GENERATE_CONTENTS)
             print("process half")
             keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())))
-            logger.info(f"Content generated successfully for section: {req.select_block}")
+            # logger.info(f"Content generated successfully for section: {req.select_block}")
             combined_result = {
                 "content": content_result,
                 "keywords": keyword_result

@@ -78,6 +78,11 @@ class OpenAIBlockSelector:
         
         result = await self.send_request(prompt, max_tokens)
         
+        print("=========== BLOCK_RECOMMEND ===========")
+        print(f"extracted_text_block_recommend : {result.data.generations[0][0].text}")
+        print(f"All_response_of_block_recommend : {result}")
+        print("======================================")
+        
         # NOTE 250219 : 기존 형식 맞추기위해서 다시 dict 형식으로 전환
         # 추후에는 find_key_by_value()과 extract_emmet_tag의 동작 방식 전환
         block_list_dict = {block_list[0]:block_list[1]}

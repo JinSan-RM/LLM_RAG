@@ -52,7 +52,10 @@ class OpenAIDataMergeClient:
                     }, request_id=0),
                     timeout=120
                 )
-                print(f"\n merge response : {response}\n")
+                print("=========== USR_PDF_MERGE ===========")
+                print(f"extracted_text_usr_pdf_merge : {response.data.generations[0][0].text}")
+                print(f"All_response_of_usr_pdf_merge : {response}")
+                print("======================================")
 
                 # 응답 구조 확인 및 텍스트 추출
                 if isinstance(response.data, dict) and 'generations' in response.data:

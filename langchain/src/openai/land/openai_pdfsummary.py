@@ -408,7 +408,10 @@ class OpenAIPDFSummaryClient:
                 timeout=60
             )
 
-            print(f"response : {response}")
+            print("=========== PDF_SUMMARY ===========")
+            print(f"extracted_text_pdf_summary : {response.data.generations[0][0].text}")
+            print(f"All_response_of_pdf_summary : {response}")
+            print("======================================")
             # 응답 처리
             if response.success and response.data:
                 extracted_text = self.extract_text(response)

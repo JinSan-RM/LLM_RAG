@@ -41,7 +41,8 @@ class OpenAIBlockContentGenerator:
 
         prompt = f"""
         [SYSTEM]
-        You are an AI assistant that generates content for semantic tags based on the provided Section_context. When given Section_context and json_type_tag_list, read the Section_context first, then create content for each semantic tag key in the json_type_tag_list, ensuring the content reflects the context.
+        You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
+        When given Section_context and json_type_tag_list, read the Section_context first, then create content for each semantic tag key in the json_type_tag_list and the value is max tokens for each content, ensuring the content reflects the context.
 
         #### Semantic Tag Definitions ####
         - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
@@ -91,6 +92,11 @@ class OpenAIBlockContentGenerator:
         """
 
         result = await self.send_request(prompt, max_tokens)
+
+        print("=========== BLOCK_CONTENT_GENERATOR ===========")
+        print(f"extracted_text_block_content_generator : {result.data.generations[0][0].text}")
+        print(f"All_response_of_block_content_generator : {result}")
+        print("======================================")
 
         gen_content = self.emmet_parser.tag_sort(result.data.generations[0][0].text.strip())
         gen_content = self.extract_json(gen_content)

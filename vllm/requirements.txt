@@ -10,7 +10,7 @@ aiohttp>=3.8.1
 transformers>=4.30.0
 
 # Numpy (수치 연산에 필요)
-numpy>=1.21.0
+numpy<2.0.0
 
 # tqdm (진행률 표시 등 선택적)
 tqdm>=4.64.0
