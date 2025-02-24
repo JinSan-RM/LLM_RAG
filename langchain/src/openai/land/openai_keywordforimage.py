@@ -165,12 +165,12 @@ class OpenAIKeywordClient:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
 
-    async def send_request(self, prompt: str) -> 'RequestResult':
+    async def send_request(self, prompt: str, max_tokens: int = 100) -> 'RequestResult':
         try:
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                     "prompt": prompt,
-                    "max_tokens": 200,  # 키워드 3개에 적합한 짧은 출력
+                    "max_tokens": max_tokens,  # 키워드 3개에 적합한 짧은 출력
                     "temperature": 0.7,  # 자연스러운 생성
                     "top_p": 0.9,       # 다양성 확보
                     "n": 1,
@@ -280,7 +280,7 @@ class OpenAIKeywordClient:
         text = re.sub(r'<\|.*?\|>', '', text)
         return text.strip()
 
-    async def section_keyword_recommend(self, context: str) -> 'RequestResult':
+    async def section_keyword_recommend(self, context: str, max_tokens: int = 100) -> 'RequestResult':
         prompt = f"""
         [SYSTEM]
         You are a professional designer tasked with creating search terms to find images that fit each section of a website landing page. Based on the provided Section_context, generate specific and relevant search terms.
@@ -322,12 +322,12 @@ class OpenAIKeywordClient:
             print(f"[ERROR] Request failed: {result.error}")
             return result
 
-    async def section_keyword_create_logic(self, context: str) -> 'RequestResult':
+    async def section_keyword_create_logic(self, context: str, max_tokens: int = 100) -> 'RequestResult':
         try:
             repeat_count = 0
             while repeat_count < 3:
                 try:
-                    result = await self.section_keyword_recommend(context)
+                    result = await self.section_keyword_recommend(context, max_tokens)
                     if result.success:
                         return result
                     print(f"[WARN] Attempt {repeat_count + 1} failed: {result.error}")
