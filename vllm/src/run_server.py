@@ -9,7 +9,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def main():
     config = VLLMConfig()
     sampling_params=SamplingParams(
-            max_tokens=2000
+            max_tokens=2000,
+            
         )
     serve(
         model=config.model,
@@ -18,7 +19,7 @@ def main():
         max_num_seqs=config.max_num_seqs,
         max_batch_size=config.max_batch_size,
         max_num_batched_tokens=config.max_num_batched_tokens,
-        gpu_memory_utilization=config.gpu_memory_utilization,
+        gpu_memory_utilization=1.0,
         request_timeout=config.request_timeout,
         max_waiting_tokens=config.max_waiting_tokens,
         sampling_params=sampling_params
