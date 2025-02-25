@@ -13,27 +13,29 @@ class OpenAIDataMergeClient:
         max_retries = 3
         for attempt in range(max_retries):
             try:
+                # 언어 감지: usr_msg의 언어를 기준으로 설정
+                is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in self.usr_msg)
+                output_language = "Korean" if is_korean else "English"
+
                 prompt = f"""
-                [SYSTEM]
                 You are an expert in writing business plans. Write a single business plan by combining the user summary and PDF summary data provided below. Follow these instructions precisely:
 
                 #### INSTRUCTIONS ####
                 1. Prioritize the user summary over the PDF summary data when combining the information.
-                2. Detect the language of the user summary and PDF summary data, and write the output entirely in that language. For example, if the input is in Korean, the output must be in Korean; if in English, the output must be in English.
-                3. Ensure the business plan includes the following seven elements. If information is missing, use creativity to fill in the gaps based on the user summary and PDF summary data:
+                2. Detect the language of the user summary and write the output entirely in that language (e.g., if the user summary is in Korean, output in Korean; if in English, output in English). The output language must be {output_language}.
+                3. Ensure the business plan includes these seven elements. If information is missing, use creativity to fill gaps:
                     1) BUSINESS ITEM: Specific product or service details
                     2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
                     3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
                     4) CORE VALUE PROPOSITION: Unique value provided to customers
                     5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
-                    6) BUSINESS MODEL: Processes that generate profits by providing differentiated value to customers
+                    6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
                     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers
-                4. Output only the final business plan text, without any additional tags, headers, or metadata. Do not include <|eot_id|> or similar tokens in the output.
-                5. Write between 500 and 1000 characters to ensure rich and detailed content.
+                4. Output ONLY the final business plan text. Do not include any tags (e.g., [SYSTEM], [USER]), headers, metadata, JSON formatting (e.g., {{Output: ...}}), or tokens (e.g., <|eot_id|>).
+                5. Write between 500 and 1000 characters in {output_language}.
                 6. Blend the user summary and PDF summary data evenly in the narrative.
-                7. Do not include any system prompts, tags like [SYSTEM], or JSON formatting in the output.
+                7. Ignore any structural data (e.g., generations=...) in the PDF summary and extract only meaningful content.
 
-                [USER]
                 user summary = {self.usr_msg}
                 pdf summary data = {self.pdf_data}
                 """
@@ -42,7 +44,7 @@ class OpenAIDataMergeClient:
                     self.batch_handler.process_single_request({
                         "prompt": prompt,
                         "max_tokens": max_tokens,
-                        "temperature": 0.7,
+                        "temperature": 0.3,
                         "top_p": 0.9,
                         "repetition_penalty": 1.2,
                         "frequency_penalty": 1.0,
@@ -52,9 +54,8 @@ class OpenAIDataMergeClient:
                     }, request_id=0),
                     timeout=120
                 )
-                print(f"\n merge response : {response}\n")
 
-                # 응답 구조 확인 및 텍스트 추출
+                # 응답에서 텍스트 추출
                 if isinstance(response.data, dict) and 'generations' in response.data:
                     generated_text = response.data['generations'][0]['text']
                 elif hasattr(response.data, 'generations'):
@@ -62,67 +63,51 @@ class OpenAIDataMergeClient:
                 else:
                     raise ValueError("Unexpected response structure")
 
-                generated_text = self.clean_text(generated_text)
-                print(f"response_merge_result: {generated_text}")
+                # 텍스트 정리
+                cleaned_text = self.clean_text(generated_text)
 
-                if len(generated_text) <= 50:
-                    print(f"Generated text is too short (attempt {attempt + 1}). Retrying...")
+                # 길이 확인
+                if len(cleaned_text) < 50:
+                    print(f"Generated text too short (attempt {attempt + 1}). Retrying...")
                     if attempt == max_retries - 1:
-                        return "텍스트 생성 실패: 생성된 텍스트가 너무 짧습니다."
+                        return "텍스트 생성 실패: 생성된 텍스트가 너무 짧습니다." if is_korean else "Text generation failed: Generated text too short."
                     continue
-                response.data.generations[0][0].text = generated_text
-                return response
+
+                return cleaned_text
 
             except asyncio.TimeoutError:
-                print(f"Contents merge request timed out (attempt {attempt + 1})")
+                print(f"Contents merge timed out (attempt {attempt + 1})")
                 if attempt == max_retries - 1:
-                    return "텍스트 생성 실패: 시간 초과"
+                    return "텍스트 생성 실패: 시간 초과" if is_korean else "Text generation failed: Timeout"
             except Exception as e:
                 print(f"Error in contents_merge (attempt {attempt + 1}): {e}")
                 if attempt == max_retries - 1:
-                    return f"텍스트 생성 실패: {str(e)}"
+                    return f"텍스트 생성 실패: {str(e)}" if is_korean else f"Text generation failed: {str(e)}"
 
-        return "텍스트 생성 실패: 최대 재시도 횟수 초과"
-
-    # def extract_text(self, result):
-    #     """BatchRequestHandler의 결과에서 텍스트를 추출합니다."""
-    #     logger.debug(f"result final: {result}")
-    #     if result.success and result.data:
-    #         if isinstance(result.data, dict) and "choices" in result.data:
-    #             text = result.data["choices"][0]["message"]["content"]
-    #         elif hasattr(result.data, "generations"):
-    #             text = result.data.generations[0][0].text
-    #         else:
-    #             text = str(result.data)
-    #         cleaned_text = self.clean_text(text)
-    #         logger.debug(f"cleaned_text: {cleaned_text}")
-    #         return cleaned_text
-    #     return "텍스트 생성 실패"
-
+        return "텍스트 생성 실패: 최대 재시도 횟수 초과" if is_korean else "Text generation failed: Max retries exceeded"
+    
     def clean_text(self, text):
-        headers_to_remove = [
-                "<|start_header_id|>system<|end_header_id|>",
-                "<|start_header_id|>SYSTEM<|end_header_id|>",
-                "<|start_header_id|>", "<|end_header_id|>",
-                "<|start_header_id|>user<|end_header_id|>",
-                "<|start_header_id|>assistant<|end_header_id|>",
-                "<|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>",
-                "<|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>",
-                "<|eot_id|><|start_header_id|>USER<|end_header_id|>",
-                "<|eot_id|>",
-                "<|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>",
-                "ASSISTANT",
-                "USER",
-                "SYSTEM",
-                "<|end_header_id|>",
-                "<|start_header_id|>"
-                "ASSISTANT_EXAMPLE",
-                "USER_EXAMPLE",
-                "[END]",
-                "[OUTPUT]"
-            ]
+        # 제거할 패턴 (태그, 메타데이터만 제거, 내용은 유지)
+        patterns = [
+            r'\[(SYSTEM|USER|END|OUTPUT)\]',  # [SYSTEM], [USER] 등
+            r'<\|start_header_id\|>.*?<\|end_header_id\|>',  # <|start_header_id|>... <|end_header_id|>
+            r'<\|eot_id\|>',  # <|eot_id|>
+            r'\{Output\s*:\s*"(.*?)"\}',  # {Output: "..."} -> "..."만 남김
+            r'generations=\[\[.*?(text=)?["\']?(.*?)(["\']|\}\]).*?\]\]',  # generations=... -> 내용만 추출
+            r'pdf\s*text\s*=\s*".*?"',  # pdf text="..."
+            r'user\s*summary\s*=\s*',  # user summary =
+            r'pdf\s*summary\s*data\s*=\s*',  # pdf summary data =
+            r'\b(ASSISTANT(_EXAMPLE)?|USER(_EXAMPLE)?|SYSTEM)\b',  # ASSISTANT, USER 등
+            r'\n\s*\n',  # 불필요한 줄바꿈
+        ]
+        
         cleaned_text = text
-        for header in headers_to_remove:
-            cleaned_text = cleaned_text.replace(header, '')
-        cleaned_text = re.sub(r'<\|.*?\|>', '', cleaned_text)
+        for pattern in patterns:
+            if pattern == r'\{Output\s*:\s*"(.*?)"\}' or pattern == r'generations=\[\[.*?(text=)?["\']?(.*?)(["\']|\}\]).*?\]\]':
+                # 캡처된 내용을 유지
+                cleaned_text = re.sub(pattern, r'\2' if 'generations' in pattern else r'\1', cleaned_text, flags=re.DOTALL)
+            else:
+                # 태그만 제거
+                cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.DOTALL)
+        
         return cleaned_text.strip()
