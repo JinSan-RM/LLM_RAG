@@ -229,6 +229,22 @@ class OpenAISectionGenerator:
             except Exception as e:
                 print(f"Error in generate_section (attempt {attempt + 1}): {str(e)}")
 
+            valid_dict = section_contents.data.generations[0][0].text
+            
+            valid_dict_keys_list = list(valid_dict.keys())
+            valid_dict_values_list = list(valid_dict.values())
+    
+            if any(["section_1" in valid_dict_keys_list,
+                None in valid_dict_values_list, 
+                "Content that Follow the INSTRUCTIONS" in valid_dict_values_list,
+                "" in valid_dict_values_list
+                ]):
+                cnt += 1
+                print(f"===== Retry create_section_contents...count {cnt}=====")
+                print(f"===== Because The content is not fited : {valid_dict}")
+                
+            else:
+                break
         
         return {
             "section_structure": section_structure_LLM_result,
