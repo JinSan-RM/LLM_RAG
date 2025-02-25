@@ -1,13 +1,14 @@
 ARG CUDA_VERSION=12.6.0
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.10
 # GPU 사용을 위한 CUDA 베이스 이미지 선택 (CUDA 버전은 필요에 따라 조정)
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 AS base
+
 
 # 필수 시스템 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
-    python3.11-dev \
+    # python3.11-dev \
     python3-pip \
     git \
     ca-certificates \

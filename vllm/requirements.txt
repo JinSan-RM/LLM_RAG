@@ -10,7 +10,7 @@ aiohttp>=3.9.5
 # Hugging Face Transformers
 transformers>=4.45.0
 
-# Numpy
+# Numpy (수치 연산에 필요)
 numpy<2.0.0
 
 # tqdm

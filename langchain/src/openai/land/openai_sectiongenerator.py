@@ -72,7 +72,12 @@ class OpenAISectionStructureGenerator:
         """
 
         result = await self.send_request(prompt, max_tokens)
-             
+        
+        print("=========== SECTION_STRUCTURE_GENERATOR ===========")
+        print(f"extracted_text_section_structure_generator : {result.data.generations[0][0].text}")
+        print(f"All_response_of_section_structure_generator : {result}")
+        print("======================================")
+        
         if result.success:
             response = result
             print(f"Section structure response: {response}")
@@ -95,9 +100,10 @@ class OpenAISectionContentGenerator:
         #### INSTRUCTIONS ####
         1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
         2. FOR EACH SECTION, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
-        3. PLEASE WRITE WITHOUT TYPOS.
-        4. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
-        5. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
+        3. WRITE DIFFERENT CONTENT FOR EACH SECTION.
+        4. WRITE WITHOUT TYPOS.
+        5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
+        6. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
         [/System]
 
         [User_Example]
@@ -132,6 +138,10 @@ class OpenAISectionContentGenerator:
 
         result = await self.batch_handler.process_single_request(request, 0)
         
+        print("=========== SECTION_CONTENTS_GENERATOR ===========")
+        print(f"extracted_text_section_contents_generator : {result.data.generations[0][0].text}")
+        print(f"All_response_of_section_contents_generator : {result}")
+        print("======================================")
         
         if result.success:
             response = result
@@ -197,7 +207,11 @@ class OpenAISectionGenerator:
 
                     
             section_structure_LLM_result.data.generations[0][0].text = updated_structure
+            
+            valid_dict = section_structure_LLM_result.data.generations[0][0].text
             if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict):
+                print(f"===== Retry create_section_structure...count {cnt}=====")
+                print(f"===== Because The condition is not fited : {valid_dict}")
                 cnt += 1
             else:
                 break
@@ -213,8 +227,26 @@ class OpenAISectionGenerator:
                 )
             contents = section_contents.data.generations[0][0].text.strip()
             section_contents.data.generations[0][0].text = self.extract_json(contents)
+            
+            
             if not isinstance(section_contents.data.generations[0][0].text, dict):
                 cnt += 1
+                print(f"===== Retry create_section_contents...count {cnt}=====")
+                print(f"===== Because The Structure is not fited : {valid_dict} =====")
+                continue
+
+            valid_dict = section_contents.data.generations[0][0].text
+            
+            valid_dict_keys_list = list(valid_dict.keys())
+            valid_dict_values_list = list(valid_dict.values())
+    
+            if any(["section_1" in valid_dict_keys_list,
+                None in valid_dict_values_list or "Content that Follow the INSTRUCTIONS" in valid_dict_values_list
+                ]):
+                cnt += 1
+                print(f"===== Retry create_section_contents...count {cnt}=====")
+                print(f"===== Because The content is not fited : {valid_dict}")
+                
             else:
                 break
         
@@ -225,7 +257,7 @@ class OpenAISectionGenerator:
         
     def extract_json(self, text):
         # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
-        print("Herere!!!!! : ", text)
+        # print("Herere!!!!! : ", text)
         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
         if json_match:
