@@ -42,7 +42,7 @@ class BatchRequestHandler:
             RequestResult: 처리 결과
         """
         try:
-            logger.debug(f"Processing request {request_id}: {request}")
+            # logger.debug(f"Processing request {request_id}: {request}")
             max_tokens = request.get("max_tokens", "default")  # 디버깅용으로 max_tokens 확인
             logger.debug(f"Request {request_id} using max_tokens: {max_tokens}")
 

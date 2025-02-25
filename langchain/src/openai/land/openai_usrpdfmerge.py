@@ -9,20 +9,21 @@ class OpenAIDataMergeClient:
         self.pdf_data = pdf_data
         self.batch_handler = batch_handler
 
-    async def contents_merge(self, max_tokens: int = 1500) -> str:
+    async def contents_merge(self, max_tokens: int = 1500) -> dict:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                # 언어 감지: usr_msg의 언어를 기준으로 설정
+                # 사용자 입력 언어 확인 (한글 여부 판단)
                 is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in self.usr_msg)
                 output_language = "Korean" if is_korean else "English"
 
+                # 프롬프트 생성
                 prompt = f"""
                 You are an expert in writing business plans. Write a single business plan by combining the user summary and PDF summary data provided below. Follow these instructions precisely:
 
                 #### INSTRUCTIONS ####
                 1. Prioritize the user summary over the PDF summary data when combining the information.
-                2. Detect the language of the user summary and write the output entirely in that language (e.g., if the user summary is in Korean, output in Korean; if in English, output in English). The output language must be {output_language}.
+                2. Detect the language of the user summary and write the output entirely in that language. The output language must be {output_language}.
                 3. Ensure the business plan includes these seven elements. If information is missing, use creativity to fill gaps:
                     1) BUSINESS ITEM: Specific product or service details
                     2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
@@ -31,15 +32,15 @@ class OpenAIDataMergeClient:
                     5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
                     6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
                     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers
-                4. Output ONLY the final business plan text. Do not include any tags (e.g., [SYSTEM], [USER]), headers, metadata, JSON formatting (e.g., {{Output: ...}}), or tokens (e.g., <|eot_id|>).
-                5. Write between 500 and 1000 characters in {output_language}.
-                6. Blend the user summary and PDF summary data evenly in the narrative.
-                7. Ignore any structural data (e.g., generations=...) in the PDF summary and extract only meaningful content.
-
+                4. Output the final business plan text as a plain, continuous string without any JSON structure, tags, labels, or metadata.
+                5. Integrate both the user summary and PDF summary data into a single, cohesive text without separating them or using labels like "Output:" or "pdf text =".
+                6. Write between 500 and 1000 characters in {output_language} for the output.
+                7. Blend the user summary and PDF summary data evenly in the narrative, ensuring a smooth and logical flow of information.
                 user summary = {self.usr_msg}
                 pdf summary data = {self.pdf_data}
                 """
 
+                # API 호출 및 응답 처리
                 response = await asyncio.wait_for(
                     self.batch_handler.process_single_request({
                         "prompt": prompt,
@@ -55,7 +56,7 @@ class OpenAIDataMergeClient:
                     timeout=120
                 )
 
-                # 응답에서 텍스트 추출
+                # 응답에서 생성된 텍스트 추출
                 if isinstance(response.data, dict) and 'generations' in response.data:
                     generated_text = response.data['generations'][0]['text']
                 elif hasattr(response.data, 'generations'):
@@ -63,51 +64,76 @@ class OpenAIDataMergeClient:
                 else:
                     raise ValueError("Unexpected response structure")
 
-                # 텍스트 정리
+                # 텍스트 정리 (구조 및 태그 제거)
                 cleaned_text = self.clean_text(generated_text)
 
-                # 길이 확인
+                # 텍스트 길이 확인 및 재시도 처리
                 if len(cleaned_text) < 50:
                     print(f"Generated text too short (attempt {attempt + 1}). Retrying...")
                     if attempt == max_retries - 1:
-                        return "텍스트 생성 실패: 생성된 텍스트가 너무 짧습니다." if is_korean else "Text generation failed: Generated text too short."
+                        return {"error": "텍스트 생성 실패: 생성된 텍스트가 너무 짧습니다."} if is_korean else {"error": "Text generation failed: Generated text too short."}
                     continue
-
-                return cleaned_text
+                response.data.generations[0][0].text = cleaned_text
+                return response
 
             except asyncio.TimeoutError:
                 print(f"Contents merge timed out (attempt {attempt + 1})")
                 if attempt == max_retries - 1:
-                    return "텍스트 생성 실패: 시간 초과" if is_korean else "Text generation failed: Timeout"
+                    return {"error": "텍스트 생성 실패: 시간 초과"} if is_korean else {"error": "Text generation failed: Timeout"}
             except Exception as e:
                 print(f"Error in contents_merge (attempt {attempt + 1}): {e}")
                 if attempt == max_retries - 1:
-                    return f"텍스트 생성 실패: {str(e)}" if is_korean else f"Text generation failed: {str(e)}"
+                    return {"error": f"텍스트 생성 실패: {str(e)}"} if is_korean else {"error": f"Text generation failed: {str(e)}"}
 
-        return "텍스트 생성 실패: 최대 재시도 횟수 초과" if is_korean else "Text generation failed: Max retries exceeded"
+        return {"error": "텍스트 생성 실패: 최대 재시도 횟수 초과"} if is_korean else {"error": "Text generation failed: Max retries exceeded"}
     
     def clean_text(self, text):
-        # 제거할 패턴 (태그, 메타데이터만 제거, 내용은 유지)
+        text = re.sub(r'\\"', '', text)
+    
+        # 2. 중복된 큰따옴표 ("") 제거
+        text = re.sub(r'""', '', text)
         patterns = [
-            r'\[(SYSTEM|USER|END|OUTPUT)\]',  # [SYSTEM], [USER] 등
-            r'<\|start_header_id\|>.*?<\|end_header_id\|>',  # <|start_header_id|>... <|end_header_id|>
-            r'<\|eot_id\|>',  # <|eot_id|>
-            r'\{Output\s*:\s*"(.*?)"\}',  # {Output: "..."} -> "..."만 남김
-            r'generations=\[\[.*?(text=)?["\']?(.*?)(["\']|\}\]).*?\]\]',  # generations=... -> 내용만 추출
-            r'pdf\s*text\s*=\s*".*?"',  # pdf text="..."
-            r'user\s*summary\s*=\s*',  # user summary =
-            r'pdf\s*summary\s*data\s*=\s*',  # pdf summary data =
-            r'\b(ASSISTANT(_EXAMPLE)?|USER(_EXAMPLE)?|SYSTEM)\b',  # ASSISTANT, USER 등
-            r'\n\s*\n',  # 불필요한 줄바꿈
+            r'\[(SYSTEM|USER|END|OUTPUT)\]',
+            r'<\|start_header_id\|>.*?<\|end_header_id\|>',
+            r'<\|eot_id\|>',
+            r'\{Output\s*:\s*.*?\}',  # 수정된 패턴
+            r'\{output\s*:\s*.*?\}',  # 수정된 패턴
+            r'\{[^}]*\}',  # 모든 중괄호 내용 제거
+            r'pdf\s*text\s*=\s*',
+            r'user\s*summary\s*=\s*',
+            r'pdf\s*summary\s*data\s*=\s*',
+            r'\b(ASSISTANT(_EXAMPLE)?|USER(_EXAMPLE)?|SYSTEM)\b',
+            r'\n\s*\n',
+            r'\*=\*',
+            r'\*:\*'
+            ":",
+            "{",
+            "}",
+            "\\n",
+            '\\"',
         ]
         
-        cleaned_text = text
         for pattern in patterns:
-            if pattern == r'\{Output\s*:\s*"(.*?)"\}' or pattern == r'generations=\[\[.*?(text=)?["\']?(.*?)(["\']|\}\]).*?\]\]':
-                # 캡처된 내용을 유지
-                cleaned_text = re.sub(pattern, r'\2' if 'generations' in pattern else r'\1', cleaned_text, flags=re.DOTALL)
-            else:
-                # 태그만 제거
-                cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.DOTALL)
+            text = re.sub(pattern, '', text, flags=re.DOTALL | re.IGNORECASE)
         
-        return cleaned_text.strip()
+        # 모든 따옴표 제거 (작은따옴표, 큰따옴표)
+        text = re.sub(r'[\'"]', '', text)
+        
+        # 모든 대괄호와 그 내용 제거
+        text = re.sub(r'\[.*?\]', '', text)
+        
+        # 모든 꺾쇠괄호와 그 내용 제거
+        text = re.sub(r'<.*?>', '', text)
+        
+        # 특정 키워드와 그 뒤의 콜론 제거
+        text = re.sub(r'\b(Output|output|pdf text|user summary|pdf summary data)\s*:', '', text)
+        
+        # 불필요한 공백 제거
+        text = re.sub(r'\s+', ' ', text)
+        
+        # 줄바꿈 문자를 실제 줄바꿈으로 변경
+        text = text.replace('\\n', '\n')
+        
+        return text.strip()
+
+

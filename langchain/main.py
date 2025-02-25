@@ -500,8 +500,6 @@ async def openai_input_data_process(requests: List[Completions]):
                         summary = str(summary_result.data)
                     merge_client = OpenAIDataMergeClient(usr_msg, summary, batch_handler)
                     merge_result = await merge_client.contents_merge(max_tokens=MAX_TOKENS_CONTENTS_MERGE)
-                    print("response merge data: ", type(merge_result), merge_result)
-                    print("==========333333333===========")
                         
                     results.append({"type": "final_result", "result": merge_result})
                 
@@ -522,7 +520,6 @@ async def openai_input_data_process(requests: List[Completions]):
             "failed_requests": sum(1 for r in results if "error" in r),
             "results": results
         }
-        print(f"response : {response}")
         return response
 
     except Exception as e:
@@ -616,12 +613,9 @@ async def openai_block_content_generate(requests: List[Completions]):
         results = []
         for req in requests:
             # logger.info(f"Received request for section: {req.select_block}")
-            logger.info(f"Received request for section: {req.tag_length}")
             
             content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=MAX_TOKENS_GENERATE_CONTENTS)
-            print("process half")
             keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
-            logger.info(f"Content generated successfully for section: {req.select_block}")
             combined_result = {
                 "content": content_result,
                 "keywords": keyword_result

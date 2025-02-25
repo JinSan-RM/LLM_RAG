@@ -457,7 +457,13 @@ class OpenAIPDFSummaryClient:
                 "<|end_header_id|>",
                 "<|start_header_id|>"
                 "ASSISTANT_EXAMPLE",
-                "USER_EXAMPLE"
+                "USER_EXAMPLE",
+                "Output",
+                "output",
+                "=",
+                "{",
+                "}",
+                ":"
             ]
             cleaned_text = text
             for header in headers_to_remove:
