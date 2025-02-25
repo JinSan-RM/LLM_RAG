@@ -103,28 +103,13 @@ class OpenAISectionContentGenerator:
         3. WRITE DIFFERENT CONTENT FOR EACH SECTION.
         4. WRITE WITHOUT TYPOS.
         5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
-        6. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
+        6. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT STRUCTURE OF THE GIVEN SECTION LIST.
+        7. DO NOT USE ANY PLACEHOLDER TEXT OR EXAMPLE CONTENT IN YOUR OUTPUT.
         [/System]
-
-        [User_Example]
-        final summary = "all_usr_data"
-        section list = "section structure"
-        [/User_Example]
-
-        [Assistant_Example]
-        section_content : {{
-        "Hero": "Content that Follow the INSTRUCTIONS",
-        "section style": "Content that Follow the INSTRUCTIONS",
-        "section style": "Content that Follow the INSTRUCTIONS",
-        "section style": "Content that Follow the INSTRUCTIONS",
-        "section style": "Content that Follow the INSTRUCTIONS",
-        "section style": "Content that Follow the INSTRUCTIONS"
-            }}
-        [/Assistant_Example]
 
         [User]
         final summary = {all_usr_data}
-        section list = {structure}
+        section list = {json.dumps(structure)}
         [/User]
         """
 
@@ -137,11 +122,6 @@ class OpenAISectionContentGenerator:
         }
 
         result = await self.batch_handler.process_single_request(request, 0)
-        
-        print("=========== SECTION_CONTENTS_GENERATOR ===========")
-        print(f"extracted_text_section_contents_generator : {result.data.generations[0][0].text}")
-        print(f"All_response_of_section_contents_generator : {result}")
-        print("======================================")
         
         if result.success:
             response = result
@@ -219,36 +199,36 @@ class OpenAISectionGenerator:
         # section_structure_LLM_result.data.generations[0][0].text = asdf
         cnt = 0
         while cnt < 3:
-            
-            section_contents = await self.content_generator.create_section_contents(
-                combined_data,
-                section_structure_LLM_result.data.generations[0][0].text,
-                max_tokens=1800
-                )
-            contents = section_contents.data.generations[0][0].text.strip()
-            section_contents.data.generations[0][0].text = self.extract_json(contents)
-            
-            
-            if not isinstance(section_contents.data.generations[0][0].text, dict):
-                cnt += 1
-                print(f"===== Retry create_section_contents...count {cnt}=====")
-                print(f"===== Because The Structure is not fited : {valid_dict} =====")
-                continue
+            try:
+                section_structure = await self.structure_generator.create_section_structure(combined_data, max_tokens)
+                structure_dict = self.extract_json(section_structure.data.generations[0][0].text.strip())
 
-            valid_dict = section_contents.data.generations[0][0].text
-            
-            valid_dict_keys_list = list(valid_dict.keys())
-            valid_dict_values_list = list(valid_dict.values())
-    
-            if any(["section_1" in valid_dict_keys_list,
-                None in valid_dict_values_list or "Content that Follow the INSTRUCTIONS" in valid_dict_values_list
-                ]):
-                cnt += 1
-                print(f"===== Retry create_section_contents...count {cnt}=====")
-                print(f"===== Because The content is not fited : {valid_dict}")
-                
-            else:
-                break
+                if not isinstance(structure_dict, dict):
+                    print(f"Invalid structure format (attempt {attempt + 1})")
+                    continue
+
+                section_contents = await self.content_generator.create_section_contents(
+                    combined_data,
+                    structure_dict,
+                    max_tokens=1800
+                )
+                contents_dict = self.extract_json(section_contents.data.generations[0][0].text.strip())
+
+                if not isinstance(contents_dict, dict):
+                    print(f"Invalid content format (attempt {attempt + 1})")
+                    continue
+
+                if self.validate_content(contents_dict, structure_dict):
+                    return {
+                        "section_structure": section_structure,
+                        "section_contents": section_contents
+                    }
+                else:
+                    print(f"Content validation failed (attempt {attempt + 1})")
+
+            except Exception as e:
+                print(f"Error in generate_section (attempt {attempt + 1}): {str(e)}")
+
         
         return {
             "section_structure": section_structure_LLM_result,
@@ -284,3 +264,10 @@ class OpenAISectionGenerator:
                 return json.loads(json_str.replace("'", '"'))
             except json.JSONDecodeError:
                 return None
+            
+    def validate_content(self, contents, structure):
+        if set(contents.keys()) != set(structure.values()):
+            return False
+        if any(value is None or "Content that Follow the INSTRUCTIONS" in str(value) for value in contents.values()):
+            return False
+        return True
