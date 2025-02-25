@@ -206,7 +206,11 @@ class OpenAISectionGenerator:
 
                     
             section_structure_LLM_result.data.generations[0][0].text = updated_structure
+            
+            valid_dict = section_structure_LLM_result.data.generations[0][0].text
             if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict):
+                print(f"===== Retry create_section_structure...count {cnt}=====")
+                print(f"===== Because The condition is not fited : {valid_dict}")
                 cnt += 1
             else:
                 break
@@ -222,8 +226,26 @@ class OpenAISectionGenerator:
                 )
             contents = section_contents.data.generations[0][0].text.strip()
             section_contents.data.generations[0][0].text = self.extract_json(contents)
+            
+            
             if not isinstance(section_contents.data.generations[0][0].text, dict):
                 cnt += 1
+                print(f"===== Retry create_section_contents...count {cnt}=====")
+                print(f"===== Because The Structure is not fited : {valid_dict} =====")
+                continue
+
+            valid_dict = section_contents.data.generations[0][0].text
+            
+            valid_dict_keys_list = list(valid_dict.keys())
+            valid_dict_values_list = list(valid_dict.values())
+    
+            if any(["section_1" in valid_dict_keys_list,
+                None in valid_dict_values_list or "Content that Follow the INSTRUCTIONS" in valid_dict_values_list
+                ]):
+                cnt += 1
+                print(f"===== Retry create_section_contents...count {cnt}=====")
+                print(f"===== Because The content is not fited : {valid_dict}")
+                
             else:
                 break
         
