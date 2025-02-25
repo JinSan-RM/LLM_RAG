@@ -407,8 +407,6 @@ class OpenAIPDFSummaryClient:
                 }, request_id=0),
                 timeout=60
             )
-
-            print(f"response : {response}")
             # 응답 처리
             if response.success and response.data:
                 extracted_text = self.extract_text(response)

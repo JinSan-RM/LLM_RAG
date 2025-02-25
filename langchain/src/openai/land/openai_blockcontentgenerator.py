@@ -15,7 +15,7 @@ class OpenAIBlockContentGenerator:
             self.batch_handler.process_single_request({
                 "prompt": prompt,
                 "max_tokens": max_tokens,
-                "temperature": 0.6,
+                "temperature": 0.3,
                 "top_p": 0.4,
                 "n": 1,
                 "stream": False,
@@ -69,9 +69,9 @@ class OpenAIBlockContentGenerator:
         Section_context = "재밋은 AI 솔루션을 기반으로 사용자들에게 간단하고 편리하게 웹 사이트를 만들 수 있도록 도와주는 선도 서비스입니다. 기업 '위븐'은 AI 솔루션을 통해 일반인들도 쉽게 접근할 수 있으며, 전문가가 사용해도 무방한 에디터와 스튜디오 서비스를 보유하고 있어서 다방면에 능한 서비스를 갖고 있는 기업입니다."
         json_type_tag_list = 
         {{
-            "h1_0": "15",
-            "h2_0": "15",
-            "p_0": "30",
+            "h1_0": "17",
+            "h2_0": "19",
+            "p_0": "31",
             "li_0": [
                 {{"h2_0": "15", "p_0": "40"}},
                 {{"h2_1": "15", "p_0": "40"}}

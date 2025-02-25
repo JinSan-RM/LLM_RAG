@@ -111,6 +111,13 @@ class OpenAIDataMergeClient:
             "}",
             "\\n",
             '\\"',
+            "<|start_header_id|>system<|end_header_id|>",
+            "<|start_header_id|>SYSTEM<|end_header_id|>",
+            "<|start_header_id|>", "<|end_header_id|>",
+            "<|start_header_id|>user<|end_header_id|>",
+            "<|start_header_id|>assistant<|end_header_id|>",
+            "<|eot_id|>", "[SYSTEM]", "[USER]", "ASSISTANT",
+            "Output"
         ]
         
         for pattern in patterns:
