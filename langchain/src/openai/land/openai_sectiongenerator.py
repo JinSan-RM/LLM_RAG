@@ -241,7 +241,9 @@ class OpenAISectionGenerator:
             valid_dict_values_list = list(valid_dict.values())
     
             if any(["section_1" in valid_dict_keys_list,
-                None in valid_dict_values_list or "Content that Follow the INSTRUCTIONS" in valid_dict_values_list
+                None in valid_dict_values_list, 
+                "Content that Follow the INSTRUCTIONS" in valid_dict_values_list,
+                "" in valid_dict_values_list
                 ]):
                 cnt += 1
                 print(f"===== Retry create_section_contents...count {cnt}=====")
