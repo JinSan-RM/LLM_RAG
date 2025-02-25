@@ -15,3 +15,5 @@ PyMuPDF
 tiktoken
 langchain_ollama
 langgraph
+langchain_openai
+openai

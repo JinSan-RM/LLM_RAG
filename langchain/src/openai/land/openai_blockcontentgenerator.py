@@ -93,11 +93,6 @@ class OpenAIBlockContentGenerator:
 
         result = await self.send_request(prompt, max_tokens)
 
-        print("=========== BLOCK_CONTENT_GENERATOR ===========")
-        print(f"extracted_text_block_content_generator : {result.data.generations[0][0].text}")
-        print(f"All_response_of_block_content_generator : {result}")
-        print("======================================")
-
         gen_content = self.emmet_parser.tag_sort(result.data.generations[0][0].text.strip())
         gen_content = self.extract_json(gen_content)
         result.data.generations[0][0].text = gen_content

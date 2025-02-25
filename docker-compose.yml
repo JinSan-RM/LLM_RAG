@@ -160,8 +160,7 @@ services:
         context: ./vllm
         dockerfile: Dockerfile
       environment:
-        - VLLM_GPU_MEMORY_UTILIZATION=0.8
-        - VLLM_MAX_SEQ_LEN=2048
+        - VLLM_GPU_MEMORY_UTILIZATION=1.0
         - CUDA_VISIBLE_DEVICES=0
         - VLLM_NO_FALLBACK=True
       restart: always
@@ -172,7 +171,7 @@ services:
         - ./vllm:/app/models  # 경로 일치
       networks:
         - service_network
-      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 0.8 --max-model-len 2048
+      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
       healthcheck:
         test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
         interval: 30s
