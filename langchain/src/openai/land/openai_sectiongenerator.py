@@ -73,10 +73,7 @@ class OpenAISectionStructureGenerator:
 
         result = await self.send_request(prompt, max_tokens)
         
-        print("=========== SECTION_STRUCTURE_GENERATOR ===========")
-        print(f"extracted_text_section_structure_generator : {result.data.generations[0][0].text}")
-        print(f"All_response_of_section_structure_generator : {result}")
-        print("======================================")
+
         
         if result.success:
             response = result
@@ -89,47 +86,100 @@ class OpenAISectionStructureGenerator:
 class OpenAISectionContentGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
-
-    async def create_section_contents(self, all_usr_data: str, structure: dict, max_tokens: int = 1800):        
         
-        prompt = f"""
-        [System]
-        You are a professional planner who organizes the content of your website landing page.
-        Write in the section content by summarizing and distributing the user's final summary data.
+    async def generate_section_contents_individually(
+        self,
+        create_section: dict,
+        all_usr_data: str,
+        max_tokens: int = 200
+    ):
+        results = {}  # 리스트 대신 딕셔너리로 초기화
+        for section_key, section_name in create_section.items():
+            print(f"section_name: {section_name}")
+            prompt = f"""
+            [System]
+            You are a professional content generator for website landing pages. Your task is to generate concise, unique content based on user data.
 
-        #### INSTRUCTIONS ####
-        1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
-        2. FOR EACH SECTION, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
-        3. WRITE DIFFERENT CONTENT FOR EACH SECTION.
-        4. WRITE WITHOUT TYPOS.
-        5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
-        6. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT STRUCTURE OF THE GIVEN SECTION LIST.
-        7. DO NOT USE ANY PLACEHOLDER TEXT OR EXAMPLE CONTENT IN YOUR OUTPUT.
-        [/System]
+            #### INSTRUCTIONS ####
+            1. Write plain text content (150-200 characters) for the '{section_name}' section.
+            2. Use only relevant parts of the user's data: {all_usr_data}.
+            3. Avoid repeating content from other sections.
+            4. Do NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
 
-        [User]
-        final summary = {all_usr_data}
-        section list = {json.dumps(structure)}
-        [/User]
-        """
-
-        request = {
-            "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": 0.7,
-            "top_p": 0.3
-        }
-
-        result = await self.batch_handler.process_single_request(request, 0)
+            [User]
+            Section: {section_name}
+            [/User]
+            """
+            request = {
+                "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+            response = await self.batch_handler.process_single_request(request, request_id=0)
+            if response.success:
+                generated_content = response.data.generations[0][0].text.strip()
+                import re
+                clean_content = re.sub(r'\[.*?\]|\#\#\#|\*\*.*?\*\*', '', generated_content).strip()
+                clean_content = clean_content[:200] if len(clean_content) > 200 else clean_content
+                results[section_name] = clean_content  # append 대신 딕셔너리에 추가
+        return results
+    # async def create_section_contents(self, all_usr_data: str, structure: dict, max_tokens: int = 1800):        
         
-        if result.success:
-            response = result
-            print(f"Section content response: {response}")
-            return response
-        else:
-            print(f"Section content generation error: {result.error}")
-            return ""
+    #     prompt = f"""
+    #     [System]
+    #     You are a professional planner who organizes the content of your website landing page.
+    #     Write in the section content by summarizing and distributing the user's final summary data.
+
+    #     #### INSTRUCTIONS ####
+    #     1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
+    #     2. FOR EACH SECTION, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
+    #     3. WRITE DIFFERENT CONTENT FOR EACH SECTION.
+    #     4. WRITE WITHOUT TYPOS.
+    #     5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
+    #     6. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
+    #     [/System]
+
+    #     [User_Example]
+    #     final summary = "all_usr_data"
+    #     section list = "section structure"
+    #     [/User_Example]
+
+    #     [Assistant_Example]
+    #     section_content : {{
+    #     "Hero": "Content that Follow the INSTRUCTIONS",
+    #     "section style": "Content that Follow the INSTRUCTIONS",
+    #     "section style": "Content that Follow the INSTRUCTIONS",
+    #     "section style": "Content that Follow the INSTRUCTIONS",
+    #     "section style": "Content that Follow the INSTRUCTIONS",
+    #     "section style": "Content that Follow the INSTRUCTIONS"
+    #         }}
+    #     [/Assistant_Example]
+
+    #     [User]
+    #     final summary = {all_usr_data}
+    #     section list = {structure}
+    #     [/User]
+    #     """
+
+    #     request = {
+    #         "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+    #         "prompt": prompt,
+    #         "max_tokens": max_tokens,
+    #         "temperature": 0.7,
+    #         "top_p": 0.3
+    #     }
+
+    #     result = await self.batch_handler.process_single_request(request, 0)
+        
+    #     if result.success:
+    #         response = result
+    #         print(f"Section content response: {response}")
+    #         return response
+    #     else:
+    #         print(f"Section content generation error: {result.error}")
+    #         return ""
 
 
 class OpenAISectionGenerator:
@@ -195,60 +245,32 @@ class OpenAISectionGenerator:
                 cnt += 1
             else:
                 break
-        # print("HEEEEERE : ", section_structure.data.generations[0][0].text , type(section_structure.data.generations[0][0].text))      
-        # section_structure_LLM_result.data.generations[0][0].text = asdf
-        cnt = 0
-        while cnt < 3:
-            try:
-                section_structure = await self.structure_generator.create_section_structure(combined_data, max_tokens)
-                structure_dict = self.extract_json(section_structure.data.generations[0][0].text.strip())
+        create_section = section_structure_LLM_result.data.generations[0][0].text
+        print(f"create_section : {create_section}")
+        section_content_data = await self.content_generator.generate_section_contents_individually(
+            create_section,
+            combined_data,
+            max_tokens=200
+        )
 
-                if not isinstance(structure_dict, dict):
-                    print(f"Invalid structure format (attempt {attempt + 1})")
-                    continue
-
-                section_contents = await self.content_generator.create_section_contents(
-                    combined_data,
-                    structure_dict,
-                    max_tokens=1800
-                )
-                contents_dict = self.extract_json(section_contents.data.generations[0][0].text.strip())
-
-                if not isinstance(contents_dict, dict):
-                    print(f"Invalid content format (attempt {attempt + 1})")
-                    continue
-
-                if self.validate_content(contents_dict, structure_dict):
-                    return {
-                        "section_structure": section_structure,
-                        "section_contents": section_contents
-                    }
-                else:
-                    print(f"Content validation failed (attempt {attempt + 1})")
-
-            except Exception as e:
-                print(f"Error in generate_section (attempt {attempt + 1}): {str(e)}")
-
-            valid_dict = section_contents.data.generations[0][0].text
-            
-            valid_dict_keys_list = list(valid_dict.keys())
-            valid_dict_values_list = list(valid_dict.values())
-    
-            if any(["section_1" in valid_dict_keys_list,
-                None in valid_dict_values_list, 
-                "Content that Follow the INSTRUCTIONS" in valid_dict_values_list,
-                "" in valid_dict_values_list
-                ]):
-                cnt += 1
-                print(f"===== Retry create_section_contents...count {cnt}=====")
-                print(f"===== Because The content is not fited : {valid_dict}")
-                
-            else:
-                break
-        
-        return {
+        print("check", {
             "section_structure": section_structure_LLM_result,
-            "section_contents": section_contents
+            "section_contents": section_content_data
+        })
+        return {
+            "section_structure": section_structure_LLM_result,  # 그대로 유지
+            "section_contents": {
+                "success": True,
+                "data": {
+                    "generations": [
+                        [
+                            {
+                                "text": section_content_data
+                            }
+                        ]
+                    ]
+                }
+            }
         }
         
     def extract_json(self, text):
@@ -280,10 +302,3 @@ class OpenAISectionGenerator:
                 return json.loads(json_str.replace("'", '"'))
             except json.JSONDecodeError:
                 return None
-            
-    def validate_content(self, contents, structure):
-        if set(contents.keys()) != set(structure.values()):
-            return False
-        if any(value is None or "Content that Follow the INSTRUCTIONS" in str(value) for value in contents.values()):
-            return False
-        return True
