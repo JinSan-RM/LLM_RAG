@@ -101,13 +101,26 @@ class OpenAISectionContentGenerator:
             You are a professional content generator for website landing pages. Your task is to generate concise, unique content based on user data.
 
             #### INSTRUCTIONS ####
-            1. Write plain text content (150-200 characters) for the '{section_name}' section.
-            2. Use only relevant parts of the user's data: {all_usr_data}.
+            1. Write plain text content (150-200 characters) for the 'section_name' section.
+            2. Use only relevant parts of the user's data: 'all_usr_data'.
             3. Avoid repeating content from other sections.
             4. Do NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+            5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
+        
+            [User_Example]
+            final summary = "all_usr_data"
+            section list = "section structure"
+            [/User_Example]
+
+            [Assistant_Example]
+            section_content : {{
+            "section_name": "Content that Follow the INSTRUCTIONS"
+            }}
+            [/Assistant_Example]
 
             [User]
-            Section: {section_name}
+            Section_name = {section_name}
+            all_usr_data = {all_usr_data}
             [/User]
             """
             request = {
@@ -125,6 +138,7 @@ class OpenAISectionContentGenerator:
                 clean_content = clean_content[:200] if len(clean_content) > 200 else clean_content
                 results[section_name] = clean_content  # append 대신 딕셔너리에 추가
         return results
+    
     # async def create_section_contents(self, all_usr_data: str, structure: dict, max_tokens: int = 1800):        
         
     #     prompt = f"""
@@ -204,7 +218,7 @@ class OpenAISectionGenerator:
             "section_1": ["Hero"],
             "section_2": ["Feature", "Content"],
             "section_3": ["CTA", "Feature", "Content", "Comparison"],
-            "section_4": ["Comparison", "Statistics", "Countdown", "CTA"],
+            "section_4": ["Comparison", "Statistics", "CTA"],
             "section_5": ["Testimonial", "Statistics", "Pricing", "FAQ"],
             "section_6": ["FAQ", "Team", "Testimonial", "Pricing"]
         }
