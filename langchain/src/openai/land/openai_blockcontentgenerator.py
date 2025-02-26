@@ -180,67 +180,25 @@ class OpenAIBlockContentGenerator:
             variation_prompt = f"\n\n중요: 이 텍스트는 같은 주제의 {tag_index+1}번째 변형입니다. {variations[tag_index % len(variations)]}"
         
         prompt = f"""
-            [SYSTEM]
-            You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
-            When given Section_context and json_type_tag_list, read the Section_context first, then create content for each semantic tag key in the json_type_tag_list and replace its value with generated content. 
-            Ensure each tag's content aligns with its purpose while strictly adhering to the maximum character length specified in json_type_tag_list.
+        [SYSTEM]
+        당신은 정확한 길이로 텍스트를 생성하는 전문가입니다. 오직 정확히 요청된 길이의 텍스트만 반환하세요.
 
-            #### Semantic Tag Definitions ####
-            - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
-            - h2: Major section headings, separating key parts of the page.
-            - h3: Subheadings under h2, detailing specific topics within sections.
-            - h5: Brief supporting text around h tags, enhancing their meaning.
-            - p: Paragraphs of plain text, grouping descriptive content.
-            - li: List items, where inner tags (e.g., h2, p) should maintain a consistent structure.
+        컨텍스트: "{section_context}"
 
-            #### Instructions ####
-            1. **READ THE SECTION_CONTEXT AND USE IT AS THE BASIS FOR GENERATING CONTENT FOR EACH TAG IN JSON_TYPE_TAG_LIST.**
-            2. **MATCH THE OUTPUT LANGUAGE TO THE PRIMARY LANGUAGE OF SECTION_CONTEXT (E.G., KOREAN OR ENGLISH).**
-            3. **FOR EACH KEY IN JSON_TYPE_TAG_LIST, THE VALUE REPRESENTS THE MAXIMUM CHARACTER LENGTH.**
-            - If the value is an integer, generate text that does NOT exceed this length.
-            - If text needs to be shortened, keep the core meaning while reducing words.
-            - Ensure readability and maintain natural sentence structure.
-            4. **PRESERVE THE EXACT JSON STRUCTURE PROVIDED IN JSON_TYPE_TAG_LIST, ONLY REPLACING VALUES WITH GENERATED CONTENT.**
-            5. **ENSURE CONTENT IS CONCISE, RELEVANT, AND AVOIDS REPETITION ACROSS TAGS.**
-            6. **OUTPUT ONLY THE RESULTING JSON, WITHOUT ADDITIONAL TAGS LIKE [SYSTEM] OR METADATA.**
-            7. **IF A LIST STRUCTURE EXISTS IN JSON_TYPE_TAG_LIST, GENERATE MULTIPLE ENTRIES WHILE ENSURING EACH MAINTAINS THE DESIGNATED MAXIMUM CHARACTER LENGTH.**
+        중요: 결과는 반드시 {target_length}자의 완전한 문장 또는 구절이어야 합니다.
+        - 정확히 {target_length}자(±3자)로 생성하세요.
+        - 단어나 문장이 중간에 잘리지 않아야 합니다.
+        - 내용은 자연스럽게 끝나야 합니다.{variation_prompt}
+        
+        다음 사항을 절대 포함하지 마세요:
+        - 설명, 소개, 코드 블록
+        - 메타 설명이나 지시사항
+        - 특수 기호, 마크다운, HTML 태그
+        - 태그 이름이나 태그 설명
 
-            [USER_EXAMPLE]
-            Section_context = "재밋은 AI 솔루션을 기반으로 사용자들에게 간단하고 편리하게 웹 사이트를 만들 수 있도록 도와주는 선도 서비스입니다. 기업 '위븐'은 AI 솔루션을 통해 일반인들도 쉽게 접근할 수 있으며, 전문가가 사용해도 무방한 에디터와 스튜디오 서비스를 보유하고 있어서 다방면에 능한 서비스를 갖고 있는 기업입니다."
-            json_type_tag_list = 
-            {{
-                "h1_0": "17",
-                "h2_0": "19",
-                "p_0": "31",
-                "li_0": [
-                    {{"h2_0": "15", "p_0": "40"}},
-                    {{"h2_1": "15", "p_0": "40"}}
-                ],
-                "p_1: "70"
-            }}
-
-            [ASSISTANT_EXAMPLE]
-            {{
-                "h1_0": "AI로 간편하게 만드는 웹사이트",
-                "h2_0": "누구나 쉽게 활용하는 AI 웹 제작",
-                "p_0": "위븐은 다방면에 능한 AI 웹 제작 서비스를 제공합니다.",
-                "li_0": [
-                    {{
-                        "h2_0": "AI 웹 제작 혁신",
-                        "p_0": "기업 '위븐'의 AI 솔루션은 누구나 직관적으로 웹사이트를 만들 수 있도록 지원합니다."
-                    }},
-                    {{
-                        "h2_1": "전문가도 만족하는 기능",
-                        "p_1": "초보자는 물론 전문가도 활용 가능한 강력한 에디터와 스튜디오 기능을 제공합니다."
-                    }}
-                ],
-                "p_1": "재밋은 AI 기반 웹사이트 제작 솔루션을 제공하는 선도 서비스로, 일반 사용자부터 전문가까지 쉽게 활용할 수 있는 강력한 에디터와 스튜디오 서비스를 갖추고 있습니다."
-            }}
-
-            [USER]
-            Section_context: {section_context}
-            json_type_tag_list: 
-            """ # {tag_length}
+        [USER]
+        '{tag}' 유형의 텍스트를 정확히 {target_length}자(±3자)로 생성하세요. 문장이나 단어가 중간에 잘리지 않게 자연스럽게 끝나야 합니다.
+        """
         
         content = await self.send_request(prompt, max_tokens)
         
