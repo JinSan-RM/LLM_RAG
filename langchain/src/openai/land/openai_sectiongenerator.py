@@ -97,21 +97,25 @@ class OpenAISectionContentGenerator:
         results = {}  # 리스트 대신 딕셔너리로 초기화
         for section_key, section_name in create_section.items():
             print(f"section_name: {section_name}")
+            
+            is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in all_usr_data)
+            output_language = "Korean" if is_korean else "English"
+            
             prompt = f"""
             [System]
-            You are a professional content generator for website landing pages. Your task is to generate concise, unique content based on user data.
+            You are a professional content generator for website landing pages. 
+            Your task is to generate concise, unique content based on all_usr_data.
 
             #### INSTRUCTIONS ####
-            1. WRITE PLAIN TEXT CONTENT (200-300 CHARACTERS) FOR THE 'section_name' SECTION
-            2. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'all_usr_data'.
-            3. AVOID REPEATING CONTENT.
-            4. DD NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-            5. THE OUTPUT LANGUAGE MUST BE SAME WITH 'all_usr_data' input.
-
+            1. THE OUTPUT LANGUAGE MUST BE {output_language}
+            2. WRITE PLAIN TEXT CONTENT (200-300 CHARACTERS) FOR THE 'section_name' SECTION
+            3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'all_usr_data'.
+            4. AVOID REPEATING CONTENT.
+            5. DD NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+            
             [User]
             Section_name = {section_name}
             all_usr_data = {all_usr_data}
-            [/User]
             """
             request = {
                 "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
@@ -125,7 +129,7 @@ class OpenAISectionContentGenerator:
                 generated_content = response.data.generations[0][0].text.strip()
                 import re
                 clean_content = re.sub(r'\[.*?\]|\#\#\#|\*\*.*?\*\*', '', generated_content).strip()
-                clean_content = clean_content[:200] if len(clean_content) > 200 else clean_content
+                clean_content = clean_content[:300] if len(clean_content) > 300 else clean_content
                 results[section_name] = clean_content  # append 대신 딕셔너리에 추가
         return results
     
