@@ -46,7 +46,8 @@ class OpenAISectionStructureGenerator:
         3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
         4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
         5. BE CAREFUL ABOUT TYPOS.
-        6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
+        6. EACH SECTION STYLE MUST BE USE ONLY 1 TIME.
+        7. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
         
         [/System]
 
@@ -91,7 +92,7 @@ class OpenAISectionContentGenerator:
         self,
         create_section: dict,
         all_usr_data: str,
-        max_tokens: int = 200
+        max_tokens: int = 300
     ):
         results = {}  # 리스트 대신 딕셔너리로 초기화
         for section_key, section_name in create_section.items():
@@ -101,22 +102,11 @@ class OpenAISectionContentGenerator:
             You are a professional content generator for website landing pages. Your task is to generate concise, unique content based on user data.
 
             #### INSTRUCTIONS ####
-            1. Write plain text content (150-200 characters) for the 'section_name' section.
-            2. Use only relevant parts of the user's data: 'all_usr_data'.
-            3. Avoid repeating content from other sections.
-            4. Do NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-            5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
-        
-            [User_Example]
-            final summary = "all_usr_data"
-            section list = "section structure"
-            [/User_Example]
-
-            [Assistant_Example]
-            section_content : {{
-            "section_name": "Content that Follow the INSTRUCTIONS"
-            }}
-            [/Assistant_Example]
+            1. WRITE PLAIN TEXT CONTENT (200-300 CHARACTERS) FOR THE 'section_name' SECTION
+            2. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'all_usr_data'.
+            3. AVOID REPEATING CONTENT.
+            4. DD NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+            5. THE OUTPUT LANGUAGE MUST BE SAME WITH 'all_usr_data' input.
 
             [User]
             Section_name = {section_name}
