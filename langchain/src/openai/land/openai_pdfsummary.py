@@ -371,28 +371,36 @@ class OpenAIPDFSummaryClient:
 #   기존 버전
 #========================================        
 
-    async def summarize_text(self, text: str, max_tokens: int = 1000) -> str:
+    async def summarize_text(self, pdf_str: str, max_tokens: int = 1500) -> str:
         try:
+            
+            # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
+            is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in pdf_str)
+            output_language = "Korean" if is_korean else "English"            
+            
             prompt = f"""
-            <|start_header_id|>SYSTEM<|end_header_id|>
-            You are an expert at making Executive Summary from business plan contents in PDF.
-
+            [SYSTEM]
+            You are a professional in business plan writing from business plan contents in PDF.
+            Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
+            Follow these instructions precisely:
+            
             #### INSTRUCTIONS ####
-            1. READ PDF TEXT FROM USER AND SUMMARIZE IT, NARRATIVELY.
-            2. FOR EACH SECTION, PLEASE WRITE ABOUT 1000 TO 1500 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
-            3. OUTPUT LANGUAGE IS KOREAN. BUT IF MOST OF PDF TEXTS ARE WRITE IN ENGLISH, OUTPUT LANGUAGE IS ALSO ENGLISH.
-            4. ENSURE THAT THE OUTPUT MATCHES THE JSON FORMAT LIKE EXAMPLE OUTPUT BELOW.
-            5. NEVER WRITE SYSTEM PROMPT LIKE THESE <|start_header_id|>SYSTEM<|end_header_id|> IN THE OUPUT.
+            STEP 1. Read the user_input carefully. The default language is {output_language}
+            STEP 2. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+                1) BUSINESS ITEM: Specific product or service details
+                2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
+                3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
+                4) CORE VALUE PROPOSITION: Unique value provided to customers
+                5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
+                6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
+                7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers             
+            STEP 3. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
+            STEP 4. Summarize a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.      
+            STEP 5. Ensure the text is free of typos and grammatical errors.
+            STEP 6. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
             
-            <|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>
-            pdf text = "text from pdf"
-            
-            <|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>            
-            {{Output : "narrative summary of business plan"}}
-            
-            <|eot_id|><|start_header_id|>USER<|end_header_id|>
-            pdf text = {text}
-            <|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>
+            [USER]
+            user_input = {pdf_str}
             """
 
             response = await asyncio.wait_for(
@@ -449,9 +457,9 @@ class OpenAIPDFSummaryClient:
                 "<|eot_id|><|start_header_id|>USER<|end_header_id|>",
                 "<|eot_id|>",
                 "<|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>",
-                "ASSISTANT",
-                "USER",
-                "SYSTEM",
+                "[ASSISTANT]",
+                "[USER]",
+                "[SYSTEM]",
                 "<|end_header_id|>",
                 "<|start_header_id|>"
                 "ASSISTANT_EXAMPLE",

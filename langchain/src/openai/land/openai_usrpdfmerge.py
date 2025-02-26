@@ -11,15 +11,27 @@ class OpenAIDataMergeClient:
 
     async def contents_merge(self, max_tokens: int = 1500) -> dict:
         max_retries = 3
+        
+        temp_usr = self.usr_msg
+        temp_pdf = self.pdf_data
+        if len(temp_usr) + len(temp_pdf) > 2000:
+            temp_usr = temp_usr[:1000]
+            temp_pdf = temp_pdf[:1000]
+        
         for attempt in range(max_retries):
             try:
+                
+                # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
                 # 사용자 입력 언어 확인 (한글 여부 판단)
                 is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in self.usr_msg)
                 output_language = "Korean" if is_korean else "English"
 
                 # 프롬프트 생성
                 prompt = f"""
-                You are an expert in writing business plans. Write a single business plan by combining the user summary and PDF summary data provided below. Follow these instructions precisely:
+                [SYSTEM]
+                You are an expert in writing business plans. 
+                Write a single business plan by combining the user summary and PDF summary data provided below. 
+                Follow these instructions precisely:
 
                 #### INSTRUCTIONS ####
                 1. Prioritize the user summary over the PDF summary data when combining the information.
@@ -36,8 +48,10 @@ class OpenAIDataMergeClient:
                 5. Integrate both the user summary and PDF summary data into a single, cohesive text without separating them or using labels like "Output:" or "pdf text =".
                 6. Write between 500 and 1000 characters in {output_language} for the output.
                 7. Blend the user summary and PDF summary data evenly in the narrative, ensuring a smooth and logical flow of information.
-                user summary = {self.usr_msg}
-                pdf summary data = {self.pdf_data}
+                
+                [USER]
+                user summary = {temp_usr}
+                pdf summary data = {temp_pdf}
                 """
 
                 # API 호출 및 응답 처리
