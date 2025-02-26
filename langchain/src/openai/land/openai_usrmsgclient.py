@@ -9,15 +9,30 @@ class OpenAIUsrMsgClient:
         self.usr_msg = str(usr_msg)
             
 
-    async def usr_msg_proposal(self, max_tokens: int = 500):
+    async def usr_msg_proposal(self, max_tokens: int = 1500):
         try:
+            
+            # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
+            is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in self.usr_msg)
+            output_language = "Korean" if is_korean else "English"            
+            
             prompt = f"""
             [SYSTEM]
-            You are a professional in business plan writing. You are provided with user input in the form of a sentence or paragraph. Your task is to write a narrative paragraph to assist in creating a business plan based on this input. Follow these instructions precisely:
+            You are a professional in business plan writing. 
+            You are provided with user input in the form of a sentence or paragraph. 
+            Your task is to write a narrative paragraph to assist in creating a business plan based on this input. 
+            Follow these instructions precisely:
 
             #### INSTRUCTIONS ####
-            STEP 1. Read the user input carefully. The default language is Korean, but if the input is in another language (e.g., English), use that language for the output. If the input contains mixed languages, prioritize the language of the majority of the text.
-            STEP 2. Identify and include key information from the user input, such as company name, brand name, products/services, and target customers, as keywords in the paragraph. Do not add information beyond what is provided.
+            STEP 1. Read the user input carefully. The default language is {output_language}
+            STEP 2. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+                1) BUSINESS ITEM: Specific product or service details
+                2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
+                3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
+                4) CORE VALUE PROPOSITION: Unique value provided to customers
+                5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
+                6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
+                7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers            
             STEP 3. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
             STEP 4. Write a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.
             STEP 5. Avoid repeating the same content to meet the character limit. Use varied expressions and vocabulary to enrich the narrative.
@@ -26,7 +41,7 @@ class OpenAIUsrMsgClient:
             STEP 8. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.
 
             [USER]
-            user input = {self.usr_msg}
+            user_input = {self.usr_msg}
             """
             print(f"usr_msg: {self.usr_msg}")
             response = await asyncio.wait_for(
