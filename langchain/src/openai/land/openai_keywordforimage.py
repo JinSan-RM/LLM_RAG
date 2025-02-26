@@ -214,28 +214,29 @@ class OpenAIKeywordClient:
                     else:
                         keywords = []
                         
-                    for key, value in json_data.items():
-                        if isinstance(value, list):
-                            keywords.extend(value)
-                        elif isinstance(value, str):
-                            keywords.append(value)
-                    
                     # 키워드 정제 및 중복 제거
                     keywords = list(set([self.clean_keyword(kw) for kw in keywords if isinstance(kw, str)]))
                     
                     # 정확히 3개의 키워드 확보
                     keywords = keywords[:3]
                     keywords += default_keywords[len(keywords):3]
+                    
+                    # 키워드가 비어있는지 확인
+                    if not keywords or len(keywords) < 3:
+                        print("[WARNING] Extracted keywords are less than 3, using defaults")
+                        keywords = default_keywords
                 else:
+                    print("[WARNING] No JSON match found in text")
                     keywords = default_keywords
             except json.JSONDecodeError:
                 print("[ERROR] Failed to parse JSON")
                 keywords = default_keywords
-
         else:
             keywords = default_keywords
 
-        return {"keyword": keywords}
+        print(f"[DEBUG] Final keywords: {keywords}")
+        # 리스트 자체를 반환하도록 수정
+        return keywords
 
 
     # def extract_keywords(self, result):
@@ -303,18 +304,42 @@ class OpenAIKeywordClient:
         [USER]
         Section_context: {context}
         """
-        result = await self.send_request(prompt, max_tokens)
-        if isinstance(result, str):  # 에러 메시지 처리
-            print(f"[ERROR] Request returned error: {result}")
-            return result
+        max_attempts = 3
+        last_result = None
         
-        if result.success and hasattr(result, 'data'):
-            result.data.generations[0][0].text = self.extract_keywords(result)
-            print(f"[DEBUG] Processed result.data.generations[0][0].text: {result.data.generations[0][0].text}")
-            return result
+        for attempt in range(max_attempts):
+            result = await self.send_request(prompt, max_tokens)
+            last_result = result  # 마지막 결과 저장
+            
+            if isinstance(result, str):  # 에러 메시지 처리
+                print(f"[ERROR] Request returned error: {result}")
+                return result
+            
+            if result.success and hasattr(result, 'data'):
+                keywords = self.extract_keywords(result)
+                
+                # 키워드가 비어있거나 3개 미만인 경우 재시도
+                if not keywords or len(keywords) < 3:
+                    print(f"[WARNING] Generated keywords are empty or less than 3. Attempt {attempt + 1}/{max_attempts}")
+                    continue
+                    
+                # 한글이 포함된 키워드가 있는지 확인
+                contains_korean = any(any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in keyword) for keyword in keywords)
+                
+                if not contains_korean:
+                    result.data.generations[0][0].text = keywords
+                    return result
+                else:
+                    print(f"[WARNING] Generated keywords contain Korean. Attempt {attempt + 1}/{max_attempts}")
+        
+        # 모든 시도 실패 시 기본 키워드로 덮어씌우기
+        if last_result and last_result.success and hasattr(last_result, 'data'):
+            default_keywords = ["business concept", "professional service", "corporate solution"]
+            last_result.data.generations[0][0].text = default_keywords
+            return last_result
         else:
-            print(f"[ERROR] Request failed: {result.error}")
-            return result
+            # 마지막 결과가 없거나 유효하지 않은 경우 에러 반환
+            return "Failed to generate valid keywords"
 
     async def section_keyword_create_logic(self, context: str, max_tokens: int = 100) -> 'RequestResult':
         try:
