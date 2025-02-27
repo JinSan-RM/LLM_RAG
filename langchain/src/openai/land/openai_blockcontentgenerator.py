@@ -178,18 +178,15 @@ class OpenAIBlockContentGenerator:
                 "비슷한 내용이지만 초점을 다르게 맞추세요."
             ]
             variation_prompt = f"\n\n중요: 이 텍스트는 같은 주제의 {tag_index+1}번째 변형입니다. {variations[tag_index % len(variations)]}"
-        
+
         prompt = f"""
         [SYSTEM]
         당신은 정확한 길이로 텍스트를 생성하는 전문가입니다. 오직 정확히 요청된 길이의 텍스트만 반환하세요.
 
         컨텍스트: "{section_context}"
 
-        중요: 결과는 반드시 {target_length}자의 완전한 문장 또는 구절이어야 합니다.
-        - 정확히 {target_length}자(±3자)로 생성하세요.
-        - 단어나 문장이 중간에 잘리지 않아야 합니다.
         - 내용은 자연스럽게 끝나야 합니다.{variation_prompt}
-        
+
         다음 사항을 절대 포함하지 마세요:
         - 설명, 소개, 코드 블록
         - 메타 설명이나 지시사항
@@ -199,9 +196,9 @@ class OpenAIBlockContentGenerator:
         [USER]
         '{tag}' 유형의 텍스트를 정확히 {target_length}자(±3자)로 생성하세요. 문장이나 단어가 중간에 잘리지 않게 자연스럽게 끝나야 합니다.
         """
-        
+
         content = await self.send_request(prompt, max_tokens)
-        
+
         # 후처리 강화
         # 모든 마크다운 기호, 태그, 설명 문구 등 제거
         content = re.sub(r'\[.*?\]|\{.*?\}|<.*?>|#|\*|\-|\|', '', content)
