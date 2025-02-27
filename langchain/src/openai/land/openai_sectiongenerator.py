@@ -46,8 +46,7 @@ class OpenAISectionStructureGenerator:
         3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
         4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
         5. BE CAREFUL ABOUT TYPOS.
-        6. EACH SECTION STYLE MUST BE USE ONLY 1 TIME.
-        7. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
+        6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
         
         [/System]
 
@@ -88,47 +87,124 @@ class OpenAISectionContentGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
         
-    async def generate_section_contents_individually(
-        self,
-        create_section: dict,
-        all_usr_data: str,
-        max_tokens: int = 300
-    ):
-        results = {}  # 리스트 대신 딕셔너리로 초기화
-        for section_key, section_name in create_section.items():
-            print(f"section_name: {section_name}")
-            prompt = f"""
-            [System]
-            You are a professional content generator for website landing pages. Your task is to generate concise, unique content based on user data.
+    # async def generate_section_contents_individually(
+    #     self,
+    #     create_section: dict,
+    #     all_usr_data: str,
+    #     max_tokens: int = 300
+    # ):
+    #     is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in all_usr_data)
+    #     language_instruction = "Write in Korean." if is_korean else "Write in English."
+    #     results = {}  # 리스트 대신 딕셔너리로 초기화
+    #     for section_key, section_name in create_section.items():
+    #         print(f"section_name: {section_name}")
+    #         prompt = f"""
+    #         [System]
+    #         You are a professional content generator for website landing pages. Your task is to generate concise, unique content based on user data.
 
-            #### INSTRUCTIONS ####
-            1. WRITE PLAIN TEXT CONTENT (200-300 CHARACTERS) FOR THE 'section_name' SECTION
-            2. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'all_usr_data'.
-            3. AVOID REPEATING CONTENT.
-            4. DD NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-            5. THE OUTPUT LANGUAGE MUST BE SAME WITH 'all_usr_data' input.
+    #         #### INSTRUCTIONS ####
+    #         1. Write plain text content (150-200 characters) for the 'section_name' section.
+    #         2. Use only relevant parts of the user's data: 'all_usr_data'.
+    #         3. Avoid repeating content from other sections.
+    #         4. Do NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+    #         5. LOOK AT THE INPUT AND **{language_instruction} LANGUAGE TO THE OUTPUT**.
+        
+    #         [User_Example]
+    #         final summary = "all_usr_data"
+    #         section list = "section structure"
+    #         [/User_Example]
 
-            [User]
-            Section_name = {section_name}
-            all_usr_data = {all_usr_data}
-            [/User]
-            """
-            request = {
-                "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+    #         [Assistant_Example]
+    #         section_content : {{
+    #         "section_name": "Content that Follow the INSTRUCTIONS"
+    #         }}
+    #         [/Assistant_Example]
+
+    #         [User]
+    #         Section_name = {section_name}
+    #         all_usr_data = {all_usr_data}
+    #         [/User]
+    #         """
+    #         request = {
+    #             "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+    #             "prompt": prompt,
+    #             "max_tokens": max_tokens,
+    #             "temperature": 0.7,
+    #             "top_p": 0.9
+    #         }
+    #         response = await self.batch_handler.process_single_request(request, request_id=0)
+    #         if response.success:
+    #             generated_content = response.data.generations[0][0].text.strip()
+    #             import re
+    #             clean_content = re.sub(r'\[.*?\]|\#\#\#|\*\*.*?\*\*', '', generated_content).strip()
+    #             clean_content = clean_content[:300] if len(clean_content) > 300 else clean_content
+    #             results[section_name] = clean_content  # append 대신 딕셔너리에 추가
+    #     return results
+    
+    async def send_request(self, prompt: str, max_tokens: int = 300) -> str:
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
                 "prompt": prompt,
                 "max_tokens": max_tokens,
-                "temperature": 0.7,
-                "top_p": 0.9
-            }
-            response = await self.batch_handler.process_single_request(request, request_id=0)
-            if response.success:
-                generated_content = response.data.generations[0][0].text.strip()
-                import re
-                clean_content = re.sub(r'\[.*?\]|\#\#\#|\*\*.*?\*\*', '', generated_content).strip()
-                clean_content = clean_content[:200] if len(clean_content) > 200 else clean_content
-                results[section_name] = clean_content  # append 대신 딕셔너리에 추가
-        return results
+                "temperature": 0.1,
+                "top_p": 0.1,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=300  # 적절한 타임아웃 값 설정
+        )
+        return response
     
+    def create_section_prompt(self, section_name, combined_data):
+        # 입력 언어 감지
+        is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in combined_data)
+        language_instruction = "한국어로 작성하세요." if is_korean else "Write in English."
+        
+        prompt = f"""
+        [System]
+        You are a professional content generator for website landing pages.
+
+        #### INSTRUCTIONS ####
+        1. Write content for '{section_name}' section (100-150 characters).
+        2. Use only this context: "{combined_data}".
+        3. {language_instruction}
+        4. Return ONLY the raw text content.
+
+        [User]
+        Generate content for {section_name} section.
+        """
+        return prompt
+    
+    async def generate_section_contents_individually(self, section_structure, combined_data, max_tokens=300):
+        # 모든 섹션에 대한 태스크 생성
+        tasks = []
+        for section_key, section_name in section_structure.items():
+            prompt = self.create_section_prompt(section_name, combined_data)
+            tasks.append(self.send_request(prompt, max_tokens))
+        
+        # 모든 태스크를 병렬로 실행
+        results = {}
+        responses = await asyncio.gather(*tasks)
+        
+        # 결과 처리
+        for section_key, response in zip(section_structure.keys(), responses):
+            section_name = section_structure[section_key]
+            if response.success and hasattr(response, 'data'):
+                content = response.data.generations[0][0].text
+                # 콘텐츠 정제
+                content = self.clean_content(content)
+                results[section_name] = content
+        
+        return results
+
+    def clean_content(self, content):
+        # 불필요한 태그, 형식, 메타데이터 제거
+        content = re.sub(r'\[.*?\]|\#\#\#|\n|\t|Output:|Example|\*\*.*?\*\*|Response:|`|Title:|Description:|Content:', '', content).strip()
+        content = re.sub(r'.*?content for.*?from the context\.', '', content, flags=re.IGNORECASE)
+        content = ' '.join(content.split())
+        return content
+        
     # async def create_section_contents(self, all_usr_data: str, structure: dict, max_tokens: int = 1800):        
         
     #     prompt = f"""
@@ -226,16 +302,21 @@ class OpenAISectionGenerator:
 
 
             updated_structure = {}
+            used_values = set()  # 이미 사용된 값을 추적
 
             for section, value in section_structure.items():
                 if section in allowed_values:
                     if value not in allowed_values[section]:
                         # 허용되지 않은 값일 경우 해당 섹션의 허용된 값 중 무작위 선택
                         print()
-                        updated_structure[section] = random.choice(allowed_values[section])
-                    else:
-                        # 허용된 값일 경우 그대로 유지
+                        value = random.choice(allowed_values[section])
+                    
+                    # 이미 사용된 값인지 확인
+                    if value not in used_values:
+                        # 처음 등장하는 값이면 추가
+                        used_values.add(value)
                         updated_structure[section] = value
+                    # 이미 사용된 값이면 해당 섹션은 건너뜀 (중복 제거)
                 else:
                     print(f"Warning: Undefined section '{section}' encountered.")
 
@@ -254,7 +335,7 @@ class OpenAISectionGenerator:
         section_content_data = await self.content_generator.generate_section_contents_individually(
             create_section,
             combined_data,
-            max_tokens=200
+            max_tokens=300
         )
 
         print("check", {
