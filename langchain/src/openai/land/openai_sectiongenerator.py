@@ -171,10 +171,10 @@ class OpenAISectionContentGenerator:
         #### INSTRUCTIONS ####
         1. WRITE PLAIN TEXT CONTENT FOR THE 'section_name' SECTION.
         2. WRITE BETWEEN 200 AND 300 CHARACTERS IN FOR THE OUTPUT.
-        2. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
-        3. AVOID REPEATING CONTENT.
-        4. DD NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-        5. {language_instruction}
+        3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
+        4. AVOID REPEATING CONTENT.
+        5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+        6. {language_instruction}
         
         [User]
         Section_name = {section_name}
