@@ -310,8 +310,8 @@ class OpenAIBlockContentGenerator:
             self.batch_handler.process_single_request({
                 "prompt": prompt,
                 "max_tokens": max_tokens,
-                "temperature": 0.1,  # 안정성 우선
-                "top_p": 0.1,
+                "temperature": 0.3,  # 안정성 우선
+                "top_p": 0.5,
                 "n": 1,
                 "stream": False,
                 "logprobs": None
