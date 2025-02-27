@@ -335,46 +335,41 @@ class OpenAIBlockContentGenerator:
         variation_prompt = ""
         if tag_index > 0:
             variations = [
-                "이전과 다른 관점에서 설명하세요.",
-                "다른 측면을 강조하세요.",
-                "다른 단어 선택과 문장 구조를 사용하세요.",
-                "동일한 내용이지만 완전히 다른 표현으로 작성하세요.",
-                "비슷한 내용이지만 초점을 다르게 맞추세요."
+                "PLEASE EXPLAIN FROM A DIFFERENT PERSPECTIVE THAN BEFORE.",
+                "HIGHLIGHT DIFFERENT ASPECTS",
+                "USE DIFFERENT WORD CHOICES AND SENTENCE STRUCTURES.",
+                "WRITE THE SAME CONTENT BUT WITH COMPLETELY DIFFERENT EXPRESSIONS.",
+                "SIMILAR CONTENT, BUT WITH A DIFFERENT FOCUS."
             ]
-            variation_prompt = f"\n\n중요: 이 텍스트는 같은 주제의 {tag_index+1}번째 변형입니다. {variations[tag_index % len(variations)]}"
+            variation_prompt = f"\n\n**IMPORTANT**: THIS TEXT IS THE {tag_index+1} VARIATION ON THE SAME TOPIC. {variations[tag_index % len(variations)]}"
 
         # 랜딩페이지 전체 흐름과 자연스러운 연결성을 고려한 프롬프트
         prompt = f"""
         [SYSTEM]
-        당신은 랜딩페이지 콘텐츠 생성 전문가입니다.
-        아래의 컨텍스트에 부합하는 순수한 콘텐츠만을 생성하세요.
-        생성 결과에는 절대로 프롬프트의 지시문, 숫자 조건, [USER] 입력 내용, 또는 부가 설명이나 추가 텍스트가 포함되어서는 안 됩니다.
-        오직 컨텍스트와 관련된 내용만 자연스럽게 이어지도록 작성하며, 어떠한 형태의"이후에 설명명", "유형의 텍스트를 정확히"와 같은 지시문도 출력에 나타나지 않아야 합니다.
-        추가 설명, 부연 설명, 혹은 불필요한 안내 문구는 절대 포함하지 마세요.
-        생성된 텍스트가 요구한 길이 범위를 벗어나면 반드시 재생성해야 합니다.
-        전체 컨텍스트의 흐름과 일관성을 고려하여, 각 태그의 텍스트가 자연스럽게 이어지도록 작성하세요.
-        구성 예시:
-        - h1: 전체 주제와 핵심 메시지 소개
-        - h2: 주요 섹션 제목 (h1과 논리적으로 연결)
-        - h5: 부가 설명 및 강조
-        - p: 상세한 설명으로, 전체 문맥에 맞게 자연스러운 흐름 유지
-        - li: 리스트 항목으로, 해당 섹션의 주요 포인트를 전달
-
-        컨텍스트: "{section_context}"
-        - 내용은 자연스럽게 끝나야 하며, 문장이 중간에 끊기지 않도록 하세요.{variation_prompt}
-        - 내용은 오직 컨텍스트에 부합해야 하며, 불필요한 지시문이나 프롬프트의 설명은 절대 포함하지 마세요.
-
-        반드시 지켜야 할 사항:
-        - 설명, 소개, 코드 블록, 메타 설명, 특수 기호, 마크다운, HTML 태그 및 태그 이름/설명은 포함하지 마세요.
-        - 생성한 텍스트에 들어온 내용과 프롬프트 내용을 추가해서 말하지 마세요.
-        [USER]에 입력한 내용을 생성하지마세요.
+        You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
+        Ensure each tag's content aligns with its purpose while strictly adhering to the maximum character length that given.
+        Considering the flow and consistency of the overall context, write the text of each tag so that it flows naturally.
+        ** IF YOU FOLLOW THE INSTRUCTIONS, I WILL GIVE YOU TIP **
         
-        생성된 텍스트가 요구 길이 범위를 벗어날 경우, 반드시 다시 생성하세요.
+        #### Semantic Tag Definitions ####
+        - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
+        - h2: Major section headings, separating key parts of the page.
+        - h3: Subheadings under h2, detailing specific topics within sections.
+        - h4: Subheadings under h3, detailing specific topics within sections.
+        - h5: Brief supporting text around h tags, enhancing their meaning.
+        - p: Paragraphs of plain text, grouping descriptive content.
+        - li: List items, where inner tags (e.g., h2, p) should maintain a consistent structure.
+
+        #### INSTRUCTIONS ####
+        1. USING SECTION_CONTEXT, THE CONTENT SHOULD END NATURALLY AND THE SENTENCE SHOULD NOT BE INTERRUPTED IN THE MIDDLE. {variation_prompt}
+        2. ENSURE READABILITY AND MAINTAIN NATURAL SENTENCE STRUCTURE.
+        3. MUST EXCLUDE INTRODUCTIONS, CODE BLOCKS, META DESCRIPTIONS, SPECIAL SYMBOLS, MARKDOWN, HTML TAGS, AND TAG NAMES/DESCRIPTIONS.
+        4. IF THE GENERATED TEXT IS OUTSIDE THE REQUIRED LENGTH RANGE, BE SURE TO GENERATE IT AGAIN.
         
         [USER]
-        '{tag}' 유형의 텍스트를 정확히 {target_length}자(±5자)로 생성하세요.
+        Section_context = {section_context}
+        Use Section_context and INSTRUCTIONS to create '{tag}' type text with exactly {target_length} characters (±5 characters).
         """
-
         content = await self.send_request(prompt, max_tokens)
 
         # 후처리: 미리 컴파일한 정규식들을 순차적으로 적용
