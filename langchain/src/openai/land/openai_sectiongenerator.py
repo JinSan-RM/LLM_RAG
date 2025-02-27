@@ -156,6 +156,7 @@ class OpenAISectionContentGenerator:
         )
         return response
     
+    # 이부분 코쳐야함
     def create_section_prompt(self, section_name, combined_data):
         # 입력 언어 감지
         is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in combined_data)
