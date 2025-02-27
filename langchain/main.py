@@ -427,7 +427,7 @@ MAX_TOKENS_CONTENTS_MERGE = 1500
 MAX_TOKENS_CREATE_SECTION_STRUCTURE = 200
 MAX_TOKENS_CREATE_SECTION_CONTENTS = 1800
 MAX_TOKENS_SELECT_BLOCK = 50
-MAX_TOKENS_GENERATE_CONTENTS = 1000
+MAX_TOKENS_GENERATE_CONTENTS = 250
 MAX_TOKENS_SECTION_KEYWORD_RECOMMEND = 100
 
 @app.post("/batch_completions")
@@ -541,11 +541,7 @@ async def openai_section_select(requests: List[Completions]):
         # logger.info(f"Received section generation request: {requests}")
         
         generator = OpenAISectionGenerator(batch_handler)
-        print("+++++++++++ API/SECTION_SELECT +++++++++++")
-        for req in requests:
-            print(f"all_usr_data_section_select : {req.all_usr_data}")
-        print("++++++++++++++++++++++++++++++++++++++++++")
-        
+
         results = await generator.generate_landing_page(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
         
         end = time.time()
@@ -581,17 +577,12 @@ async def openai_block_select(requests: List[Completions]):
         contexts = [req.section_context for req in requests]
         # logger.debug(f"Extracted contexts: {contexts}")
 
-        print("+++++++++++ API/BLOCK_SELCECT +++++++++++")
-        print(f"block_lists_block_select : {block_lists}")
-        print(f"contexts_block_select : {contexts}")
-        print("++++++++++++++++++++++++++++++++++++++++++")
-
         # logger.debug("Starting generate_block_content_batch")
         final_results = []        
         select_block_result = await blockselect_client.select_block_batch(contexts, block_lists, max_tokens=MAX_TOKENS_SELECT_BLOCK)
         # logger.debug(f"Results from generate_block_content_batch: {results}")
         final_results.append(select_block_result)
-        
+        print(f"final_results : {final_results}")
         end = time.time()
         processing_time = end - start
         # logger.info(f"Processing time: {processing_time} seconds")

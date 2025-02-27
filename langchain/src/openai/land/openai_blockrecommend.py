@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 import re
 import difflib
 import json
+import random
 
 class OpenAIBlockSelector:
     def __init__(self, batch_handler):
@@ -90,18 +91,30 @@ class OpenAIBlockSelector:
             except Exception as e:
                 print("block recommend error :", e)
                 if (attempt + 1) == 3:
+                    
+                    random_index = random.randint(0, len(block_list[1].keys()) - 1)
+                    block_keys = list(block_list[1].keys())
+                    selected_block_id = block_keys[random_index]
+                    selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+
+                    print(f"Attempt {attempt + 1} failed. Returning random default response with index {random_index}.")
                     return {
                         'Section_name': section_context[0],
-                        'Block_id': list(block_list[1].keys())[0],
-                        'HTML_Tag': tag_slice[0]
+                        'Block_id': selected_block_id,
+                        'HTML_Tag': selected_html_tag
                     }
-                    
             # 3번 시도 후에도 실패하면 기본값 반환
             print("All attempts failed. Returning default response.")
+        random_index = random.randint(0, len(block_list[1].keys()) - 1)
+        block_keys = list(block_list[1].keys())
+        selected_block_id = block_keys[random_index]
+        selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+
+        print("All attempts failed. Returning random default response with index {random_index}.")
         return {
             'Section_name': section_context[0],
-            'Block_id': list(block_list[1].keys())[0],
-            'HTML_Tag': tag_slice[0]
+            'Block_id': selected_block_id,
+            'HTML_Tag': selected_html_tag
         }
 
     async def select_block_batch(
