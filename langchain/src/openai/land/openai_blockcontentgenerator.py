@@ -295,9 +295,15 @@ class OpenAIBlockContentGenerator:
         # 후처리에 사용할 정규식들을 미리 컴파일 (속도 개선 효과)
         self.re_codeblocks = re.compile(r'```[\s\S]*?```|`[\s\S]*?`')
         self.re_symbols = re.compile(r'\[.*?\]|\{.*?\}|<.*?>|#|\*|\-|\|')
-        self.re_words = re.compile(r'내용:|결과:|텍스트:|반환:|생성된 내용:|태그 내용:|순수 텍스트:|여기에|입니다\.$')
+        self.re_words = re.compile(r'내용:|결과:|텍스트:|반환:|생성된 내용:|태그 내용:|순수 텍스트:|주제:|부연 설명:|예시:|여기에|h1|h2|h3|h5|p|li|h4|:|입니다\.$')
         self.re_quotes = re.compile(r'[\'"]')
         self.re_instruct = re.compile(r'\S+\s*유형의 텍스트를 정확히.*?로 생성하세요\.?')
+        self.re_meta = re.compile(r'^(제목\s*:\s*|h1\s*:\s*|부제목\s*:\s*|\*\s*:\s*)', re.IGNORECASE)
+        self.re_leading_meta = re.compile(r'^(?:제목|h1|h2|h3|h4|h5|부제목|\*)[^:]*:\s*', re.IGNORECASE)
+        self.re_tag_names = re.compile(r'\b(?:제목|h1|h2|h3|h4|h5|부제목|\*|p |li|<p>|(p))\s*:\s*', re.IGNORECASE)
+        self.re_leading_colon = re.compile(r'^[:：]+\s*')
+
+
 
     async def send_request(self, prompt: str, max_tokens: int = 250) -> str:
         response = await asyncio.wait_for(
@@ -341,6 +347,11 @@ class OpenAIBlockContentGenerator:
         prompt = f"""
         [SYSTEM]
         당신은 랜딩페이지 콘텐츠 생성 전문가입니다.
+        아래의 컨텍스트에 부합하는 순수한 콘텐츠만을 생성하세요.
+        생성 결과에는 절대로 프롬프트의 지시문, 숫자 조건, [USER] 입력 내용, 또는 부가 설명이나 추가 텍스트가 포함되어서는 안 됩니다.
+        오직 컨텍스트와 관련된 내용만 자연스럽게 이어지도록 작성하며, 어떠한 형태의"이후에 설명명", "유형의 텍스트를 정확히"와 같은 지시문도 출력에 나타나지 않아야 합니다.
+        추가 설명, 부연 설명, 혹은 불필요한 안내 문구는 절대 포함하지 마세요.
+        생성된 텍스트가 요구한 길이 범위를 벗어나면 반드시 재생성해야 합니다.
         전체 컨텍스트의 흐름과 일관성을 고려하여, 각 태그의 텍스트가 자연스럽게 이어지도록 작성하세요.
         구성 예시:
         - h1: 전체 주제와 핵심 메시지 소개
@@ -351,10 +362,12 @@ class OpenAIBlockContentGenerator:
 
         컨텍스트: "{section_context}"
         - 내용은 자연스럽게 끝나야 하며, 문장이 중간에 끊기지 않도록 하세요.{variation_prompt}
+        - 내용은 오직 컨텍스트에 부합해야 하며, 불필요한 지시문이나 프롬프트의 설명은 절대 포함하지 마세요.
 
         반드시 지켜야 할 사항:
         - 설명, 소개, 코드 블록, 메타 설명, 특수 기호, 마크다운, HTML 태그 및 태그 이름/설명은 포함하지 마세요.
-        '{tag}' 유형의 텍스트를 정확히 {target_length}자(±5자)로 생성하세요.
+        - 생성한 텍스트에 들어온 내용과 프롬프트 내용을 추가해서 말하지 마세요.
+        [USER]에 입력한 내용을 생성하지마세요.
         
         생성된 텍스트가 요구 길이 범위를 벗어날 경우, 반드시 다시 생성하세요.
         
@@ -370,6 +383,10 @@ class OpenAIBlockContentGenerator:
         content = self.re_words.sub('', content)
         content = self.re_quotes.sub('', content)
         content = self.re_instruct.sub('', content)
+        content = self.re_meta.sub('', content)
+        content = self.re_leading_meta.sub('', content)
+        content = self.re_tag_names.sub('', content)
+        content = self.re_leading_colon.sub('', content)
         content = ' '.join(content.split()).strip()
 
         print(f"Generated content for {tag} at {key_path}: '{content}' ({len(content)} chars)")
