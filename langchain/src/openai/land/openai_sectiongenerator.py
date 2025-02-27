@@ -164,16 +164,19 @@ class OpenAISectionContentGenerator:
         
         prompt = f"""
         [System]
-        You are a professional content generator for website landing pages.
+        You are a professional content generator for website landing pages. 
+        Your task is to generate concise, unique content based on combined_data.
 
         #### INSTRUCTIONS ####
-        1. Write content for '{section_name}' section (100-150 characters).
-        2. Use only this context: "{combined_data}".
-        3. {language_instruction}
-        4. Return ONLY the raw text content.
-
+        1. WRITE PLAIN TEXT CONTENT (200-300 CHARACTERS) FOR THE 'section_name' SECTION
+        2. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
+        3. AVOID REPEATING CONTENT.
+        4. DD NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+        5. {language_instruction}
+        
         [User]
-        Generate content for {section_name} section.
+        Section_name = {section_name}
+        all_usr_data = {combined_data}
         """
         return prompt
     
