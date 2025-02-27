@@ -344,6 +344,8 @@ class OpenAIBlockContentGenerator:
             variation_prompt = f"\n\n**IMPORTANT**: THIS TEXT IS THE {tag_index+1} VARIATION ON THE SAME TOPIC. {variations[tag_index % len(variations)]}"
 
         # 랜딩페이지 전체 흐름과 자연스러운 연결성을 고려한 프롬프트
+        is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in section_context)
+        output_language = "Korean" if is_korean else "English"            
         prompt = f"""
         [SYSTEM]
         You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
@@ -365,6 +367,7 @@ class OpenAIBlockContentGenerator:
         2. ENSURE READABILITY AND MAINTAIN NATURAL SENTENCE STRUCTURE.
         3. MUST EXCLUDE INTRODUCTIONS, CODE BLOCKS, META DESCRIPTIONS, SPECIAL SYMBOLS, MARKDOWN, HTML TAGS, AND TAG NAMES/DESCRIPTIONS.
         4. IF THE GENERATED TEXT IS OUTSIDE THE REQUIRED LENGTH RANGE, BE SURE TO GENERATE IT AGAIN.
+        5. Read the user_input carefully. The default language is {output_language}
         
         [USER]
         Section_context = {section_context}
