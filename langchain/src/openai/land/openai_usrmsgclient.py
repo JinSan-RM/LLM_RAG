@@ -15,7 +15,7 @@ class OpenAIUsrMsgClient:
             # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
             is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in self.usr_msg)
             output_language = "Korean" if is_korean else "English"            
-            
+            # STEP 1. Read the user input carefully. The default language is {output_language}
             prompt = f"""
             [SYSTEM]
             You are a professional in business plan writing. 
@@ -24,8 +24,8 @@ class OpenAIUsrMsgClient:
             Follow these instructions precisely:
 
             #### INSTRUCTIONS ####
-            STEP 1. Read the user input carefully. The default language is {output_language}
-            STEP 2. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+            
+            STEP 1. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
                 1) BUSINESS ITEM: Specific product or service details
                 2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
                 3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
@@ -33,13 +33,14 @@ class OpenAIUsrMsgClient:
                 5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
                 6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
                 7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers            
-            STEP 3. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
-            STEP 4. Write a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.
-            STEP 5. Avoid repeating the same content to meet the character limit. Use varied expressions and vocabulary to enrich the narrative.
-            STEP 6. Do not include repeated User-Assistant interactions or unnecessary filler. End the output naturally after completing the narrative.
-            STEP 7. Ensure the text is free of typos and grammatical errors.
-            STEP 8. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.
-
+            STEP 2. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
+            STEP 3. Write a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.
+            STEP 4. Avoid repeating the same content to meet the character limit. Use varied expressions and vocabulary to enrich the narrative.
+            STEP 5. Do not include repeated User-Assistant interactions or unnecessary filler. End the output naturally after completing the narrative.
+            STEP 6. Ensure the text is free of typos and grammatical errors.
+            STEP 7. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.
+            STEP 8. 출력은 반드시 **한국어**로 해.
+            
             [USER]
             user_input = {self.usr_msg}
             """

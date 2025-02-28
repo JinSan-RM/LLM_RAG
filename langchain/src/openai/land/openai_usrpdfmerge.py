@@ -26,6 +26,8 @@ class OpenAIDataMergeClient:
                 is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in self.usr_msg)
                 output_language = "Korean" if is_korean else "English"
 
+                
+                # 6. Write between 500 and 1000 characters in {output_language} for the output.
                 # 프롬프트 생성
                 prompt = f"""
                 [SYSTEM]
@@ -46,8 +48,8 @@ class OpenAIDataMergeClient:
                     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers
                 4. Output the final business plan text as a plain, continuous string without any JSON structure, tags, labels, or metadata.
                 5. Integrate both the user summary and PDF summary data into a single, cohesive text without separating them or using labels like "Output:" or "pdf text =".
-                6. Write between 500 and 1000 characters in {output_language} for the output.
-                7. Blend the user summary and PDF summary data evenly in the narrative, ensuring a smooth and logical flow of information.
+                6. Blend the user summary and PDF summary data evenly in the narrative, ensuring a smooth and logical flow of information.
+                7. 출력은 반드시 **한국어**로 해.
                 
                 [USER]
                 user summary = {temp_usr}
