@@ -161,7 +161,7 @@ class OpenAISectionContentGenerator:
         # 입력 언어 감지
         is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in combined_data)
         language_instruction = "한국어로 작성하세요." if is_korean else "Write in English."
-        
+        # 6. {language_instruction}
         prompt = f"""
         [System]
         You are a professional content generator for sections in the website landing pages.
@@ -174,7 +174,7 @@ class OpenAISectionContentGenerator:
         3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
         4. AVOID REPEATING CONTENT.
         5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-        6. {language_instruction}
+        6. 출력은 반드시 **한국어**로 해.
         
         [User]
         Section_name = {section_name}
@@ -329,7 +329,9 @@ class OpenAISectionGenerator:
                 else:
                     print(f"Warning: Undefined section '{section}' encountered.")
 
-                    
+            
+            print("Let's Input the Magic Code_structure : ", updated_structure)
+            
             section_structure_LLM_result.data.generations[0][0].text = updated_structure
             
             valid_dict = section_structure_LLM_result.data.generations[0][0].text
