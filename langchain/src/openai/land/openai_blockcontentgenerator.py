@@ -479,3 +479,191 @@ class OpenAIBlockContentGenerator:
 #                 current = current[k]
 #         last_key = keys[-1]
 #         current[last_key] = content
+
+
+# ========================================================================================================================================================
+import asyncio
+from typing import Dict, Any
+import re
+import json
+from src.utils.emmet_parser import EmmetParser
+
+class OpenAIBlockContentGenerator:
+    def __init__(self, batch_handler, concurrency_limit: int = 10):
+        self.batch_handler = batch_handler
+        self.emmet_parser = EmmetParser()
+        # 동일 조건의 요청에 대한 캐시 (tag, target_length, tag_index, section_context)
+        self.cache = {}
+        self.concurrency_limit = concurrency_limit
+
+        # 후처리에 사용할 정규식들을 미리 컴파일 (속도 개선 효과)
+        self.re_codeblocks = re.compile(r'```[\s\S]*?```|`[\s\S]*?`')
+        self.re_symbols = re.compile(r'\[.*?\]|\{.*?\}|<.*?>|#|\*|\-|\|')
+        self.re_words = re.compile(r'내용:|결과:|텍스트:|반환:|생성된 내용:|태그 내용:|순수 텍스트:|주제:|부연 설명:|예시:|여기에|h1|h2|h3|h5|p|li|h4|:|입니다\.$')
+        self.re_quotes = re.compile(r'[\'"]')
+        self.re_instruct = re.compile(r'\S+\s*유형의 텍스트를 정확히.*?로 생성하세요\.?')
+        self.re_meta = re.compile(r'^(제목\s*:\s*|h1\s*:\s*|부제목\s*:\s*|\*\s*:\s*)', re.IGNORECASE)
+        self.re_leading_meta = re.compile(r'^(?:제목|h1|h2|h3|h4|h5|부제목|\*)[^:]*:\s*', re.IGNORECASE)
+        self.re_tag_names = re.compile(r'\b(?:제목|h1|h2|h3|h4|h5|부제목|\*|p |li|<p>|(p))\s*:\s*', re.IGNORECASE)
+        self.re_leading_colon = re.compile(r'^[:：]+\s*')
+
+
+
+    async def send_request(self, prompt: str, max_tokens: int = 250) -> str:
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "temperature": 0.3,  # 안정성 우선
+                "top_p": 0.5,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=120  # 타임아웃 설정
+        )
+        return response.data.generations[0][0].text.strip()
+
+    async def generate_tag_content(self, tag: str, target_length: int, section_context: str, key_path: str, max_tokens: int = 250) -> str:
+        # key_path 마지막 부분의 인덱스(예: p_0, p_1 등) 추출하여 변형 요청에 활용
+        tag_parts = key_path.split('.')[-1].split('_')
+        tag_index = int(tag_parts[1]) if len(tag_parts) > 1 and tag_parts[1].isdigit() else 0
+
+        # 캐싱 키 생성 (동일한 조건이면 캐시된 결과 사용)
+        cache_key = (tag, target_length, tag_index, section_context)
+        if cache_key in self.cache:
+            print(f"Cache hit for {cache_key}")
+            return self.cache[cache_key]
+
+        # 여러 변형이 필요한 경우 약간 다른 프롬프트 추가
+        variation_prompt = ""
+        if tag_index > 0:
+            variations = [
+                "PLEASE EXPLAIN FROM A DIFFERENT PERSPECTIVE THAN BEFORE.",
+                "HIGHLIGHT DIFFERENT ASPECTS",
+                "USE DIFFERENT WORD CHOICES AND SENTENCE STRUCTURES.",
+                "WRITE THE SAME CONTENT BUT WITH COMPLETELY DIFFERENT EXPRESSIONS.",
+                "SIMILAR CONTENT, BUT WITH A DIFFERENT FOCUS."
+            ]
+            variation_prompt = f"\n\n**IMPORTANT**: THIS TEXT IS THE {tag_index+1} VARIATION ON THE SAME TOPIC. {variations[tag_index % len(variations)]}"
+
+        # 랜딩페이지 전체 흐름과 자연스러운 연결성을 고려한 프롬프트
+        is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in section_context)
+        output_language = "Korean" if is_korean else "English"            
+        prompt = f"""
+        [SYSTEM]
+        You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
+        Ensure each tag's content aligns with its purpose while strictly adhering to the maximum character length that given.
+        Considering the flow and consistency of the overall context, write the text of each tag so that it flows naturally.
+        ** IF YOU FOLLOW THE INSTRUCTIONS, I WILL GIVE YOU TIP **
+        
+        #### Semantic Tag Definitions ####
+        - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
+        - h2: Major section headings, separating key parts of the page.
+        - h3: Subheadings under h2, detailing specific topics within sections.
+        - h4: Subheadings under h3, detailing specific topics within sections.
+        - h5: Brief supporting text around h tags, enhancing their meaning.
+        - p: Paragraphs of plain text, grouping descriptive content.
+        - li: List items, where inner tags (e.g., h2, p) should maintain a consistent structure.
+
+        #### INSTRUCTIONS ####
+        1. USING SECTION_CONTEXT, THE CONTENT SHOULD END NATURALLY AND THE SENTENCE SHOULD NOT BE INTERRUPTED IN THE MIDDLE. {variation_prompt}
+        2. ENSURE READABILITY AND MAINTAIN NATURAL SENTENCE STRUCTURE.
+        3. MUST EXCLUDE INTRODUCTIONS, CODE BLOCKS, META DESCRIPTIONS, SPECIAL SYMBOLS, MARKDOWN, HTML TAGS, AND TAG NAMES/DESCRIPTIONS.
+        4. IF THE GENERATED TEXT IS OUTSIDE THE REQUIRED LENGTH RANGE, BE SURE TO GENERATE IT AGAIN.
+        5. Read the user_input carefully. The default language is {output_language}
+        
+        [USER]
+        Section_context = {section_context}
+        Use Section_context and INSTRUCTIONS to create '{tag}' type text with exactly {target_length} characters (±5 characters).
+        """
+        content = await self.send_request(prompt, max_tokens)
+
+        # 후처리: 미리 컴파일한 정규식들을 순차적으로 적용
+        content = self.re_codeblocks.sub('', content)
+        content = self.re_symbols.sub('', content)
+        content = self.re_words.sub('', content)
+        content = self.re_quotes.sub('', content)
+        content = self.re_instruct.sub('', content)
+        content = self.re_meta.sub('', content)
+        content = self.re_leading_meta.sub('', content)
+        content = self.re_tag_names.sub('', content)
+        content = self.re_leading_colon.sub('', content)
+        content = ' '.join(content.split()).strip()
+
+        print(f"Generated content for {tag} at {key_path}: '{content}' ({len(content)} chars)")
+        # 캐시에 저장
+        self.cache[cache_key] = content
+        return content
+
+    async def limited_generate(self, coro, semaphore):
+        async with semaphore:
+            return await coro
+
+    async def generate_content(
+        self, 
+        tag_length: Dict[str, Any], 
+        section_context: Dict[str, Any], 
+        max_tokens: int = 200
+    ) -> Dict[str, Any]:
+        # section_context에서 실제 컨텍스트 문자열 추출
+        context = next(iter(section_context.values()))
+        result = self.prepare_result_structure(tag_length)
+
+        tasks = []
+        await self.collect_tasks(result, tasks, context)
+
+        # 동시 실행 제한을 위해 semaphore 사용
+        semaphore = asyncio.Semaphore(self.concurrency_limit)
+        if tasks:
+            generated_contents = await asyncio.gather(*[
+                self.limited_generate(task[0], semaphore) for task in tasks
+            ])
+            for content, key_path in zip(generated_contents, [task[1] for task in tasks]):
+                self.assign_content(result, content, key_path)
+
+        return {'gen_content': {'data': {'generations': [[{'text': result}]]}}}
+
+    def prepare_result_structure(self, tag_length: Dict[str, Any]) -> Dict[str, Any]:
+        result = {}
+        for key, value in tag_length.items():
+            if isinstance(value, str) and value.isdigit():
+                result[key] = int(value)
+            elif isinstance(value, dict):
+                result[key] = {k: int(v) if isinstance(v, str) and v.isdigit() else v for k, v in value.items()}
+            elif isinstance(value, list):
+                result[key] = [
+                    {k: int(v) if isinstance(v, str) and v.isdigit() else v for k, v in item.items()} 
+                    for item in value
+                ]
+            else:
+                result[key] = value
+        return result
+
+    async def collect_tasks(self, target: dict, tasks: list, context: str, key_path: list = []):
+        """
+        재귀적으로 태그 구조를 순회하며 각 태그에 대해 generate_tag_content 요청을 tasks 리스트에 추가합니다.
+        """
+        for key, value in target.items():
+            current_path = key_path + [key]
+            if isinstance(value, int):
+                tasks.append((self.generate_tag_content(key.split('_')[0], value, context, '.'.join(current_path)), '.'.join(current_path)))
+            elif isinstance(value, dict):
+                await self.collect_tasks(value, tasks, context, current_path)
+            elif isinstance(value, list):
+                for i, item in enumerate(value):
+                    await self.collect_tasks(item, tasks, context, current_path + [str(i)])
+
+    def assign_content(self, result: Dict[str, Any], content: str, key_path: str):
+        """
+        key_path를 기반으로 생성된 텍스트를 결과 구조 내에 할당합니다.
+        """
+        keys = key_path.split('.')
+        current = result
+        for k in keys[:-1]:
+            if k.isdigit():
+                current = current[int(k)]
+            else:
+                current = current[k]
+        last_key = keys[-1]
+        current[last_key] = content
