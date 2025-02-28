@@ -298,7 +298,7 @@ class OpenAISectionGenerator:
         import random
         while cnt < 3:
             section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data, max_tokens)
-            print(f"section_structure_LLM_result.data.generations[0][0].text : {section_structure_LLM_result.data.generations[0][0].text}")
+            # print(f"section_structure_LLM_result.data.generations[0][0].text : {section_structure_LLM_result.data.generations[0][0].text}")
             section_structure = section_structure_LLM_result.data.generations[0][0].text.strip()
             # section_structure = await self.structure_generator.create_section_structure(combined_data)
             section_structure_LLM_result.data.generations[0][0].text = self.extract_json(section_structure)

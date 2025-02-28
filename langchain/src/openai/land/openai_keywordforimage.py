@@ -177,7 +177,7 @@ class OpenAIKeywordClient:
                     "stream": False,
                     "logprobs": None
                 }, request_id=0),
-                timeout=60
+                timeout=120
             )
             return response
         except asyncio.TimeoutError:

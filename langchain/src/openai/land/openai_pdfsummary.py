@@ -277,7 +277,7 @@ class OpenAIPDFSummaryClient:
 
             result = await asyncio.wait_for(
                 self.batch_handler.process_single_request(request, 0),
-                timeout=120
+                timeout=240
             )
 
             if result.success:
@@ -337,7 +337,7 @@ class OpenAIPDFSummaryClient:
                         "stream": False,
                         "logprobs": None
                     }, request_id=0),
-                timeout=60  # 적절한 타임아웃 값 설정
+                timeout=240  # 적절한 타임아웃 값 설정
             )
             return response
         except Exception as e:
@@ -407,7 +407,7 @@ class OpenAIPDFSummaryClient:
                     "stream": False,
                     "logprobs": None
                 }, request_id=0),
-                timeout=60
+                timeout=240
             )
             # 응답 처리
             if response.success and response.data:

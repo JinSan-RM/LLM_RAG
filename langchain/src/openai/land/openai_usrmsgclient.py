@@ -57,7 +57,7 @@ class OpenAIUsrMsgClient:
                     "stream": False,
                     "logprobs": None
                 }, request_id=0),
-                timeout=60
+                timeout=240
             )
 
             response.data.generations[0][0].text = self.extract_text(response)
