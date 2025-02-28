@@ -387,7 +387,6 @@ class OpenAIBlockContentGenerator:
         content = self.re_leading_colon.sub('', content)
         content = ' '.join(content.split()).strip()
 
-        print(f"Generated content for {tag} at {key_path}: '{content}' ({len(content)} chars)")
         # 캐시에 저장
         self.cache[cache_key] = content
         return content

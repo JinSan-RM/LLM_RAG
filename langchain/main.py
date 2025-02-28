@@ -466,12 +466,9 @@ async def openai_input_data_process(requests: List[Completions]):
             summary_result = None  # 초기값을 None으로 변경
             summary = None
             usr_msg = None
-            
-            print("+++++++++++ API/INPUT_DATA_PROCESS +++++++++++")
-            
+
             # usr_msg 처리
             if req.usr_msg:
-                print(f"usr_msg_input_data_process : {req.usr_msg}")
                 usr_msg_client = OpenAIUsrMsgClient(req.usr_msg, batch_handler)
                 usr_msg_result = await usr_msg_client.usr_msg_proposal(max_tokens=MAX_TOKENS_USR_MSG_PROPOSAL) 
                 results.append({"type": "usr_msg_argument", "result": usr_msg_result})
@@ -480,7 +477,6 @@ async def openai_input_data_process(requests: List[Completions]):
             if req.pdf_data1:
                 try:
                     pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "")
-                    print(f"pdf_data1_input_data_process : {pdf_data}")
                     summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler)
                     summary_result = await summary_client.summarize_text(pdf_data, max_tokens=MAX_TOKENS_SUMMARIZE_TEXT)
                     results.append({"type": "pdf_summary", "result": summary_result})
@@ -488,10 +484,8 @@ async def openai_input_data_process(requests: List[Completions]):
                     print(f"Error in PDFHandle: {str(e)}")
                     results.append({"type": "pdf_summary", "error": str(e)})
                     continue
-                
-            print("++++++++++++++++++++++++++++++++++++++++++")
+
             try:
-                print("merge process start")
                 if usr_msg_result and summary_result:
                     # usr_msg_result에서 텍스트 추출
                     if hasattr(usr_msg_result.data, 'generations'):
@@ -506,9 +500,9 @@ async def openai_input_data_process(requests: List[Completions]):
                         summary = str(summary_result.data)
                     merge_client = OpenAIDataMergeClient(usr_msg, summary, batch_handler)
                     merge_result = await merge_client.contents_merge(max_tokens=MAX_TOKENS_CONTENTS_MERGE)
-                        
+
                     results.append({"type": "final_result", "result": merge_result})
-                
+
                 elif usr_msg_result and usr_msg_result.data.generations[0][0].text:
                     results.append({"type": "final_result", "result": usr_msg_result})
                 elif summary_result and summary_result.data.generations[0][0].text:
@@ -582,7 +576,6 @@ async def openai_block_select(requests: List[Completions]):
         select_block_result = await blockselect_client.select_block_batch(contexts, block_lists, max_tokens=MAX_TOKENS_SELECT_BLOCK)
         # logger.debug(f"Results from generate_block_content_batch: {results}")
         final_results.append(select_block_result)
-        print(f"final_results : {final_results}")
         end = time.time()
         processing_time = end - start
         # logger.info(f"Processing time: {processing_time} seconds")
@@ -617,10 +610,7 @@ async def openai_block_content_generate(requests: List[Completions]):
         blockcontentclient = OpenAIBlockContentGenerator(batch_handler=batch_handler)
         keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
         results = []
-        for req in requests:
-            # logger.info(f"Received request for section: {req.select_block}")
-            logger.info(f"Received request for section: {req.tag_length}")
-            
+        for req in requests:            
             content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=MAX_TOKENS_GENERATE_CONTENTS)
             keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
             combined_result = {

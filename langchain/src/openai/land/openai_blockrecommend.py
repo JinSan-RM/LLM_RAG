@@ -70,47 +70,40 @@ class OpenAIBlockSelector:
                 """
 
                 result = await self.send_request(prompt, max_tokens)
-                
+
                 selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text)
-                print(f"생성 직후 tag : {selected_Html_tag_json}")
                 if selected_Html_tag_json and 'selected_tag' in selected_Html_tag_json:
                     selected_Html_tag_str = selected_Html_tag_json['selected_tag']
-                    
+
                     if selected_Html_tag_str in tag_slice:
                         section_name = section_context[0]
                         reversed_block_dict = {value: key for key, value in block_list[1].items()}
-                        
+
                         return {
                             'Section_name': section_name,
                             'Block_id': reversed_block_dict[selected_Html_tag_str],
                             'HTML_Tag': selected_Html_tag_str
                         }
-                
-                print(f"Attempt {attempt + 1} failed. Retrying...")
-            
+
             except Exception as e:
                 print("block recommend error :", e)
                 if (attempt + 1) == 3:
-                    
+
                     random_index = random.randint(0, len(block_list[1].keys()) - 1)
                     block_keys = list(block_list[1].keys())
                     selected_block_id = block_keys[random_index]
                     selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
 
-                    print(f"Attempt {attempt + 1} failed. Returning random default response with index {random_index}.")
                     return {
                         'Section_name': section_context[0],
                         'Block_id': selected_block_id,
                         'HTML_Tag': selected_html_tag
                     }
-            # 3번 시도 후에도 실패하면 기본값 반환
-            print("All attempts failed. Returning default response.")
         random_index = random.randint(0, len(block_list[1].keys()) - 1)
         block_keys = list(block_list[1].keys())
         selected_block_id = block_keys[random_index]
         selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
 
-        print("All attempts failed. Returning random default response with index {random_index}.")
         return {
             'Section_name': section_context[0],
             'Block_id': selected_block_id,
@@ -193,7 +186,6 @@ class OpenAIBlockSelector:
         
     def extract_json(self, text):
     # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
-        print(f"block recommend text : {text}")
         # re.sub(r'')
         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)

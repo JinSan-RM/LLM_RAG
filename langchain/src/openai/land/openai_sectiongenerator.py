@@ -195,9 +195,6 @@ class OpenAISectionContentGenerator:
         
         # 결과 처리
         for section_key, response in zip(section_structure.keys(), responses):
-            print("==============================================")
-            print("response : ", response)
-            print("==============================================")
             section_name = section_structure[section_key]
             if response.success and hasattr(response, 'data'):
                 content = response.data.generations[0][0].text
@@ -309,10 +306,15 @@ class OpenAISectionGenerator:
             updated_structure = {}
             section_structure = section_structure_LLM_result.data.generations[0][0].text
 
-
             updated_structure = {}
             used_values = set()  # 이미 사용된 값을 추적
-
+            print(f" section_structure : {section_structure} || {type(section_structure)}")
+            if section_structure is None or not isinstance(section_structure, dict):
+                section_structure = {}
+                for section_key in allowed_values.keys():
+                    # 해당 섹션에 대해 허용된 값들 중에서 랜덤으로 하나 선택
+                    section_structure[section_key] = random.choice(allowed_values[section_key])
+                print(f"section에 dict가 없어서 새로 생성. 1{section_structure}")
             for section, value in section_structure.items():
                 if section in allowed_values:
                     if value not in allowed_values[section]:
@@ -329,28 +331,23 @@ class OpenAISectionGenerator:
                 else:
                     print(f"Warning: Undefined section '{section}' encountered.")
 
-                    
             section_structure_LLM_result.data.generations[0][0].text = updated_structure
-            
-            valid_dict = section_structure_LLM_result.data.generations[0][0].text
-            if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict):
-                print(f"===== Retry create_section_structure...count {cnt}=====")
-                print(f"===== Because The condition is not fited : {valid_dict}")
-                cnt += 1
+
+            if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict) or section_structure_LLM_result.data.generations[0][0].text is None:
+                section_structure = {}
+                for section_key in allowed_values.keys():
+                    # 해당 섹션에 대해 허용된 값들 중에서 랜덤으로 하나 선택
+                    section_structure[section_key] = random.choice(allowed_values[section_key])
+                print(f"section에 dict가 없어서 새로 생성. 2 {section_structure}")
             else:
                 break
         create_section = section_structure_LLM_result.data.generations[0][0].text
-        print(f"create_section : {create_section}")
         section_content_data = await self.content_generator.generate_section_contents_individually(
             create_section,
             combined_data,
             max_tokens=300
         )
 
-        print("check", {
-            "section_structure": section_structure_LLM_result,
-            "section_contents": section_content_data
-        })
         return {
             "section_structure": section_structure_LLM_result,  # 그대로 유지
             "section_contents": {

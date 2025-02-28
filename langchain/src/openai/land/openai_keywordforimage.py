@@ -179,7 +179,6 @@ class OpenAIKeywordClient:
                 }, request_id=0),
                 timeout=60
             )
-            print(f"[DEBUG] Raw response: {response}")
             return response
         except asyncio.TimeoutError:
             print("[ERROR] Request timed out")
@@ -195,7 +194,6 @@ class OpenAIKeywordClient:
         return cleaned.strip()
 
     def extract_keywords(self, result):
-        print(f"[DEBUG] Extracting keywords from result: {result}")
         default_keywords = ["industry concept", "generic term", "basic idea"]
 
         if result.success and hasattr(result, 'data') and result.data.generations:
@@ -234,7 +232,6 @@ class OpenAIKeywordClient:
         else:
             keywords = default_keywords
 
-        print(f"[DEBUG] Final keywords: {keywords}")
         # 리스트 자체를 반환하도록 수정
         return keywords
 

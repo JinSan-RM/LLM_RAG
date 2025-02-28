@@ -283,7 +283,6 @@ class OpenAIPDFSummaryClient:
             if result.success:
             # Extract the summary from the response
                 response = result
-                print(f"[DEBUG] Extracted summary: {response}")
                 return response  # Return the generated summary
 
             else:
@@ -361,12 +360,6 @@ class OpenAIPDFSummaryClient:
         except Exception as e:
             print(f"PDF 처리 중 오류: {str(e)}")
             return ""
-
-        
-        
-        
-        
-        
 #========================================        
 #   기존 버전
 #========================================        
@@ -419,7 +412,6 @@ class OpenAIPDFSummaryClient:
             if response.success and response.data:
                 extracted_text = self.extract_text(response)
                 # 상위 호출과 호환성을 위해 generations 구조로 변환
-                print(f"[DEBUG] Summarized text: {extracted_text}")
                 return response
             else:
                 print(f"[ERROR] Summary generation failed: {response.error}")

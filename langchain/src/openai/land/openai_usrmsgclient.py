@@ -58,9 +58,7 @@ class OpenAIUsrMsgClient:
                 }, request_id=0),
                 timeout=60
             )
-            print("Result text of usr_msg : ", response.data.generations[0][0].text)
-            print("Response of usr_msg : ", response)
-            
+
             response.data.generations[0][0].text = self.extract_text(response)
             return response
         except asyncio.TimeoutError:
@@ -146,7 +144,6 @@ class OpenAIUsrMsgClient:
 # 위는 pydantic 테스트 ======================================================
 
     def extract_text(self, result):
-        print(f"result final: {result}")
         if result.success and result.data.generations:
             text = result.data.generations[0][0].text
             # JSON 파싱 시도

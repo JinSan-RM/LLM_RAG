@@ -83,7 +83,6 @@ class OpenAIDataMergeClient:
 
                 # 텍스트 길이 확인 및 재시도 처리
                 if len(cleaned_text) < 50:
-                    print(f"Generated text too short (attempt {attempt + 1}). Retrying...")
                     if attempt == max_retries - 1:
                         return {"error": "텍스트 생성 실패: 생성된 텍스트가 너무 짧습니다."} if is_korean else {"error": "Text generation failed: Generated text too short."}
                     continue
