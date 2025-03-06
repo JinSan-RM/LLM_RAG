@@ -90,7 +90,6 @@ class EmmetParser:
         return style
 
     def tag_sort(self, gen_data: str) -> str:
-        print(f"gen_data before re.sub: {gen_data}")
         cleaned = re.sub(r'``````', '', gen_data, flags=re.DOTALL)
         cleaned = re.sub(r'\*{3}[^*]+\*{3}', '', cleaned)
         cleaned = re.sub(r'<!DOCTYPE.*?>', '', cleaned, flags=re.IGNORECASE)
