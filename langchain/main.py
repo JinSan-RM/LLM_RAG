@@ -489,28 +489,30 @@ async def openai_input_data_process(requests: List[Completions]):
                 if usr_msg_result and summary_result:
                     # usr_msg_result에서 텍스트 추출
                     if hasattr(usr_msg_result.data, 'generations'):
-                        usr_msg = usr_msg_result.data.generations[0][0].text
+                        usr_msg = usr_msg_result.data['generations'][0][0]['text']
                     else:
                         usr_msg = str(usr_msg_result.data)
 
                     # summary_result에서 텍스트 추출
                     if isinstance(summary_result.data, dict) and 'generations' in summary_result.data:
-                        summary = summary_result.data['generations'][0]['text']
+                        summary = summary_result.data['generations'][0][0]['text']
                     else:
                         summary = str(summary_result.data)
                     merge_client = OpenAIDataMergeClient(usr_msg, summary, batch_handler)
                     merge_result = await merge_client.contents_merge(max_tokens=MAX_TOKENS_CONTENTS_MERGE)
-
+                    re_text = merge_result.data['generations'][0][0]['text']
+                    re_text = re_text.replace("\n", " ")
+                    merge_result.data['generations'][0][0]['text'] = re_text
                     results.append({"type": "final_result", "result": merge_result})
 
-                elif usr_msg_result and usr_msg_result.data.generations[0][0].text:
+                elif usr_msg_result and usr_msg_result.data['generations'][0][0]['text']:
                     results.append({"type": "final_result", "result": usr_msg_result})
-                elif summary_result and summary_result.data.generations[0][0].text:
+                elif summary_result and summary_result.data['generations'][0][0]['text']:
                     results.append({"type": "final_result", "result": summary_result})
             except Exception as e:
                 print(f"merge process error: {e}")
                 results.append({"type": "final_result", "error": str(e)})
-
+        
         end = time.time()
         processing_time = end - start
         response = {

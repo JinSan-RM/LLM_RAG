@@ -29,8 +29,33 @@ class OpenAIDataMergeClient:
                 
                 # 6. Write between 500 and 1000 characters in {output_language} for the output.
                 # 프롬프트 생성
-                prompt = f"""
-                [SYSTEM]
+                # prompt = f"""
+                # [SYSTEM]
+                # You are an expert in writing business plans. 
+                # Write a single business plan by combining the user summary and PDF summary data provided below. 
+                # Follow these instructions precisely:
+
+                # #### INSTRUCTIONS ####
+                # 1. Prioritize the user summary over the PDF summary data when combining the information.
+                # 2. Detect the language of the user summary and write the output entirely in that language. The output language must be {output_language}.
+                # 3. Ensure the business plan includes these seven elements. If information is missing, use creativity to fill gaps:
+                #     1) BUSINESS ITEM: Specific product or service details
+                #     2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
+                #     3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
+                #     4) CORE VALUE PROPOSITION: Unique value provided to customers
+                #     5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
+                #     6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
+                #     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers
+                # 4. Output the final business plan text as a plain, continuous string without any JSON structure, tags, labels, or metadata.
+                # 5. Integrate both the user summary and PDF summary data into a single, cohesive text without separating them or using labels like "Output:" or "pdf text =".
+                # 6. Blend the user summary and PDF summary data evenly in the narrative, ensuring a smooth and logical flow of information.
+                # 7. 출력은 반드시 **한국어**로 해.
+                
+                # [USER]
+                # user summary = {temp_usr}
+                # pdf summary data = {temp_pdf}
+                # """
+                sys_prompt = f"""
                 You are an expert in writing business plans. 
                 Write a single business plan by combining the user summary and PDF summary data provided below. 
                 Follow these instructions precisely:
@@ -50,8 +75,9 @@ class OpenAIDataMergeClient:
                 5. Integrate both the user summary and PDF summary data into a single, cohesive text without separating them or using labels like "Output:" or "pdf text =".
                 6. Blend the user summary and PDF summary data evenly in the narrative, ensuring a smooth and logical flow of information.
                 7. 출력은 반드시 **한국어**로 해.
-                
-                [USER]
+                """
+
+                usr_prompt = f"""
                 user summary = {temp_usr}
                 pdf summary data = {temp_pdf}
                 """
@@ -59,7 +85,9 @@ class OpenAIDataMergeClient:
                 # API 호출 및 응답 처리
                 response = await asyncio.wait_for(
                     self.batch_handler.process_single_request({
-                        "prompt": prompt,
+                        # "prompt": prompt,
+                        "sys_prompt": sys_prompt,
+                        "usr_prompt": usr_prompt,
                         "max_tokens": max_tokens,
                         "temperature": 0.3,
                         "top_p": 0.9,
@@ -74,21 +102,25 @@ class OpenAIDataMergeClient:
 
                 # 응답에서 생성된 텍스트 추출
                 if isinstance(response.data, dict) and 'generations' in response.data:
-                    generated_text = response.data['generations'][0]['text']
+                    generated_text = response.data['generations'][0][0]['text']
+                    generated_text = generated_text.replace("\n", " ")
+                    response.data['generations'][0][0]['text'] = generated_text
                 elif hasattr(response.data, 'generations'):
-                    generated_text = response.data.generations[0][0].text
+                    generated_text = response.data['generations'][0][0]['text']
+                    generated_text = generated_text.replace("\n", " ")
+                    response.data['generations'][0][0]['text'] = generated_text
                 else:
                     raise ValueError("Unexpected response structure")
 
                 # 텍스트 정리 (구조 및 태그 제거)
-                cleaned_text = self.clean_text(generated_text)
+                # cleaned_text = self.clean_text(generated_text)
 
                 # 텍스트 길이 확인 및 재시도 처리
-                if len(cleaned_text) < 50:
+                if len(generated_text) < 50:
                     if attempt == max_retries - 1:
                         return {"error": "텍스트 생성 실패: 생성된 텍스트가 너무 짧습니다."} if is_korean else {"error": "Text generation failed: Generated text too short."}
                     continue
-                response.data.generations[0][0].text = cleaned_text
+                response.data['generations'][0][0]['text'] = generated_text
                 return response
 
             except asyncio.TimeoutError:

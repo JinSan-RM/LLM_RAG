@@ -371,8 +371,32 @@ class OpenAIPDFSummaryClient:
             is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in pdf_str)
             output_language = "Korean" if is_korean else "English"            
             # STEP 1. Read the user_input carefully. The default language is {output_language}
-            prompt = f"""
-            [SYSTEM]
+            # prompt = f"""
+            # [SYSTEM]
+            # You are a professional in business plan writing from business plan contents in PDF.
+            # Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
+            # Follow these instructions precisely:
+            
+            # #### INSTRUCTIONS ####
+            
+            # STEP 1. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+            #     1) BUSINESS ITEM: Specific product or service details
+            #     2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
+            #     3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
+            #     4) CORE VALUE PROPOSITION: Unique value provided to customers
+            #     5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
+            #     6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
+            #     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers             
+            # STEP 2. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
+            # STEP 3. Summarize a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.      
+            # STEP 4. Ensure the text is free of typos and grammatical errors.
+            # STEP 5. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
+            # STEP 6. 출력은 반드시 **한국어**로 해.
+            
+            # [USER]
+            # user_input = {pdf_str}
+            # """
+            sys_prompt = f"""
             You are a professional in business plan writing from business plan contents in PDF.
             Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
             Follow these instructions precisely:
@@ -392,14 +416,17 @@ class OpenAIPDFSummaryClient:
             STEP 4. Ensure the text is free of typos and grammatical errors.
             STEP 5. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
             STEP 6. 출력은 반드시 **한국어**로 해.
+            """
             
-            [USER]
+            usr_prompt = f"""
             user_input = {pdf_str}
             """
 
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
-                    "prompt": prompt,
+                    # "prompt": prompt,
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
                     "max_tokens": max_tokens,
                     "temperature": 0.7,
                     "top_p": 0.3,
@@ -411,7 +438,10 @@ class OpenAIPDFSummaryClient:
             )
             # 응답 처리
             if response.success and response.data:
-                extracted_text = self.extract_text(response)
+                # extracted_text = self.extract_text(response)
+                re_text = response.data['generations'][0][0]['text']
+                re_text = re_text.replace("\n", " ")
+                response.data['generations'][0][0]['text'] = re_text
                 # 상위 호출과 호환성을 위해 generations 구조로 변환
                 return response
             else:
