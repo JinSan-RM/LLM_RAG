@@ -1,3 +1,4 @@
+*.pyc
 /langchain/models
 /langchain/__pycache__
 /langchain/config/__pycache__
