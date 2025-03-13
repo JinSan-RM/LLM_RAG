@@ -56,27 +56,30 @@ class BatchRequestHandler:
                         await asyncio.sleep(min_interval - time_since_last)
 
                 self.last_request_time = time.time()
-
+                
                 # Execute request with timeout
                 try:
-                    # OpenAI 요청 전 로깅
-                    # logger.debug(f"Sending OpenAI request {request_id}")
-                    # print(f"request : {request}")
-                    if 'messages' in request:
-                        response = ""
-                        async for chunk in self.openai_service.chat_completions(**request):
-                            response += chunk
-                        return RequestResult(success=True, data={'choices': [{'message': {'content': response}}]})
+                    print(f"request : {request}")
+                    if 'sys_prompt' in request or 'usr_prompt' in request:
+                        response = await self.openai_service.chat_completions(**request)  # 단일 결과 반환
+                        return RequestResult(
+                            success=True,
+                            data={'generations': [[{'text': response.content}]]}
+                        )
+                    elif 'messages' in request:
+                        response = await self.openai_service.chat_completions(**request)  # 단일 결과 반환
+                        return RequestResult(
+                            success=True,
+                            data={'choices': [{'message': {'content': response}}]}
+                        )
                     else:
                         response = await asyncio.wait_for(
                             self.openai_service.completions(**request),
                             timeout=self.request_timeout
                         )
-                    # logger.debug(f"Request {request_id} successful")
-                    return RequestResult(success=True, data=response)
+                        return RequestResult(success=True, data=response)
 
                 except TimeoutError:
-                    # logger.error(f"Request {request_id} timed out")
                     return RequestResult(
                         success=False,
                         error=f"Request timed out after {self.request_timeout}s",
