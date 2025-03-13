@@ -171,7 +171,12 @@ services:
         - ./vllm:/app/models  # 경로 일치
       networks:
         - service_network
-      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
+      # NOTE_250311 : run_server.py 사용을 위한 테스트
+      #               이렇게 자세하게 적어서 api_server를 열어놓기.
+      #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
+      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
+      # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
+      # command: python3 /app/models/src/run_server.py
       healthcheck:
         test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
         interval: 30s
