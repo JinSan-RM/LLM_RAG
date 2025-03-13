@@ -52,3 +52,4 @@ langchain/pipelines/__pycache__/content_chain.cpython-39.pyc
 langchain/utils/ollama/__pycache__/ollama_menu.cpython-39.pyc
 langchain/utils/ollama/__pycache__/ollama_summary.cpython-39.pyc
 vllm/models/EEVE-Korean-Instruct-10.8B-v1.0
+*.pyc

@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 import re
 import difflib
 import json
+import random
 
 class OpenAIBlockSelector:
     def __init__(self, batch_handler):
@@ -24,119 +25,100 @@ class OpenAIBlockSelector:
         return response
 
     async def select_block(self,
-                           section_context: str,
-                           block_list: Dict[str, str],
-                           max_tokens: int = 50) -> Dict[str, Any]:
+        section_context: str,
+        block_list: Dict[str, str],
+        max_tokens: int = 50) -> Dict[str, Any]:
         
         only_section_context = section_context[1]
         tag_slice = list(block_list[1].values())
-        
 
-        # 원래 section_name 인데 이걸 section_context로로 변경
-        # 왜냐면 이미 1차적으로 섹션이 정해진 것이기 떄문에, 컨텐츠를 잘 표현할 리스트를 찾는게 맞음
-        prompt = f"""
+        for attempt in range(3):  # 최대 3번 시도
+            try:
+                prompt = f"""
                 [System]
-                You are an AI assistant that helps you select HTML tags. Please follow these instructions.
-                
-                #### Explain Semantic Tag ####
-                h1: Represents the most important title of the web page. Typically only one is used per page, and it represents the topic or purpose of the page.
-                h2: Indicates the next most important heading after h1. It is mainly used to separate major sections of a page.
-                h3: A subheading of h2, indicating detailed topics within the section.
-                h5: It is located around h tags and briefly assists them.
-                p: A tag that defines a paragraph. Used to group plain text content.
-                li: Represents a list item. Mainly used within ul (unordered list) or ol (ordered list) tags.
-                
-                #### INSTRUCTIONS ####
-                1. READ THE section context FROM USER.
-                2. READ Explain Semantic Tag ABOVE.
-                2. SELECT ONLY ONE TAG FROM THE tag list THAT CAN BEST EXPRESS THE section context.
-                3. RETURN ONLY ONE TAG. NEVER ADD THE OTHER WORDS.
-                4. KEEP THE STRUCTURE GIVEN.
-                5. DO NOT PRINT ANY OTHER TEXT.
-                6. BE SURE TO SELECT ONLY ONE OF THE DATA IN THE TAG LIST TO PRINT.
+                You are an AI assistant that selects appropriate HTML tags for website sections. Follow these instructions precisely:
 
-                
-                [/System]
-                
-                [Example_User]
-                User input:
-                section context = "제일철강은 고품질 철강 제조 및 판매를 주력으로 하는 기업으로서, 철강 제련 및 유통 사업을 전개하고자 합니다. 당사는 제조업체와 건설회사를 1차 목표 시장으로 설정하고, 중소 철강 가공업체로 시장을 확대하며, 장기적으로는 수출 시장 진출을 목표로 하고 있습니다."
-                tag list = ["h1_h2_p", "li(h2+h5+p)*2", "h5_h1_p"]
-                [/Example_User]
-                
-                [Example_Assistant]
-                Example_Output:
-                {{"selected_tag": "li(h2+h5+p)*2"}}
-                [/Example_Assistant]
+                1. Read the given section context and tag list.
+                2. Select ONE tag from the list that best represents the section context.
+                3. Return ONLY a JSON object with the key "selected_tag" and the chosen tag as its value.
+                4. Do NOT include any additional text or explanations.
+                5. Ensure the output is a valid JSON object.
+                6. Do NOT copy or use the example outputs directly. Generate a new, appropriate response based on the given input.
+
+                --- EXAMPLE INPUTS AND OUTPUTS (FOR REFERENCE ONLY) ---
+                Example Input 1:
+                section context = "회사 소개: 우리는 혁신적인 기술 솔루션을 제공하는 선도적인 기업입니다."
+                tag list = ["h1_p", "h2_li_p", "h3_h5_p"]
+
+                Example Output 1:
+                {{"selected_tag": "h1_p"}}
+
+                Example Input 2:
+                section context = "제품 목록: 1. 스마트폰 2. 태블릿 3. 노트북"
+                tag list = ["p_li", "h2_ul_li", "h3_ol_li"]
+
+                Example Output 2:
+                {{"selected_tag": "h2_ul_li"}}
+                --- END OF EXAMPLES ---
 
                 [User]
-                User input:
                 section context = {only_section_context}
                 tag list = {tag_slice}
-                [/User]
-                """
-        
-        result = await self.send_request(prompt, max_tokens)
-        
-        # NOTE 250219 : 기존 형식 맞추기위해서 다시 dict 형식으로 전환
-        # 추후에는 find_key_by_value()과 extract_emmet_tag의 동작 방식 전환
-        block_list_dict = {block_list[0]:block_list[1]}
-        # print("check check : ", block_list)
 
-        # NOTE 250219 : 아래 함수를 사용하기 위해서 extract_json
-        if result.data.generations[0][0].text.strip() == None:
-            selected_Html_tag_str = tag_slice[0]
-        else:
-            selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text.strip())
-            selected_Html_tag_str = str(list(selected_Html_tag_json.values())[0])
-        
-        if selected_Html_tag_str not in tag_slice:
-            selected_Html_tag_str = tag_slice[0]
-        # NOTE 250219 : 여기는 좀 나중에 보자... 눈 빠지것다
-        #               지금은 임시고, 여기 검증단계 살려야합니다아아
-        # b_id = self.find_key_by_value(block_list_dict, selected_Html_tag_str)
-        # if b_id is None:
-        #     raise ValueError(f"매칭되는 b_id가 없습니다: ")
-        
-        # b_value = self.extract_emmet_tag(block_list_dict[b_id])
-        
-        section_name = section_context[0]
-        reversed_block_dict = {value: key for key, value in block_list[1].items()}
-        
-        # NOTE 250219 : 정동이사님 요청으로 Section_name 함께 반환
-        result.data.generations[0][0].text = {
-            'Section_name': section_name,
-            'Block_id': reversed_block_dict[selected_Html_tag_str], # b_id
-            'HTML_Tag': selected_Html_tag_str # b_value
+                [Assistant]
+                # YOUR RESPONSE STARTS HERE (ONLY INCLUDE THE JSON OBJECT):
+                """
+
+                result = await self.send_request(prompt, max_tokens)
+
+                selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text)
+                if selected_Html_tag_json and 'selected_tag' in selected_Html_tag_json:
+                    selected_Html_tag_str = selected_Html_tag_json['selected_tag']
+
+                    if selected_Html_tag_str in tag_slice:
+                        section_name = section_context[0]
+                        reversed_block_dict = {value: key for key, value in block_list[1].items()}
+
+                        return {
+                            'Section_name': section_name,
+                            'Block_id': reversed_block_dict[selected_Html_tag_str],
+                            'HTML_Tag': selected_Html_tag_str
+                        }
+
+            except Exception as e:
+                print("block recommend error :", e)
+                if (attempt + 1) == 3:
+
+                    random_index = random.randint(0, len(block_list[1].keys()) - 1)
+                    block_keys = list(block_list[1].keys())
+                    selected_block_id = block_keys[random_index]
+                    selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+
+                    return {
+                        'Section_name': section_context[0],
+                        'Block_id': selected_block_id,
+                        'HTML_Tag': selected_html_tag
+                    }
+        random_index = random.randint(0, len(block_list[1].keys()) - 1)
+        block_keys = list(block_list[1].keys())
+        selected_block_id = block_keys[random_index]
+        selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+
+        return {
+            'Section_name': section_context[0],
+            'Block_id': selected_block_id,
+            'HTML_Tag': selected_html_tag
         }
-        
-        # print("++++++++++++++++++++++++++++++++++++++++")
-        # print("result : ", result)
-        
-        return result
 
     async def select_block_batch(
         self,
         section_names_n_contents: List[str],
         section_names_n_block_lists: List[Dict[str, str]],
         max_tokens: int = 50) -> List[Dict[str, Any]]:
-        
-        # print("+++++++++++++++++++++++++++++++++")
-        # print("type(section_names_n_contents) : ", type(section_names_n_contents))
-        # print("section_names_n_contents : ", section_names_n_contents)
-        # print("section_names_n_contents[0] : ", section_names_n_contents[0])
-        # print("type(section_names_n_block_lists) : ", type(section_names_n_block_lists))
-        # print("section_names_n_block_lists : ", section_names_n_block_lists)
-        # print("section_names_n_block_lists[0] : ", section_names_n_block_lists[0])
     
         select_block_results = []
         for section_name, block_list in zip(section_names_n_contents, section_names_n_block_lists):
             
-            # print("++++++++++==========++++++++++")
-            # print("type(section_name) : ", type(section_name))
-            # print("section_name : ", section_name)
-            # print("type(block_list) : ", type(block_list))
-            # print("block_list : ", block_list)
             
             # NOTE 250219 : 데이터가 들어오는 만큼 뭉텅이로 보낼 수 있게 설계
             temp_section_list = list(section_name.items())
@@ -204,6 +186,7 @@ class OpenAIBlockSelector:
         
     def extract_json(self, text):
     # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
+        # re.sub(r'')
         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
         if json_match:

@@ -70,7 +70,7 @@ class OpenAIService:
     async def completions(self, **kwargs):
         max_tokens = kwargs.get("max_tokens", self.llm.max_tokens)
         try:
-            print(f"Calling completions with kwargs: {kwargs}")
+            # print(f"Calling completions with kwargs: {kwargs}")
             if self.streaming:
                 response = await self.stream_completion(**kwargs)
             else:

@@ -22,7 +22,7 @@ class RequestResult:
 class BatchRequestHandler:
     def __init__(self, openai_service: OpenAIService, 
                  max_concurrent_requests: int = 50,
-                 request_timeout: int = 30,
+                 request_timeout: int = 240,
                  requests_per_second: float = 20):  # 초당 요청 수 제한
         self.openai_service = openai_service
         self.semaphore = asyncio.Semaphore(max_concurrent_requests)
@@ -42,7 +42,7 @@ class BatchRequestHandler:
             RequestResult: 처리 결과
         """
         try:
-            logger.debug(f"Processing request {request_id}: {request}")
+            # logger.debug(f"Processing request {request_id}: {request}")
             max_tokens = request.get("max_tokens", "default")  # 디버깅용으로 max_tokens 확인
             logger.debug(f"Request {request_id} using max_tokens: {max_tokens}")
 

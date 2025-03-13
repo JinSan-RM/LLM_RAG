@@ -1,13 +1,14 @@
 ARG CUDA_VERSION=12.6.0
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.10
 # GPU 사용을 위한 CUDA 베이스 이미지 선택 (CUDA 버전은 필요에 따라 조정)
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 AS base
+
 
 # 필수 시스템 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
-    python3.11-dev \
+    # python3.11-dev \
     python3-pip \
     git \
     ca-certificates \
@@ -15,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 작업 디렉토리 설정
 WORKDIR /app
-
+ENV VLLM_GPU_MEMORY_UTILIZATION=1.0
 # requirements.txt 복사 (여기에는 vllm, torch, aiohttp, fastapi 등 필요한 라이브러리들이 포함되어 있어야 합니다.)
 COPY requirements.txt .
 COPY /models/EEVE-Korean-Instruct-10.8B-v1.0 /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0

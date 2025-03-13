@@ -165,21 +165,20 @@ class OpenAIKeywordClient:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
 
-    async def send_request(self, prompt: str) -> 'RequestResult':
+    async def send_request(self, prompt: str, max_tokens: int = 100) -> 'RequestResult':
         try:
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                     "prompt": prompt,
-                    "max_tokens": 200,  # 키워드 3개에 적합한 짧은 출력
+                    "max_tokens": max_tokens,  # 키워드 3개에 적합한 짧은 출력
                     "temperature": 0.7,  # 자연스러운 생성
                     "top_p": 0.9,       # 다양성 확보
                     "n": 1,
                     "stream": False,
                     "logprobs": None
                 }, request_id=0),
-                timeout=60
+                timeout=120
             )
-            print(f"[DEBUG] Raw response: {response}")
             return response
         except asyncio.TimeoutError:
             print("[ERROR] Request timed out")
@@ -195,7 +194,6 @@ class OpenAIKeywordClient:
         return cleaned.strip()
 
     def extract_keywords(self, result):
-        print(f"[DEBUG] Extracting keywords from result: {result}")
         default_keywords = ["industry concept", "generic term", "basic idea"]
 
         if result.success and hasattr(result, 'data') and result.data.generations:
@@ -214,28 +212,28 @@ class OpenAIKeywordClient:
                     else:
                         keywords = []
                         
-                    for key, value in json_data.items():
-                        if isinstance(value, list):
-                            keywords.extend(value)
-                        elif isinstance(value, str):
-                            keywords.append(value)
-                    
                     # 키워드 정제 및 중복 제거
                     keywords = list(set([self.clean_keyword(kw) for kw in keywords if isinstance(kw, str)]))
                     
                     # 정확히 3개의 키워드 확보
                     keywords = keywords[:3]
                     keywords += default_keywords[len(keywords):3]
+                    
+                    # 키워드가 비어있는지 확인
+                    if not keywords or len(keywords) < 3:
+                        print("[WARNING] Extracted keywords are less than 3, using defaults")
+                        keywords = default_keywords
                 else:
+                    print("[WARNING] No JSON match found in text")
                     keywords = default_keywords
             except json.JSONDecodeError:
                 print("[ERROR] Failed to parse JSON")
                 keywords = default_keywords
-
         else:
             keywords = default_keywords
 
-        return {"keyword": keywords}
+        # 리스트 자체를 반환하도록 수정
+        return keywords
 
 
     # def extract_keywords(self, result):
@@ -280,7 +278,7 @@ class OpenAIKeywordClient:
         text = re.sub(r'<\|.*?\|>', '', text)
         return text.strip()
 
-    async def section_keyword_recommend(self, context: str) -> 'RequestResult':
+    async def section_keyword_recommend(self, context: str, max_tokens: int = 100) -> 'RequestResult':
         prompt = f"""
         [SYSTEM]
         You are a professional designer tasked with creating search terms to find images that fit each section of a website landing page. Based on the provided Section_context, generate specific and relevant search terms.
@@ -303,25 +301,49 @@ class OpenAIKeywordClient:
         [USER]
         Section_context: {context}
         """
-        result = await self.send_request(prompt)
-        if isinstance(result, str):  # 에러 메시지 처리
-            print(f"[ERROR] Request returned error: {result}")
-            return result
+        max_attempts = 3
+        last_result = None
         
-        if result.success and hasattr(result, 'data'):
-            result.data.generations[0][0].text = self.extract_keywords(result)
-            print(f"[DEBUG] Processed result.data.generations[0][0].text: {result.data.generations[0][0].text}")
-            return result
+        for attempt in range(max_attempts):
+            result = await self.send_request(prompt, max_tokens)
+            last_result = result  # 마지막 결과 저장
+            
+            if isinstance(result, str):  # 에러 메시지 처리
+                print(f"[ERROR] Request returned error: {result}")
+                return result
+            
+            if result.success and hasattr(result, 'data'):
+                keywords = self.extract_keywords(result)
+                
+                # 키워드가 비어있거나 3개 미만인 경우 재시도
+                if not keywords or len(keywords) < 3:
+                    print(f"[WARNING] Generated keywords are empty or less than 3. Attempt {attempt + 1}/{max_attempts}")
+                    continue
+                    
+                # 한글이 포함된 키워드가 있는지 확인
+                contains_korean = any(any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in keyword) for keyword in keywords)
+                
+                if not contains_korean:
+                    result.data.generations[0][0].text = keywords
+                    return result
+                else:
+                    print(f"[WARNING] Generated keywords contain Korean. Attempt {attempt + 1}/{max_attempts}")
+        
+        # 모든 시도 실패 시 기본 키워드로 덮어씌우기
+        if last_result and last_result.success and hasattr(last_result, 'data'):
+            default_keywords = ["business concept", "professional service", "corporate solution"]
+            last_result.data.generations[0][0].text = default_keywords
+            return last_result
         else:
-            print(f"[ERROR] Request failed: {result.error}")
-            return result
+            # 마지막 결과가 없거나 유효하지 않은 경우 에러 반환
+            return "Failed to generate valid keywords"
 
-    async def section_keyword_create_logic(self, context: str) -> 'RequestResult':
+    async def section_keyword_create_logic(self, context: str, max_tokens: int = 100) -> 'RequestResult':
         try:
             repeat_count = 0
             while repeat_count < 3:
                 try:
-                    result = await self.section_keyword_recommend(context)
+                    result = await self.section_keyword_recommend(context, max_tokens)
                     if result.success:
                         return result
                     print(f"[WARN] Attempt {repeat_count + 1} failed: {result.error}")
