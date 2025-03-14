@@ -1,7 +1,7 @@
 """This module handles openai requests."""
 from langchain_openai import OpenAI
 from langchain.chat_models import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langchain.callbacks.manager import AsyncCallbackManager, CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from src.configs.openai_config import OpenAIConfig
@@ -120,13 +120,15 @@ class OpenAIService:
         try:
             print(f"Calling chat completions with kwargs: {kwargs}")
             
-            # kwargs에서 sys_prompt와 usr_prompt 추출, 기본값 설정
+            # kwargs에서 필요한 값들 추출
             sys_prompt = kwargs.get('sys_prompt')
             usr_prompt = kwargs.get('usr_prompt')
-            # extra_body = kwargs.get('extra_body')
             max_tokens = kwargs.get('max_tokens')
             
-            # usr_prompt가 없으면 messages에서 마지막 content를 사용 (기존 로직 유지)
+            # extra_body를 명시적으로 초기화
+            extra_body = kwargs.get('extra_body')
+            
+            # usr_prompt가 없으면 messages에서 마지막 content를 사용
             if not usr_prompt and 'messages' in kwargs and kwargs['messages']:
                 usr_prompt = kwargs['messages'][-1]['content']
             
@@ -140,10 +142,10 @@ class OpenAIService:
             ]
             
             # 비스트리밍 방식으로 응답 생성
-            if 'extra_body' in kwargs:
-                if extra_body and "guided_json" in extra_body:
+            if extra_body:  # 'extra_body' in kwargs 대신 extra_body 변수 직접 사용
+                if "guided_json" in extra_body:
+                    print(f"sys_prompt : {sys_prompt} || usr_prompt : {usr_prompt} || max_tokens: {max_tokens} || extra_body:{extra_body}")
                     sys_prompt += f"\nRespond in JSON format with the 'generate' field containing a narrative paragraph of {max_tokens} characters in Korean, following the instructions below."
-                extra_body = kwargs.get('extra_body')
                 response = await self.chat.ainvoke(
                     input=messages,
                     max_tokens=max_tokens,
@@ -155,11 +157,12 @@ class OpenAIService:
                     max_tokens=max_tokens
                 )
             print(f"Chat completions response: {response}")
-            return response  # response.content를 직접 반환
+            return response
         
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
             raise
+
     # NOTE : 기존의 chat_completions 방식 아래래
     # async def chat_completions(self, **kwargs):
     #     try:

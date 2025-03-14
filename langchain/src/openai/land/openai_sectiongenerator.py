@@ -5,13 +5,26 @@ from src.utils.batch_handler import BatchRequestHandler
 
 
 class OpenAISectionStructureGenerator:
-    def __init__(self, batch_handler: BatchRequestHandler):
+    def __init__(self, batch_handler, model="gpt-3.5-turbo"):
         self.batch_handler = batch_handler
-
-    async def send_request(self, prompt: str, max_tokens: int = 200) -> str:
+        self.model = model
+        self.extra_body = {}  # 기본값으로 초기화
+    
+    def set_extra_body(self, extra_body):
+        """extra_body 설정 메서드"""
+        self.extra_body = extra_body
+        
+    # async def send_request(self, prompt: str, max_tokens: int = 200) -> str:
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 200, extra_body: dict = None) -> str:
+        if extra_body is None:
+            extra_body = self.extra_body
+            
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
-                "prompt": prompt,
+                # "prompt": prompt,
+                "sys_prompt": sys_prompt,
+                "usr_prompt": usr_prompt,
+                "extra_body": extra_body,
                 "max_tokens": max_tokens,
                 "temperature": 0.1,
                 "top_p": 0.1,
@@ -24,9 +37,52 @@ class OpenAISectionStructureGenerator:
         return response
     
     async def create_section_structure(self, final_summary_data: str, max_tokens: int = 200):
+        # prompt = f"""
+        # [System]
+        # You are a professional designer who creates website landing page.
+        # Combine the sections according to the Section style list, Instructions and User input.
         
-        prompt = f"""
-        [System]
+        # #### Section style list ####
+        
+        # - 1 section: ["Hero"]
+        # - 2 section: ["Feature", "Content"]
+        # - 3 section: ["CTA", "Feature", "Content", "Comparison"]
+        # - 4 section: ["Comparison", "Statistics", "Countdown", "CTA"]
+        # - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ"]
+        # - 6 section: ["FAQ", "Team", "Testimonial", "Pricing"]
+        
+        # #### INSTRUCTIONS ####
+        
+        # 1. READ THE final summary data FROM USER.
+        # 2. THINK ABOUT WHAT KIND OF COMBINATION IS BEST FIT WITH THE final summary data.
+        # 3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
+        # 4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
+        # 5. BE CAREFUL ABOUT TYPOS.
+        # 6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
+        
+        # [/System]
+
+        # [User_Example]
+        # final summary data = "final summary data"
+        # [/User_Example]
+
+        # [Assistant_Example]
+        # "menu_structure": {{
+        # "section_1": "Hero",
+        # "section_2": "section style",
+        # "section_3": "section style",
+        # "section_4": "section style",
+        # "section_5": "section style",
+        # "section_6": "section style"
+        # }}
+
+        # [/Assistant_Example]
+        
+        # [User]
+        # final summary data = {final_summary_data}
+        # [/User]
+        # """
+        sys_prompt = f"""
         You are a professional designer who creates website landing page.
         Combine the sections according to the Section style list, Instructions and User input.
         
@@ -47,37 +103,20 @@ class OpenAISectionStructureGenerator:
         4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
         5. BE CAREFUL ABOUT TYPOS.
         6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
-        
-        [/System]
-
-        [User_Example]
-        final summary data = "final summary data"
-        [/User_Example]
-
-        [Assistant_Example]
-        "menu_structure": {{
-        "section_1": "Hero",
-        "section_2": "section style",
-        "section_3": "section style",
-        "section_4": "section style",
-        "section_5": "section style",
-        "section_6": "section style"
-        }}
-
-        [/Assistant_Example]
-        
-        [User]
-        final summary data = {final_summary_data}
-        [/User]
         """
+        usr_prompt = f"""
+        {final_summary_data}
+        """
+        # result = await self.send_request(prompt, max_tokens)
+        result = await self.send_request(
+            sys_prompt=sys_prompt,
+            usr_prompt=usr_prompt,
+            max_tokens=max_tokens,
+            extra_body=self.extra_body
+            )
 
-        result = await self.send_request(prompt, max_tokens)
-        
-
-        
         if result.success:
             response = result
-            print(f"Section structure response: {response}")
             return response
         else:
             print(f"Section structure generation error: {result.error}")
@@ -141,10 +180,13 @@ class OpenAISectionContentGenerator:
     #             results[section_name] = clean_content  # append 대신 딕셔너리에 추가
     #     return results
     
-    async def send_request(self, prompt: str, max_tokens: int = 300) -> str:
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 300) -> str:
+    # async def send_request(self, prompt: str, max_tokens: int = 300) -> str:
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
-                "prompt": prompt,
+                # "prompt": prompt,
+                "sys_prompt": sys_prompt,
+                "usr_prompt": usr_prompt,
                 "max_tokens": max_tokens,
                 "temperature": 0.1,
                 "top_p": 0.1,
@@ -162,7 +204,25 @@ class OpenAISectionContentGenerator:
         is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in combined_data)
         language_instruction = "한국어로 작성하세요." if is_korean else "Write in English."
         # 6. {language_instruction}
-        prompt = f"""
+        # prompt = f"""
+        # [System]
+        # You are a professional content generator for sections in the website landing pages.
+        # You know what should be included in the composition of each section.
+        # Your task is to generate concise, unique content based on combined_data.
+
+        # #### INSTRUCTIONS ####
+        # 1. WRITE PLAIN TEXT CONTENT FOR THE 'section_name' SECTION.
+        # 2. WRITE BETWEEN 200 AND 300 CHARACTERS IN FOR THE OUTPUT.
+        # 3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
+        # 4. AVOID REPEATING CONTENT.
+        # 5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+        # 6. 출력은 반드시 **한국어**로 해.
+        
+        # [User]
+        # Section_name = {section_name}
+        # all_usr_data = {combined_data}
+        # """
+        sys_prompt = f"""
         [System]
         You are a professional content generator for sections in the website landing pages.
         You know what should be included in the composition of each section.
@@ -175,19 +235,19 @@ class OpenAISectionContentGenerator:
         4. AVOID REPEATING CONTENT.
         5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
         6. 출력은 반드시 **한국어**로 해.
-        
-        [User]
+        """
+        usr_prompt = f"""
         Section_name = {section_name}
         all_usr_data = {combined_data}
         """
-        return prompt
+        return sys_prompt, usr_prompt
     
     async def generate_section_contents_individually(self, section_structure, combined_data, max_tokens=300):
         # 모든 섹션에 대한 태스크 생성
         tasks = []
         for section_key, section_name in section_structure.items():
-            prompt = self.create_section_prompt(section_name, combined_data)
-            tasks.append(self.send_request(prompt, max_tokens))
+            sys_prompt, usr_prompt = self.create_section_prompt(section_name, combined_data)
+            tasks.append(self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens))
         
         # 모든 태스크를 병렬로 실행
         results = {}
@@ -197,7 +257,8 @@ class OpenAISectionContentGenerator:
         for section_key, response in zip(section_structure.keys(), responses):
             section_name = section_structure[section_key]
             if response.success and hasattr(response, 'data'):
-                content = response.data.generations[0][0].text
+                # content = response.data.generations[0][0].text
+                content = response.data['generations'][0][0]['text']
                 # 콘텐츠 정제
                 content = self.clean_content(content)
                 results[section_name] = content
@@ -210,73 +271,49 @@ class OpenAISectionContentGenerator:
         content = re.sub(r'.*?content for.*?from the context\.', '', content, flags=re.IGNORECASE)
         content = ' '.join(content.split())
         return content
-        
-    # async def create_section_contents(self, all_usr_data: str, structure: dict, max_tokens: int = 1800):        
-        
-    #     prompt = f"""
-    #     [System]
-    #     You are a professional planner who organizes the content of your website landing page.
-    #     Write in the section content by summarizing and distributing the user's final summary data.
-
-    #     #### INSTRUCTIONS ####
-    #     1. CHECK THE FINAL SUMMARY FOR NECESSARY INFORMATION AND ORGANIZE IT APPROPRIATELY FOR EACH SECTION.
-    #     2. FOR EACH SECTION, PLEASE WRITE ABOUT 150 TO 200 CHARACTERS SO THAT THE CONTENT IS RICH AND CONVEYS THE CONTENT.
-    #     3. WRITE DIFFERENT CONTENT FOR EACH SECTION.
-    #     4. WRITE WITHOUT TYPOS.
-    #     5. LOOK AT THE INPUT AND **FOLLOW THE INPUT LANGUAGE TO THE OUTPUT**.
-    #     6. ENSURE THAT THE OUTPUT MATCHES THE JSON OUTPUT EXAMPLE BELOW.
-    #     [/System]
-
-    #     [User_Example]
-    #     final summary = "all_usr_data"
-    #     section list = "section structure"
-    #     [/User_Example]
-
-    #     [Assistant_Example]
-    #     section_content : {{
-    #     "Hero": "Content that Follow the INSTRUCTIONS",
-    #     "section style": "Content that Follow the INSTRUCTIONS",
-    #     "section style": "Content that Follow the INSTRUCTIONS",
-    #     "section style": "Content that Follow the INSTRUCTIONS",
-    #     "section style": "Content that Follow the INSTRUCTIONS",
-    #     "section style": "Content that Follow the INSTRUCTIONS"
-    #         }}
-    #     [/Assistant_Example]
-
-    #     [User]
-    #     final summary = {all_usr_data}
-    #     section list = {structure}
-    #     [/User]
-    #     """
-
-    #     request = {
-    #         "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-    #         "prompt": prompt,
-    #         "max_tokens": max_tokens,
-    #         "temperature": 0.7,
-    #         "top_p": 0.3
-    #     }
-
-    #     result = await self.batch_handler.process_single_request(request, 0)
-        
-    #     if result.success:
-    #         response = result
-    #         print(f"Section content response: {response}")
-    #         return response
-    #     else:
-    #         print(f"Section content generation error: {result.error}")
-    #         return ""
-
 
 class OpenAISectionGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
         self.structure_generator = OpenAISectionStructureGenerator(batch_handler)
         self.content_generator = OpenAISectionContentGenerator(batch_handler)
-
+        
     async def generate_landing_page(self, requests, max_tokens: int = 200):
         results = []
-
+        extra_body = {
+            "guided_json": {
+                "type": "object",
+                "properties": {
+                    "section_1": {
+                        "type": "string",
+                        "enum": ["Hero"]
+                    },
+                    "section_2": {
+                        "type": "string",
+                        "enum": ["Feature", "Content"]
+                    },
+                    "section_3": {
+                        "type": "string",
+                        "enum": ["CTA", "Feature", "Content", "Comparison"]
+                    },
+                    "section_4": {
+                        "type": "string",
+                        "enum": ["Comparison", "Statistics", "Countdown", "CTA"]
+                    },
+                    "section_5": {
+                        "type": "string",
+                        "enum": ["Testimonial", "Statistics", "Pricing", "FAQ"]
+                    },
+                    "section_6": {
+                        "type": "string",
+                        "enum": ["FAQ", "Team", "Testimonial", "Pricing"]
+                    }
+                },
+                "required": ["section_1", "section_2", "section_3", "section_4", "section_5", "section_6"]
+            }
+        }
+        
+        self.structure_generator.set_extra_body(extra_body)
         for req in requests:
 
             section_data = await self.generate_section(req.all_usr_data, max_tokens)
@@ -297,14 +334,31 @@ class OpenAISectionGenerator:
         cnt = 0
         import random
         while cnt < 3:
-            section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data, max_tokens)
-            # print(f"section_structure_LLM_result.data.generations[0][0].text : {section_structure_LLM_result.data.generations[0][0].text}")
-            section_structure = section_structure_LLM_result.data.generations[0][0].text.strip()
-            # section_structure = await self.structure_generator.create_section_structure(combined_data)
-            section_structure_LLM_result.data.generations[0][0].text = self.extract_json(section_structure)
+            try:
+                section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data, max_tokens)
+                print(f"\n section_structure_LLM_result : {section_structure_LLM_result} \n")
+                
+                # 결과 타입 확인 및 처리
+                if not section_structure_LLM_result.success:
+                    print(f"Section structure generation error: {section_structure_LLM_result.error}")
+                    return None
+                    
+                # 문자열인지 객체인지 확인하여 처리
+                if isinstance(section_structure_LLM_result, str):
+                    section_structure = section_structure_LLM_result
+                else:
+                    section_structure = section_structure_LLM_result.data['generations'][0][0]['text'].strip()
+
+            except Exception as e:
+                print(f"Error in generate_section: {str(e)}")
+                return None
+                # 예외 처리: 객체 구조가 예상과 다를 경우
+            section_structure = str(section_structure_LLM_result)
+            section_structure_LLM_result.data['generations'][0][0]['text'] = self.extract_json(section_structure)
                 
             updated_structure = {}
-            section_structure = section_structure_LLM_result.data.generations[0][0].text
+            # section_structure = section_structure_LLM_result.data.generations[0][0].text
+            section_structure = section_structure_LLM_result.data['generations'][0][0]['text']
 
             updated_structure = {}
             used_values = set()  # 이미 사용된 값을 추적
@@ -331,9 +385,11 @@ class OpenAISectionGenerator:
                 else:
                     print(f"Warning: Undefined section '{section}' encountered.")
 
-            section_structure_LLM_result.data.generations[0][0].text = updated_structure
+            # section_structure_LLM_result.data.generations[0][0].text = updated_structure
+            section_structure_LLM_result.data['generations'][0][0]['text'] = updated_structure
 
-            if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict) or section_structure_LLM_result.data.generations[0][0].text is None:
+            # if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict) or section_structure_LLM_result.data.generations[0][0].text is None:
+            if not isinstance(section_structure_LLM_result.data['generations'][0][0]['text'], dict) or section_structure_LLM_result.data['generations'][0][0]['text'] is None:
                 section_structure = {}
                 for section_key in allowed_values.keys():
                     # 해당 섹션에 대해 허용된 값들 중에서 랜덤으로 하나 선택
@@ -341,7 +397,8 @@ class OpenAISectionGenerator:
                 print(f"section에 dict가 없어서 새로 생성. 2 {section_structure}")
             else:
                 break
-        create_section = section_structure_LLM_result.data.generations[0][0].text
+        # create_section = section_structure_LLM_result.data.generations[0][0].text
+        create_section = section_structure_LLM_result.data['generations'][0][0]['text']
         section_content_data = await self.content_generator.generate_section_contents_individually(
             create_section,
             combined_data,

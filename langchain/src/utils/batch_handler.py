@@ -44,8 +44,10 @@ class BatchRequestHandler:
         try:
             # logger.debug(f"Processing request {request_id}: {request}")
             max_tokens = request.get("max_tokens", "default")  # 디버깅용으로 max_tokens 확인
-            logger.debug(f"Request {request_id} using max_tokens: {max_tokens}")
-
+            extra_body = request.get("extra_body", {})  # 기본값으로 
+        
+            # 로그 메시지 수정: 두 번째 로그 메시지의 변수명 수정
+            logger.debug(f"Request {request_id} using max_tokens: {max_tokens} \n Request {request_id} using extra_body: {extra_body}")
             async with self.semaphore:
                 # Rate limiting - wait if needed
                 now = time.time()
