@@ -613,7 +613,7 @@ async def openai_block_content_generate(requests: List[Completions]):
         keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
         results = []
         for req in requests:            
-            content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=MAX_TOKENS_GENERATE_CONTENTS)
+            content_result = await blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=1000)
             keyword_result = await keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
             combined_result = {
                 "content": content_result,
