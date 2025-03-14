@@ -604,7 +604,6 @@ async def openai_block_select(requests: List[Completions]):
 # 이거 랜딩페이지 만들 수 있게 작업해야함.
 # FastAPI 엔드포인트
 
-
 @app.post("/api/block_content_generate")
 async def openai_block_content_generate(requests: List[Completions]):
     try:
