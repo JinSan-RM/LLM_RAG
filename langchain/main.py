@@ -478,7 +478,9 @@ async def openai_input_data_process(requests: List[Completions]):
                 try:
                     pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "")
                     summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler)
-                    summary_result = await summary_client.summarize_text(pdf_data, max_tokens=MAX_TOKENS_SUMMARIZE_TEXT)
+                    # NOTE : 
+                    summary_result = await summary_client.summarize_chunked_texts_with_CoD(pdf_data, 500, 50)
+                    # summary_result = await summary_client.summarize_text(pdf_data, max_tokens=MAX_TOKENS_SUMMARIZE_TEXT)
                     results.append({"type": "pdf_summary", "result": summary_result})
                 except Exception as e:
                     print(f"Error in PDFHandle: {str(e)}")
@@ -508,7 +510,8 @@ async def openai_input_data_process(requests: List[Completions]):
                 elif usr_msg_result and usr_msg_result.data['generations'][0][0]['text']:
                     results.append({"type": "final_result", "result": usr_msg_result})
                 elif summary_result and summary_result.data['generations'][0][0]['text']:
-                    results.append({"type": "final_result", "result": summary_result})
+                    temp_results = await summary_client.generate_proposal(summary_result.data['generations'][0][0]['text'])
+                    results.append({"type": "final_result", "result": temp_results})
             except Exception as e:
                 print(f"merge process error: {e}")
                 results.append({"type": "final_result", "error": str(e)})

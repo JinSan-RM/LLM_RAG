@@ -6,13 +6,6 @@ from langchain.callbacks.manager import AsyncCallbackManager, CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from src.configs.openai_config import OpenAIConfig
 import asyncio
-
-# import openai
-# import tiktoken
-# from logger.ve_logger import VeLogger
-# from openai import AsyncOpenAI
-
-
 class OpenAIService:
     """This class handles openai requests."""
 
@@ -50,6 +43,10 @@ class OpenAIService:
         self.streaming = streaming
         callback_manager = AsyncCallbackManager([StreamingStdOutCallbackHandler()]) if streaming else CallbackManager([])
         
+        # NOTE : 여기에서 분기를 태울까? 괜찮아보이는데?
+        
+        print("openai_config.openai_api_base : ", openai_config.openai_api_base)
+        
         self.llm = OpenAI(
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             openai_api_key=openai_config.openai_api_key,
@@ -60,6 +57,15 @@ class OpenAIService:
         )
         
         self.chat = ChatOpenAI(
+            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+            openai_api_key=openai_config.openai_api_key,
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm:8002/v1",
+            streaming=streaming,
+            max_tokens=2000
+        )
+
+        self.chatmsg = ChatOpenAI(
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             openai_api_key=openai_config.openai_api_key,
             openai_api_base=openai_config.openai_api_base,
@@ -77,16 +83,27 @@ class OpenAIService:
             }}
         )
         
+        self.chatguided = ChatOpenAI(
+            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+            openai_api_key=openai_config.openai_api_key,
+            openai_api_base="http://vllm:8002/v1",
+            extra_body={"guided_json": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}, "answer": {"type": "string"}},
+                "required": ["question", "answer"]
+            }}
+        )
+
     async def completions(self, **kwargs):
         max_tokens = kwargs.get("max_tokens", self.llm.max_tokens)
         try:
-            # print(f"Calling completions with kwargs: {kwargs}")
             if self.streaming:
                 response = await self.stream_completion(**kwargs)
             else:
                 response = await asyncio.to_thread(self.llm.generate, [kwargs['prompt']], max_tokens=max_tokens)
-            # print(f"Completions response: {response}")
+                print(f"Completions response: {response}")
             return response
+        
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
             raise

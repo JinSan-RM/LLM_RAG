@@ -8,10 +8,13 @@ FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 AS base
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
-    # python3.11-dev \
-    python3-pip \
+    # python3-pip \
     git \
     ca-certificates \
+# NOTE : 하위 3가지는 extra_body={"guided_json" ~ }를 위한 패키지지
+    curl \
+    python3-dev \
+    gcc \
  && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
@@ -30,4 +33,11 @@ COPY . .
 EXPOSE 8002
 
 # vLLM 추론 서버 실행 (추가 인자가 필요하면 환경변수나 CMD 인자에 포함)
+
 CMD ["python3", "-m", "vllm.entrypoints.openai.api_server", "--port=8002", "--host=0.0.0.0"]
+
+# NOTE_250311 : run_server.py 사용을 위한 테스트
+#               api_server는 CLI로 실행하는게 낫다는 판단
+#               제대로 열어줄려면 docker-compose.yml처럼 --model도 같이 넣어줘야 함. 아니면 안 열림
+#               이렇게 모델 지정해서 열기 때문에 포트를 바꾸지 않으면 하나의 모델만 사용 가능
+# CMD ["python3", "/app/models/src/run_server.py"]
