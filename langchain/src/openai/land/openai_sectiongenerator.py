@@ -336,7 +336,7 @@ class OpenAISectionGenerator:
         while cnt < 3:
             try:
                 section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data, max_tokens)
-                print(f"\n section_structure_LLM_result : {section_structure_LLM_result} \n")
+                print(f"\n section_structure_LLM_result before : {section_structure_LLM_result} \n")
                 
                 # 결과 타입 확인 및 처리
                 if not section_structure_LLM_result.success:
@@ -344,25 +344,21 @@ class OpenAISectionGenerator:
                     return None
                     
                 # 문자열인지 객체인지 확인하여 처리
-                if isinstance(section_structure_LLM_result, str):
-                    section_structure = section_structure_LLM_result
-                else:
-                    section_structure = section_structure_LLM_result.data['generations'][0][0]['text'].strip()
+                section_structure = section_structure_LLM_result.data['generations'][0][0]['text'].strip()
 
             except Exception as e:
                 print(f"Error in generate_section: {str(e)}")
                 return None
                 # 예외 처리: 객체 구조가 예상과 다를 경우
-            section_structure = str(section_structure_LLM_result)
             section_structure_LLM_result.data['generations'][0][0]['text'] = self.extract_json(section_structure)
                 
+            print(f"\n section_structure_LLM_result after : {section_structure_LLM_result} \n")
             updated_structure = {}
             # section_structure = section_structure_LLM_result.data.generations[0][0].text
             section_structure = section_structure_LLM_result.data['generations'][0][0]['text']
 
             updated_structure = {}
             used_values = set()  # 이미 사용된 값을 추적
-            print(f" section_structure : {section_structure} || {type(section_structure)}")
             if section_structure is None or not isinstance(section_structure, dict):
                 section_structure = {}
                 for section_key in allowed_values.keys():

@@ -9,10 +9,14 @@ class OpenAIBlockSelector:
     def __init__(self, batch_handler):
         self.batch_handler = batch_handler
 
-    async def send_request(self, prompt: str, max_tokens: int = 50) -> str:
+    # async def send_request(self, prompt: str, max_tokens: int = 50) -> str:
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 50, extra_body: dict = None) -> str:
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
-                "prompt": prompt,
+                # "prompt": prompt,
+                "sys_prompt": sys_prompt,
+                "usr_prompt": usr_prompt,
+                "extra_body": extra_body,
                 "max_tokens": max_tokens,
                 "temperature": 0.1,
                 "top_p": 0.1,
@@ -34,8 +38,41 @@ class OpenAIBlockSelector:
 
         for attempt in range(3):  # 최대 3번 시도
             try:
-                prompt = f"""
-                [System]
+                # prompt = f"""
+                # [System]
+                # You are an AI assistant that selects appropriate HTML tags for website sections. Follow these instructions precisely:
+
+                # 1. Read the given section context and tag list.
+                # 2. Select ONE tag from the list that best represents the section context.
+                # 3. Return ONLY a JSON object with the key "selected_tag" and the chosen tag as its value.
+                # 4. Do NOT include any additional text or explanations.
+                # 5. Ensure the output is a valid JSON object.
+                # 6. Do NOT copy or use the example outputs directly. Generate a new, appropriate response based on the given input.
+
+                # --- EXAMPLE INPUTS AND OUTPUTS (FOR REFERENCE ONLY) ---
+                # Example Input 1:
+                # section context = "회사 소개: 우리는 혁신적인 기술 솔루션을 제공하는 선도적인 기업입니다."
+                # tag list = ["h1_p", "h2_li_p", "h3_h5_p"]
+
+                # Example Output 1:
+                # {{"selected_tag": "h1_p"}}
+
+                # Example Input 2:
+                # section context = "제품 목록: 1. 스마트폰 2. 태블릿 3. 노트북"
+                # tag list = ["p_li", "h2_ul_li", "h3_ol_li"]
+
+                # Example Output 2:
+                # {{"selected_tag": "h2_ul_li"}}
+                # --- END OF EXAMPLES ---
+
+                # [User]
+                # section context = {only_section_context}
+                # tag list = {tag_slice}
+
+                # [Assistant]
+                # # YOUR RESPONSE STARTS HERE (ONLY INCLUDE THE JSON OBJECT):
+                # """
+                sys_prompt = f"""
                 You are an AI assistant that selects appropriate HTML tags for website sections. Follow these instructions precisely:
 
                 1. Read the given section context and tag list.
@@ -60,18 +97,28 @@ class OpenAIBlockSelector:
                 Example Output 2:
                 {{"selected_tag": "h2_ul_li"}}
                 --- END OF EXAMPLES ---
-
-                [User]
+                """
+                
+                usr_prompt = f"""
                 section context = {only_section_context}
                 tag list = {tag_slice}
-
-                [Assistant]
-                # YOUR RESPONSE STARTS HERE (ONLY INCLUDE THE JSON OBJECT):
                 """
+                extra_body = {
+                    "guided_json": {
+                        "type": "object",
+                        "properties": {
+                            "selected_tag": {
+                                "type": "string",
+                                "enum": tag_slice
+                            }
+                        },
+                        "required": ["selected_tag"]
+                    }
+                }
 
-                result = await self.send_request(prompt, max_tokens)
-
-                selected_Html_tag_json = self.extract_json(result.data.generations[0][0].text)
+                result = await self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens, extra_body=extra_body)
+                print(f"result : {result}")
+                selected_Html_tag_json = self.extract_json(result.data['generations'][0][0]['text'])
                 if selected_Html_tag_json and 'selected_tag' in selected_Html_tag_json:
                     selected_Html_tag_str = selected_Html_tag_json['selected_tag']
 
