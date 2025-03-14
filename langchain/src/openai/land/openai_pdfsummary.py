@@ -94,6 +94,10 @@ class OpenAIPDFSummaryClient:
                 print("type(combined_denser_summary) : ", type(combined_denser_summary))
                 print("combined_denser_summary : ", combined_denser_summary)
                 str_combined_denser_summary = str(combined_denser_summary)
+                
+                # str_only_keywords = ', '.join(only_keywords)
+                # print("str_only_keywords : ", str_only_keywords)
+                
                 print("type(str_combined_denser_summary) : ", type(str_combined_denser_summary))
                 print("str_combined_denser_summary : ", str_combined_denser_summary)
                 
