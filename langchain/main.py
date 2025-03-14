@@ -479,7 +479,7 @@ async def openai_input_data_process(requests: List[Completions]):
                     pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "")
                     summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler)
                     # NOTE : 
-                    summary_result = await summary_client.summarize_chunked_texts_with_CoD(pdf_data, 500, 50)
+                    summary_result = await summary_client.summarize_chunked_texts_with_CoD(pdf_data, 2000, 500)
                     # summary_result = await summary_client.summarize_text(pdf_data, max_tokens=MAX_TOKENS_SUMMARIZE_TEXT)
                     results.append({"type": "pdf_summary", "result": summary_result})
                 except Exception as e:

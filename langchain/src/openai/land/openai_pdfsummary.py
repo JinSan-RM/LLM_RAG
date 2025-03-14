@@ -59,7 +59,7 @@ class OpenAIPDFSummaryClient:
                     content=chunk,
                     content_category="business report",
                     entity_range=1,
-                    max_words=150,
+                    max_words=300,
                     iterations=1
                 )
                 combined_denser_summary = []
