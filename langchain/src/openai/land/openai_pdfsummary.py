@@ -40,13 +40,12 @@ class OpenAIPDFSummaryClient:
             chunk_overlap=chunk_overlap  # Chunk 간 오버랩 (중복 내용 포함)
         )
         text_chunks = text_splitter.split_text(content)
-        print("len(청크 된 묶음 갯 수 좀 보자) : ", len(text_chunks))
-        print("청크 된 텍스트 좀 보자 : ", text_chunks)
+
         return text_chunks
 
     async def summarize_chunked_texts_with_CoD(self, pdf_texts: str, chunk_size: int, chunk_overlap: int) -> str:
         try:
-            print("몇 글자가 들어왔나아 : ", len(pdf_texts))
+
             # 0. 텍스트 청킹 수행
             chunk_texts = self.chunking_text(content=pdf_texts,
                                              chunk_size=chunk_size,
@@ -63,44 +62,13 @@ class OpenAIPDFSummaryClient:
                     max_words=150,
                     iterations=1
                 )
-                
                 combined_denser_summary = []
-                # print(f"type(CoD의 중가안안 {i} 번째 결과물 보자) : ", type(summary))
-                # print(f"CoD의 중가안안 {i} 번째 결과물 보자 : ", summary)                
-                
                 text_result = summary.data['generations'][0][0]['text']
-                # print("type(text_result) : ", type(text_result))
-                # print("text_result : ", text_result)
                 parsed_lists = json.loads(text_result)
-                
-                # print("type(parsed_list) : ", type(parsed_list))  # <class 'list'>
-                # print("len(parsed_list) : ", len(parsed_list))   # 4
-                
-                # print("parsed_list[-1] : ", parsed_list[-1])
                 for parsed_list in parsed_lists:
                     combined_denser_summary.append(parsed_list["denser_summary"])
-                
                 # NOTE : 나중에 chunk_size가 커져서 값이 많이 나오게 된다면 다시 [-1]로 바꾸기
-                
-                # last_output = parsed_lists[-1]
-                # print("응? type(Json 파싱 된 결과물) : ", type(last_output))
-                # print("Json 파싱 된 결과물 : ", last_output)
-                # print("denser_summary_Json 파싱 된 결과물 : ", last_output["denser_summary"])
-                
-                # str_last_output = str(last_output)
-                # print("type(Json 파싱 후 자료형 바꾼거거) : ", type(str_last_output))
-                # print("Json 파싱 후 자료형 바꾼거거 : ", str_last_output)                
-                
-                print("type(combined_denser_summary) : ", type(combined_denser_summary))
-                print("combined_denser_summary : ", combined_denser_summary)
                 str_combined_denser_summary = str(combined_denser_summary)
-                
-                # str_only_keywords = ', '.join(only_keywords)
-                # print("str_only_keywords : ", str_only_keywords)
-                
-                print("type(str_combined_denser_summary) : ", type(str_combined_denser_summary))
-                print("str_combined_denser_summary : ", str_combined_denser_summary)
-                
                 if str_combined_denser_summary:  # 빈 문자열이 아닌 경우만 추가
                     chunk_summaries.append(str_combined_denser_summary)
             
@@ -109,13 +77,8 @@ class OpenAIPDFSummaryClient:
                 print("모든 청크 요약에 실패했습니다.")
                 return ""
             
-            print("type(chunk_summaries) : ", type(chunk_summaries))
-            print("chunk_summaries : ", chunk_summaries)
-            
             # 2. 모든 요약 데이터 종합합
             combined_summaries = "\n\n".join(chunk_summaries)
-            print("type(combined_summaries) : ", type(combined_summaries))
-            print("combined_summaries : ", combined_summaries)
             
             # 3. 최종 요약 수행
             final_summary = await self.summarize_text_with_CoD(
@@ -129,8 +92,7 @@ class OpenAIPDFSummaryClient:
             # NOTE : 만약 텍스트가 모자라다면 여기도 위와 같이 리스트 만들어서 append 하기
             
             text_result = final_summary.data['generations'][0][0]['text']
-            # print("type(text_result) : ", type(text_result))
-            # print("text_result : ", text_result)
+
             parsed_lists = json.loads(text_result)
             
             combined_denser_summary_final = []
@@ -138,22 +100,7 @@ class OpenAIPDFSummaryClient:
             for parsed_list in parsed_lists:
                 combined_denser_summary_final.append(parsed_list["denser_summary"])
             
-            print("type(combined_denser_summary_final) : ", type(combined_denser_summary_final))
-            print("combined_denser_summary_final : ", combined_denser_summary_final)
-            str_combined_denser_summary_final = str(combined_denser_summary_final)
-            print("type(str_combined_denser_summary_final) : ", type(str_combined_denser_summary_final))
-            print("str_combined_denser_summary_final : ", str_combined_denser_summary_final)            
-            
-            # # print("type(parsed_list) : ", type(parsed_list))  # <class 'list'>
-            # # print("len(parsed_list) : ", len(parsed_list))   # 4
-            
-            # # print("parsed_list[-1] : ", parsed_list[-1])
-            
-            # last_output = parsed_list[-1]
-            # # print("type(Json 파싱 된 결과물) : ", type(last_output))
-            # print("Json 파싱 된 결과물 : ", last_output)
-            
-            # str_last_output = str(last_output)
+            str_combined_denser_summary_final = str(combined_denser_summary_final)           
             
             final_summary.data['generations'][0][0]['text'] = str_combined_denser_summary_final
             
@@ -165,12 +112,6 @@ class OpenAIPDFSummaryClient:
 
     async def summarize_text_with_CoD(self, content: str, content_category: str = "business report", entity_range:int = 3, max_words:int = 80, iterations:int = 3) -> str:
 
-        # content_category: Title Case, e.g., Article, Video Transcript, Blog Post, Research Paper. Default Article
-        # content: Content to summarize.
-        # entity_range: String range of how many entities to pick from the content and add to the summary. Default 1-3.
-        # max_words: Summary maximum length in words. Default 80.
-        # iterations: Number of entity densification rounds. Total summaries is iterations+1. For 80 words, 3 iterations is ideal. Longer summaries could benefit from 4-5 rounds, and also possibly sliding the entity_range to, e.g., 1-4. Default: 3.
-    
         sys_prompt = f"""
             As an expert copy-writer, you will write increasingly concise, entity-dense summaries of the user provided {content_category}. The initial summary should be under {max_words} words and contain {entity_range} informative Descriptive Entities from the {content_category}.
 
@@ -241,12 +182,12 @@ class OpenAIPDFSummaryClient:
 
             result = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
-                "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-                "sys_prompt": sys_prompt,
-                "usr_prompt": usr_prompt,
-                "extra_body": extra_body,
-                "temperature": 0.1,
-                "top_p": 0.3}, request_id=0),
+                    "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    "extra_body": extra_body,
+                    "temperature": 0.1,
+                    "top_p": 0.3}, request_id=0),
                 timeout=240
             )
 
@@ -269,37 +210,6 @@ class OpenAIPDFSummaryClient:
 
     async def generate_proposal(self, summary: str):
         try:
-
-            # prompt = f"""
-            # <|start_header_id|>system<|end_header_id|>
-            # Your task is to interpret and transform the content of an uploaded summary data into a website proposal. Analyze the data and fit it to the componants below.
-
-            # Instructions:
-            # Interpret the content to create a comprehensive, engaging a website proposal.
-            # Write between 1500-2000 characters in summary for the website proposal on main language in summary.
-            # Ensure the script is logically structured with clear sections and transitions. Maintain all core information without summarizing.
-            # Avoid the hallucination and frame the script as an independent narrative.
-            # Do not use bullet points; ensure a smooth narrative flow.
-
-            # Organize the script into json type: start with "key" and end with "value"
-
-            # Output Format:
-            # "Identify business goals" : "'Description include Business goals you want to achieve through this website / Problems or inconveniences you are currently experiencing / Changes or effects expected through the website'",
-            # "Customize your target" : "Description include 'Who will mainly use it? / For what purpose do users visit? / Market trend analysis'",
-            # "Derive core functions" : "Description include 'Differentiating features compared to competitors / Need for integration with existing systems or services',
-            # "design requirements" : "Description include Colors that match the brand identity"
-
-            # ensure that the output mathces the JSON output example below.
-            # Example JSON Output:
-            # json {{ "Identify business goals": "description", "Customize your target" : "description",  "Derive core functions" : "Description", "design requirements" : "description"}}
-            
-            
-            # <|eot_id|><|start_header_id|>user<|end_header_id|>
-            # summary = {summary}
-            # <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-            
-            # """
-            
             sys_prompt = f"""
                 You are a professional in business plan writing. 
                 You are provided with summarized pdf input from user.
@@ -327,9 +237,8 @@ class OpenAIPDFSummaryClient:
             
             usr_prompt = f"""
             {summary}
-            """            
-            
-            
+            """
+
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                         "sys_prompt": sys_prompt,
@@ -343,188 +252,170 @@ class OpenAIPDFSummaryClient:
                     }, request_id=0),
                 timeout=240  # 적절한 타임아웃 값 설정
             )
-            
             print("generate_proposal result : ", response)
             return response
         except Exception as e:
             print(f"제안서 생성 중 예상치 못한 오류: {str(e)}")
             return ""
         
+# #========================================
+# #   기존 버전
+# #========================================
+
+#     async def summarize_text(self, pdf_str: str, max_tokens: int = 1500) -> str:
+#         try:
+            
+#             # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
+#             is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in pdf_str)
+#             output_language = "Korean" if is_korean else "English"            
+#             # STEP 1. Read the user_input carefully. The default language is {output_language}
+#             # prompt = f"""
+#             # [SYSTEM]
+#             # You are a professional in business plan writing from business plan contents in PDF.
+#             # Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
+#             # Follow these instructions precisely:
+            
+#             # #### INSTRUCTIONS ####
+            
+#             # STEP 1. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+#             #     1) BUSINESS ITEM: Specific product or service details
+#             #     2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
+#             #     3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
+#             #     4) CORE VALUE PROPOSITION: Unique value provided to customers
+#             #     5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
+#             #     6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
+#             #     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers             
+#             # STEP 2. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
+#             # STEP 3. Summarize a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.      
+#             # STEP 4. Ensure the text is free of typos and grammatical errors.
+#             # STEP 5. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
+#             # STEP 6. 출력은 반드시 **한국어**로 해.
+            
+#             # [USER]
+#             # user_input = {pdf_str}
+#             # """
+#             sys_prompt = f"""
+#             You are a professional in business plan writing from business plan contents in PDF.
+#             Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
+#             Follow these instructions precisely:
+            
+#             #### INSTRUCTIONS ####
+            
+#             STEP 1. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+#                 1) BUSINESS ITEM: Specific product or service details
+#                 2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
+#                 3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
+#                 4) CORE VALUE PROPOSITION: Unique value provided to customers
+#                 5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
+#                 6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
+#                 7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers             
+#             STEP 2. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
+#             STEP 3. Summarize a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.      
+#             STEP 4. Ensure the text is free of typos and grammatical errors.
+#             STEP 5. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
+#             STEP 6. 출력은 반드시 **한국어**로 해.
+#             """
+            
+#             usr_prompt = f"""
+#             user_input = {pdf_str}
+#             """
+
+#             response = await asyncio.wait_for(
+#                 self.batch_handler.process_single_request({
+#                     # "prompt": prompt,
+#                     "sys_prompt": sys_prompt,
+#                     "usr_prompt": usr_prompt,
+#                     "max_tokens": max_tokens,
+#                     "temperature": 0.7,
+#                     "top_p": 0.3,
+#                     "n": 1,
+#                     "stream": False,
+#                     "logprobs": None
+#                 }, request_id=0),
+#                 timeout=240
+#             )
+#             # 응답 처리
+#             if response.success and response.data:
+#                 # extracted_text = self.extract_text(response)
+#                 re_text = response.data['generations'][0][0]['text']
+#                 re_text = re_text.replace("\n", " ")
+#                 response.data['generations'][0][0]['text'] = re_text
+#                 # 상위 호출과 호환성을 위해 generations 구조로 변환
+#                 return response
+#             else:
+#                 print(f"[ERROR] Summary generation failed: {response.error}")
+#                 response.data = {"generations": [{"text": "텍스트 생성 실패"}]}
+#                 return response
+
+#         except asyncio.TimeoutError:
+#             print("요약 요청 시간 초과")
+#             response = type('MockResponse', (), {'success': False, 'data': {"generations": [{"text": "요약 요청 시간 초과"}]}})()
+#             return response
+#         except Exception as e:
+#             print(f"요약 중 예상치 못한 오류: {str(e)}")
+#             response = type('MockResponse', (), {'success': False, 'data': {"generations": [{"text": f"오류: {str(e)}"}]}})()
+#             return response
+
+#     def extract_text(self, result):
+#         if result.success and result.data.generations:
+#             json_data = self.extract_json(result.data.generations[0][0].text)
+#             result.data.generations[0][0].text = json_data
+#             return result
+#         return "텍스트 생성 실패"
+
+#     def extract_json(self, text):
+#         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
         
-    # async def process_pdf(self):
-    #     try:
-    #         summary = await self.summarize_text(self.pdf_data)
-    #         if not summary:
-    #             print("요약 생성 실패")
-    #             return ""
-            
-    #         proposal = await self.generate_proposal(summary)
-    #         if not proposal:
-    #             print("제안서 생성 실패")
-    #             return ""
-            
-    #         return proposal  # 이 값을 직접 사용할 수 있습니다
-    #     except Exception as e:
-    #         print(f"PDF 처리 중 오류: {str(e)}")
-    #         return ""
-#========================================
-#   기존 버전
-#========================================
-
-    async def summarize_text(self, pdf_str: str, max_tokens: int = 1500) -> str:
-        try:
-            
-            # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
-            is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in pdf_str)
-            output_language = "Korean" if is_korean else "English"            
-            # STEP 1. Read the user_input carefully. The default language is {output_language}
-            # prompt = f"""
-            # [SYSTEM]
-            # You are a professional in business plan writing from business plan contents in PDF.
-            # Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
-            # Follow these instructions precisely:
-            
-            # #### INSTRUCTIONS ####
-            
-            # STEP 1. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
-            #     1) BUSINESS ITEM: Specific product or service details
-            #     2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
-            #     3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
-            #     4) CORE VALUE PROPOSITION: Unique value provided to customers
-            #     5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
-            #     6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
-            #     7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers             
-            # STEP 2. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
-            # STEP 3. Summarize a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.      
-            # STEP 4. Ensure the text is free of typos and grammatical errors.
-            # STEP 5. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
-            # STEP 6. 출력은 반드시 **한국어**로 해.
-            
-            # [USER]
-            # user_input = {pdf_str}
-            # """
-            sys_prompt = f"""
-            You are a professional in business plan writing from business plan contents in PDF.
-            Your task is to write a narrative paragraph to assist in creating a business plan based on user_input. 
-            Follow these instructions precisely:
-            
-            #### INSTRUCTIONS ####
-            
-            STEP 1. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
-                1) BUSINESS ITEM: Specific product or service details
-                2) SLOGAN OR CATCH PHRASE: A sentence expressing the company's main vision or ideology
-                3) TARGET CUSTOMERS: Characteristics and needs of the major customer base
-                4) CORE VALUE PROPOSITION: Unique value provided to customers
-                5) PRODUCT AND SERVICE FEATURES: Main functions and advantages
-                6) BUSINESS MODEL: Processes that generate profits by providing differentiated value
-                7) PROMOTION AND MARKETING STRATEGY: How to introduce products or services to customers             
-            STEP 2. Develop the business plan narrative step-by-step using only the keywords and details from the user input. Do not expand the scope beyond the provided content.
-            STEP 3. Summarize a paragraph of 1000 to 1500 characters to ensure the content is detailed and informative.      
-            STEP 4. Ensure the text is free of typos and grammatical errors.
-            STEP 5. Output only the final business plan narrative text. Do not include tags (e.g., [SYSTEM], <|eot_id|>), JSON formatting (e.g., {{Output: "..."}}), or any metadata in the output.            
-            STEP 6. 출력은 반드시 **한국어**로 해.
-            """
-            
-            usr_prompt = f"""
-            user_input = {pdf_str}
-            """
-
-            response = await asyncio.wait_for(
-                self.batch_handler.process_single_request({
-                    # "prompt": prompt,
-                    "sys_prompt": sys_prompt,
-                    "usr_prompt": usr_prompt,
-                    "max_tokens": max_tokens,
-                    "temperature": 0.7,
-                    "top_p": 0.3,
-                    "n": 1,
-                    "stream": False,
-                    "logprobs": None
-                }, request_id=0),
-                timeout=240
-            )
-            # 응답 처리
-            if response.success and response.data:
-                # extracted_text = self.extract_text(response)
-                re_text = response.data['generations'][0][0]['text']
-                re_text = re_text.replace("\n", " ")
-                response.data['generations'][0][0]['text'] = re_text
-                # 상위 호출과 호환성을 위해 generations 구조로 변환
-                return response
-            else:
-                print(f"[ERROR] Summary generation failed: {response.error}")
-                response.data = {"generations": [{"text": "텍스트 생성 실패"}]}
-                return response
-
-        except asyncio.TimeoutError:
-            print("요약 요청 시간 초과")
-            response = type('MockResponse', (), {'success': False, 'data': {"generations": [{"text": "요약 요청 시간 초과"}]}})()
-            return response
-        except Exception as e:
-            print(f"요약 중 예상치 못한 오류: {str(e)}")
-            response = type('MockResponse', (), {'success': False, 'data': {"generations": [{"text": f"오류: {str(e)}"}]}})()
-            return response
-
-    def extract_text(self, result):
-        if result.success and result.data.generations:
-            json_data = self.extract_json(result.data.generations[0][0].text)
-            result.data.generations[0][0].text = json_data
-            return result
-        return "텍스트 생성 실패"
-
-    def extract_json(self, text):
-        text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
+#         def clean_data(text):
+#             headers_to_remove = [
+#                 "<|start_header_id|>system<|end_header_id|>",
+#                 "<|start_header_id|>SYSTEM<|end_header_id|>",
+#                 "<|start_header_id|>", "<|end_header_id|>",
+#                 "<|start_header_id|>user<|end_header_id|>",
+#                 "<|start_header_id|>assistant<|end_header_id|>",
+#                 "<|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>",
+#                 "<|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>",
+#                 "<|eot_id|><|start_header_id|>USER<|end_header_id|>",
+#                 "<|eot_id|>",
+#                 "<|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>",
+#                 "[ASSISTANT]",
+#                 "[USER]",
+#                 "[SYSTEM]",
+#                 "<|end_header_id|>",
+#                 "<|start_header_id|>"
+#                 "ASSISTANT_EXAMPLE",
+#                 "USER_EXAMPLE",
+#                 "Output",
+#                 "output",
+#                 "=",
+#                 "{",
+#                 "}",
+#                 ":"
+#             ]
+#             cleaned_text = text
+#             for header in headers_to_remove:
+#                 cleaned_text = cleaned_text.replace(header, '')
+#             pattern = r'<\|.*?\|>'
+#             cleaned_text = re.sub(pattern, '', cleaned_text)
+#             return cleaned_text.strip()
         
-        def clean_data(text):
-            headers_to_remove = [
-                "<|start_header_id|>system<|end_header_id|>",
-                "<|start_header_id|>SYSTEM<|end_header_id|>",
-                "<|start_header_id|>", "<|end_header_id|>",
-                "<|start_header_id|>user<|end_header_id|>",
-                "<|start_header_id|>assistant<|end_header_id|>",
-                "<|eot_id|><|start_header_id|>ASSISTANT_EXAMPLE<|end_header_id|>",
-                "<|eot_id|><|start_header_id|>USER_EXAMPLE<|end_header_id|>",
-                "<|eot_id|><|start_header_id|>USER<|end_header_id|>",
-                "<|eot_id|>",
-                "<|eot_id|><|start_header_id|>ASSISTANT<|end_header_id|>",
-                "[ASSISTANT]",
-                "[USER]",
-                "[SYSTEM]",
-                "<|end_header_id|>",
-                "<|start_header_id|>"
-                "ASSISTANT_EXAMPLE",
-                "USER_EXAMPLE",
-                "Output",
-                "output",
-                "=",
-                "{",
-                "}",
-                ":"
-            ]
-            cleaned_text = text
-            for header in headers_to_remove:
-                cleaned_text = cleaned_text.replace(header, '')
-            pattern = r'<\|.*?\|>'
-            cleaned_text = re.sub(pattern, '', cleaned_text)
-            return cleaned_text.strip()
+#         text = clean_data(text)
         
-        text = clean_data(text)
-        
-        # JSON 객체를 찾음
-        json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            open_braces = json_str.count('{')
-            close_braces = json_str.count('}')
-            if open_braces > close_braces:
-                json_str += '}' * (open_braces - close_braces)
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                try:
-                    return json.loads(json_str.replace("'", '"'))
-                except json.JSONDecodeError:
-                    return text  # JSON 파싱 실패 시 원본 텍스트 반환
-        else:
-            # JSON이 없으면 정리된 텍스트 반환
-            return text.strip()
+#         # JSON 객체를 찾음
+#         json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
+#         if json_match:
+#             json_str = json_match.group()
+#             open_braces = json_str.count('{')
+#             close_braces = json_str.count('}')
+#             if open_braces > close_braces:
+#                 json_str += '}' * (open_braces - close_braces)
+#             try:
+#                 return json.loads(json_str)
+#             except json.JSONDecodeError:
+#                 try:
+#                     return json.loads(json_str.replace("'", '"'))
+#                 except json.JSONDecodeError:
+#                     return text  # JSON 파싱 실패 시 원본 텍스트 반환
+#         else:
+#             # JSON이 없으면 정리된 텍스트 반환
+#             return text.strip()

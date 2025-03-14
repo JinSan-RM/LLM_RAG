@@ -107,24 +107,6 @@ class OpenAIService:
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
             raise
-        
-    async def text_invoke(self, **kwargs):
-        max_tokens = kwargs.get("max_tokens", self.chatguided.max_tokens)
-        try:
-            print("invoke 타이밍")
-            if self.streaming:
-                response = await self.stream_chat_completion(**kwargs)
-            else:
-                # 'messages' 키를 사용하고, 리스트로 전달
-                messages = kwargs.get('messages', [])
-                if not messages:
-                    raise ValueError("No 'messages' provided in the request")
-                # chat.invoke가 리스트를 기대한다고 가정
-                response = await asyncio.to_thread(self.chatguided.invoke, messages, max_tokens=max_tokens)
-            return response
-        except Exception as e:
-            print(f"OpenAI Chat API call failed : {str(e)}")
-            raise
 
     async def stream_completion(self, **kwargs):
         response = ""
@@ -135,8 +117,6 @@ class OpenAIService:
     
     async def chat_completions(self, **kwargs):
         try:
-            print(f"Calling chat completions with kwargs: {kwargs}")
-            
             # kwargs에서 필요한 값들 추출
             sys_prompt = kwargs.get('sys_prompt')
             usr_prompt = kwargs.get('usr_prompt')
@@ -161,7 +141,6 @@ class OpenAIService:
             # 비스트리밍 방식으로 응답 생성
             if extra_body:  # 'extra_body' in kwargs 대신 extra_body 변수 직접 사용
                 if "guided_json" in extra_body:
-                    print(f"sys_prompt : {sys_prompt} || usr_prompt : {usr_prompt} || max_tokens: {max_tokens} || extra_body:{extra_body}")
                     sys_prompt += f"\nRespond in JSON format with the 'generate' field containing a narrative paragraph of {max_tokens} characters in Korean, following the instructions below."
                 response = await self.chat.ainvoke(
                     input=messages,
@@ -173,7 +152,6 @@ class OpenAIService:
                     input=messages,
                     max_tokens=max_tokens
                 )
-            print(f"Chat completions response: {response}")
             return response
         
         except Exception as e:

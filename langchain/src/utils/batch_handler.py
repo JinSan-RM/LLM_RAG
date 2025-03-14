@@ -47,7 +47,6 @@ class BatchRequestHandler:
             extra_body = request.get("extra_body", {})  # 기본값으로 
         
             # 로그 메시지 수정: 두 번째 로그 메시지의 변수명 수정
-            logger.debug(f"Request {request_id} using max_tokens: {max_tokens} \n Request {request_id} using extra_body: {extra_body}")
             async with self.semaphore:
                 # Rate limiting - wait if needed
                 now = time.time()
@@ -61,7 +60,6 @@ class BatchRequestHandler:
                 
                 # Execute request with timeout
                 try:
-                    print(f"request : {request}")
                     if 'sys_prompt' in request or 'usr_prompt' in request:
                         response = await self.openai_service.chat_completions(**request)  # 단일 결과 반환
                         return RequestResult(

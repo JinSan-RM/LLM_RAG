@@ -233,10 +233,10 @@ class OpenAIBlockContentGenerator:
             max_tokens=max_tokens
         )
         json_string = response.data['generations'][0][0]['text']
-
         # JSON 문자열 파싱
-        
+
         parsed_data = json.loads(json_string)
+
         combined_li = []
         for key, value in parsed_data.items():
             if key.startswith('li_'):
@@ -248,7 +248,7 @@ class OpenAIBlockContentGenerator:
 
         response.data['generations'][0][0]['text'] = transformed_data
 
-        return {'gen_content': {'data': {'generations': [[{'text': response}]]}}}
+        return {'gen_content': {'data': {'generations': [[{'text': response.data['generations'][0][0]['text']}]]}}}
 
     def assign_content(self, result: Dict[str, Any], content: str, key_path: str):
         """
