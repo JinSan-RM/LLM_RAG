@@ -23,8 +23,11 @@ ENV VLLM_GPU_MEMORY_UTILIZATION=1.0
 # requirements.txt 복사 (여기에는 vllm, torch, aiohttp, fastapi 등 필요한 라이브러리들이 포함되어 있어야 합니다.)
 COPY requirements.txt .
 COPY /models/EEVE-Korean-Instruct-10.8B-v1.0 /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0
+
+RUN apt-get update && apt-get install -y python3-pip
+
 # pip 업그레이드 후 requirements.txt 설치
-RUN pip3 install --upgrade pip && pip3 install --only-binary=:all: -r requirements.txt
+RUN pip install --upgrade pip && pip3 install --only-binary=:all: -r requirements.txt
 
 # 애플리케이션 코드 복사 (필요한 경우)
 COPY . .
