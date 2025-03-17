@@ -122,6 +122,7 @@ class OpenAIService:
             usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
             temperature = kwargs.get('temperature')
+            # repetition_penalty = kwargs.get('repetition_penalty')
             
             # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
@@ -147,7 +148,8 @@ class OpenAIService:
                 invoke_params["extra_body"] = extra_body
             if temperature:
                 invoke_params["temperature"] = temperature
-            
+            # if repetition_penalty:
+            #     invoke_params["repetition_penalty"] = repetition_penalty
             # 단일 비동기 호출
             return await self.chat.ainvoke(**invoke_params)
             

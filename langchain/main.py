@@ -773,7 +773,8 @@ async def openai_block_content_generate(requests: List[Completions]):
 
         # 각 요청에 대한 처리 작업 생성
         tasks = [content_batch_process(req, blockcontentclient, keywordclient) for req in requests]
-
+        print("What is in the tasks : ", tasks)
+        
         # 모든 태스크를 병렬로 실행
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
