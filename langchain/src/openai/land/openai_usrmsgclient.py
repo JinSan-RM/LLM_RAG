@@ -9,7 +9,7 @@ class OpenAIUsrMsgClient:
         self.usr_msg = str(usr_msg)
             
 
-    async def usr_msg_proposal(self, max_tokens: int = 1500):
+    async def usr_msg_proposal(self, max_tokens: int = 1000):
         try:
             
             # NOTE : 이 부분은 나중에는 연산을 넣어서 판단하면 될듯
@@ -84,7 +84,7 @@ class OpenAIUsrMsgClient:
                     "stream": False,
                     "logprobs": None
                 }, request_id=0),
-                timeout=240
+                timeout=100
             )
             re_text = response.data['generations'][0][0]['text']
             re_text = re_text.replace("\n", " ")

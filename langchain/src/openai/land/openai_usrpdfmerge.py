@@ -97,7 +97,7 @@ class OpenAIDataMergeClient:
                         "stream": False,
                         "logprobs": None
                     }, request_id=0),
-                    timeout=240
+                    timeout=100
                 )
 
                 # 응답에서 생성된 텍스트 추출

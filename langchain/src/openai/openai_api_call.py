@@ -117,43 +117,35 @@ class OpenAIService:
 
     async def chat_completions(self, **kwargs):
         try:
-            # kwargs에서 필요한 값들 추출
-            sys_prompt = kwargs.get('sys_prompt')
-            usr_prompt = kwargs.get('usr_prompt')
+            # 필요한 값들만 효율적으로 추출
+            sys_prompt = kwargs.get('sys_prompt', '')
+            usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
-
-            # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
-
-            # usr_prompt가 없으면 messages에서 마지막 content를 사용
+            
+            # usr_prompt 처리 최적화
             if not usr_prompt and 'messages' in kwargs and kwargs['messages']:
                 usr_prompt = kwargs['messages'][-1]['content']
-
+                
             if not usr_prompt:
                 raise ValueError("No user prompt provided in 'usr_prompt' or 'messages'")
-
-            # messages 리스트 구성
+                
+            # 메시지 생성을 최적화
             messages = [
                 SystemMessage(content=sys_prompt),
                 HumanMessage(content=usr_prompt)
             ]
             
-            # 비스트리밍 방식으로 응답 생성
-            if extra_body:  # 'extra_body' in kwargs 대신 extra_body 변수 직접 사용
-                if "guided_json" in extra_body:
-                    sys_prompt += f"\nRespond in JSON format with the 'generate' field containing a narrative paragraph of {max_tokens} characters in Korean, following the instructions below."
-                response = await self.chat.ainvoke(
-                    input=messages,
-                    max_tokens=max_tokens,
-                    extra_body=extra_body
-                )
-            else:
-                response = await self.chat.ainvoke(
-                    input=messages,
-                    max_tokens=max_tokens
-                )
-            return response
-        
+            # 단일 ainvoke 호출로 최적화
+            invoke_params = {"input": messages}
+            if max_tokens:
+                invoke_params["max_tokens"] = max_tokens
+            if extra_body:
+                invoke_params["extra_body"] = extra_body
+                
+            # 단일 비동기 호출
+            return await self.chat.ainvoke(**invoke_params)
+            
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
             raise

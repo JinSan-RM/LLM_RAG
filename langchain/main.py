@@ -464,7 +464,7 @@ async def openai_input_data_process(requests: List[Completions]):
 
         for idx, req in enumerate(requests):
             # 각 요청을 독립적인 태스크로 처리
-            tasks.append(process_single_request(req, idx))
+            tasks.append(inputDataProcess(req, idx))
         
         # 모든 태스크를 병렬로 실행
         processed_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -491,7 +491,7 @@ async def openai_input_data_process(requests: List[Completions]):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 # 단일 요청 처리 함수
-async def process_single_request(req, req_idx):
+async def inputDataProcess(req, req_idx):
     results = []
     try:
         usr_msg_task = None
@@ -505,7 +505,9 @@ async def process_single_request(req, req_idx):
         if req.pdf_data1:
             pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "")
             summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler)
-            summary_task = summary_client.summarize_chunked_texts_with_CoD(pdf_data, 2000, 500)
+            if len(pdf_data) > 4000:
+                pdf_data = pdf_data[:4000]
+            summary_task = summary_client.summarize_chunked_texts_with_CoD(pdf_data, 2000, 50)
         
         # 두 작업 동시 실행 및 결과 대기
         usr_msg_result = await usr_msg_task if usr_msg_task else None
@@ -746,6 +748,61 @@ async def openai_block_select(requests: List[Completions]):
 # 이거 랜딩페이지 만들 수 있게 작업해야함.
 # FastAPI 엔드포인트
 
+@app.post("/api/block_content_generate")
+async def openai_block_content_generate(requests: List[Completions]):
+    try:
+        start = time.time()
+        blockcontentclient = OpenAIBlockContentGenerator(batch_handler=batch_handler)
+        keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
+
+        async def content_batch_process(req, blockcontentclient, keywordclient):
+            try:
+                # 각 요청 내에서도 content와 keyword 생성을 병렬로 처리
+                content_task = blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=1000)
+                keyword_task = keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
+
+                # 두 작업을 동시에 실행
+                content_result, keyword_result = await asyncio.gather(content_task, keyword_task)
+
+                return {
+                    "content": content_result,
+                    "keywords": keyword_result
+                }
+            except Exception as e:
+                return e  # 예외를 반환하여 상위 레벨에서 처리
+
+        # 각 요청에 대한 처리 작업 생성
+        tasks = [content_batch_process(req, blockcontentclient, keywordclient) for req in requests]
+
+        # 모든 태스크를 병렬로 실행
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 예외 처리
+        processed_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                processed_results.append({"error": str(result)})
+            else:
+                processed_results.append(result)
+                
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": processed_results
+        }
+        return response
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # @app.post("/api/block_content_generate")
 # async def openai_block_content_generate(requests: List[Completions]):
 #     try:
@@ -778,54 +835,54 @@ async def openai_block_select(requests: List[Completions]):
 #         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
 #         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/block_content_generate")
-async def openai_block_content_generate(requests: List[Completions]):
-    try:
-        start = time.time()
-        blockcontentclient = OpenAIBlockContentGenerator(batch_handler=batch_handler)
-        keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
-        async def content_batch_process(req, blockcontentclient, keywordclient):
-            try:
-                # 각 요청 내에서도 content와 keyword 생성을 병렬로 처리
-                content_task = blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=1000)
-                keyword_task = keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
+# @app.post("/api/block_content_generate")
+# async def openai_block_content_generate(requests: List[Completions]):
+#     try:
+#         start = time.time()
+#         blockcontentclient = OpenAIBlockContentGenerator(batch_handler=batch_handler)
+#         keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
+#         async def content_batch_process(req, blockcontentclient, keywordclient):
+#             try:
+#                 # 각 요청 내에서도 content와 keyword 생성을 병렬로 처리
+#                 content_task = blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=1000)
+#                 keyword_task = keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
                 
-                # 두 작업을 동시에 실행
-                content_result, keyword_result = await asyncio.gather(content_task, keyword_task)
+#                 # 두 작업을 동시에 실행
+#                 content_result, keyword_result = await asyncio.gather(content_task, keyword_task)
                 
-                return {
-                    "content": content_result,
-                    "keywords": keyword_result
-                }
-            except Exception as e:
-                return e  # 예외를 반환하여 상위 레벨에서 처리
-        results = []
-        tasks = [content_batch_process(req, blockcontentclient, keywordclient) for req in requests]
+#                 return {
+#                     "content": content_result,
+#                     "keywords": keyword_result
+#                 }
+#             except Exception as e:
+#                 return e  # 예외를 반환하여 상위 레벨에서 처리
+#         results = []
+#         tasks = [content_batch_process(req, blockcontentclient, keywordclient) for req in requests]
         
-        # 모든 태스크를 병렬로 실행
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+#         # 모든 태스크를 병렬로 실행
+#         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # 예외 처리
-        processed_results = []
-        for result in results:
-            if isinstance(result, Exception):
-                processed_results.append({"error": str(result)})
-            else:
-                processed_results.append(result)
-        end = time.time()
-        processing_time = end - start
-        response = {
-            "timestamp": processing_time,
-            "total_requests": len(requests),
-            "successful_requests": sum(1 for r in results if "error" not in r),
-            "failed_requests": sum(1 for r in results if "error" in r),
-            "results": results
-        }
-        return response
-    except ValueError as ve:
-        logger.error(f"Validation error: {str(ve)}")
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+#         # 예외 처리
+#         processed_results = []
+#         for result in results:
+#             if isinstance(result, Exception):
+#                 processed_results.append({"error": str(result)})
+#             else:
+#                 processed_results.append(result)
+#         end = time.time()
+#         processing_time = end - start
+#         response = {
+#             "timestamp": processing_time,
+#             "total_requests": len(requests),
+#             "successful_requests": sum(1 for r in results if "error" not in r),
+#             "failed_requests": sum(1 for r in results if "error" in r),
+#             "results": results
+#         }
+#         return response
+#     except ValueError as ve:
+#         logger.error(f"Validation error: {str(ve)}")
+#         raise HTTPException(status_code=400, detail=str(ve))
+#     except Exception as e:
+#         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=str(e))
 

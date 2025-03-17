@@ -54,18 +54,22 @@ class OpenAIPDFSummaryClient:
                 print("분할 결과가 없습니다.")
                 return ""
                 
-            # 병렬 처리
-            tasks = [
-                self.summarize_text_with_CoD(
-                    content=chunk,
-                    content_category="business report",
-                    entity_range=1,
-                    max_words=300,
-                    iterations=1
-                ) for chunk in chunk_texts
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            semaphore = asyncio.Semaphore(3)
+        
+            # 세마포어를 사용한 제어된 병렬 처리
+            async def process_chunk_with_semaphore(chunk):
+                async with semaphore:
+                    return await self.summarize_text_with_CoD(
+                        content=chunk,
+                        content_category="business report",
+                        entity_range=1,
+                        max_words=300,
+                        iterations=1
+                    )
             
+            # 병렬 처리
+            tasks = [process_chunk_with_semaphore(chunk) for chunk in chunk_texts]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             # 요약 추출 병합
             all_summaries = []
             for idx, result in enumerate(results):
@@ -73,6 +77,7 @@ class OpenAIPDFSummaryClient:
                     continue
                     
                 try:
+                    print(f"result : {result}")
                     text_result = result.data['generations'][0][0]['text']
                     text_result = re.sub(r'[\x00-\x1F\x7F]', '', text_result)  # 제어 문자 제거
                     
@@ -194,10 +199,10 @@ class OpenAIPDFSummaryClient:
                     "sys_prompt": sys_prompt,
                     "usr_prompt": usr_prompt,
                     "extra_body": extra_body,
-                    "max_tokens": 1000,
+                    "max_tokens": 700,
                     "temperature": 0.1,
                     "top_p": 0.3}, request_id=0),
-                timeout=240
+                timeout=100
             )
 
             if result.success:
@@ -252,14 +257,14 @@ class OpenAIPDFSummaryClient:
                 self.batch_handler.process_single_request({
                         "sys_prompt": sys_prompt,
                         "usr_prompt": usr_prompt,
-                        "max_tokens": 1000,
+                        "max_tokens": 700,
                         "temperature": 0.7,
                         "top_p": 0.3,
                         "n": 1,
                         "stream": False,
                         "logprobs": None
                     }, request_id=0),
-                timeout=240  # 적절한 타임아웃 값 설정
+                timeout=100  # 적절한 타임아웃 값 설정
             )
             print("generate_proposal result : ", response)
             return response
