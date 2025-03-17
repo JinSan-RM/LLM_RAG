@@ -18,11 +18,13 @@ class OpenAIBlockContentGenerator:
         if isinstance(tag_length, dict):
             for key, value in tag_length.items():
                 # 리스트인 경우 (li_0, li_1 등 처리)
+                # 리스트인 경우 (li_0, li_1 등 처리)
                 if isinstance(value, list):
                     for i, item in enumerate(value):
                         if isinstance(item, dict):
                             item_properties = {}
                             item_required = []
+                            new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
                             new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
                             # new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
                             for sub_key, sub_value in item.items():
@@ -32,15 +34,20 @@ class OpenAIBlockContentGenerator:
                                     "type": "string",
                                     "maxLength": max_length,
                                     "minLength": min_length  # 최소 길이 추가
+                                    "maxLength": max_length,
+                                    "minLength": min_length  # 최소 길이 추가
                                 }
                                 item_required.append(sub_key)
                             properties[new_key] = {
                                 "type": "array",
                                 "items": {
+                                "items": {
                                     "type": "object",
                                     "properties": item_properties,
                                     "required": item_required
                                 },
+                                "minItems": 1,
+                                "maxItems": 1
                                 "minItems": 1,
                                 "maxItems": 1
                             }
@@ -54,6 +61,7 @@ class OpenAIBlockContentGenerator:
                         "required": nested_schema["required"]
                     }
                     required.append(key)
+                # 정수나 문자열인 경우 (최대/최소 길이 지정)
                 # 정수나 문자열인 경우 (최대/최소 길이 지정)
                 elif isinstance(value, (int, str)):
                     max_length = round(int(value) * 2.5)
