@@ -32,73 +32,33 @@ class OpenAIBlockSelector:
         section_context: str,
         block_list: Dict[str, str],
         max_tokens: int = 50) -> Dict[str, Any]:
-        
+
         only_section_context = section_context[1]
         tag_slice = list(block_list[1].values())
 
         for attempt in range(3):  # 최대 3번 시도
             try:
-                # prompt = f"""
-                # [System]
-                # You are an AI assistant that selects appropriate HTML tags for website sections. Follow these instructions precisely:
-
-                # 1. Read the given section context and tag list.
-                # 2. Select ONE tag from the list that best represents the section context.
-                # 3. Return ONLY a JSON object with the key "selected_tag" and the chosen tag as its value.
-                # 4. Do NOT include any additional text or explanations.
-                # 5. Ensure the output is a valid JSON object.
-                # 6. Do NOT copy or use the example outputs directly. Generate a new, appropriate response based on the given input.
-
-                # --- EXAMPLE INPUTS AND OUTPUTS (FOR REFERENCE ONLY) ---
-                # Example Input 1:
-                # section context = "회사 소개: 우리는 혁신적인 기술 솔루션을 제공하는 선도적인 기업입니다."
-                # tag list = ["h1_p", "h2_li_p", "h3_h5_p"]
-
-                # Example Output 1:
-                # {{"selected_tag": "h1_p"}}
-
-                # Example Input 2:
-                # section context = "제품 목록: 1. 스마트폰 2. 태블릿 3. 노트북"
-                # tag list = ["p_li", "h2_ul_li", "h3_ol_li"]
-
-                # Example Output 2:
-                # {{"selected_tag": "h2_ul_li"}}
-                # --- END OF EXAMPLES ---
-
-                # [User]
-                # section context = {only_section_context}
-                # tag list = {tag_slice}
-
-                # [Assistant]
-                # # YOUR RESPONSE STARTS HERE (ONLY INCLUDE THE JSON OBJECT):
-                # """
                 sys_prompt = f"""
                 You are an AI assistant that selects appropriate HTML tags for website sections. Follow these instructions precisely:
-
                 1. Read the given section context and tag list.
                 2. Select ONE tag from the list that best represents the section context.
                 3. Return ONLY a JSON object with the key "selected_tag" and the chosen tag as its value.
                 4. Do NOT include any additional text or explanations.
                 5. Ensure the output is a valid JSON object.
                 6. Do NOT copy or use the example outputs directly. Generate a new, appropriate response based on the given input.
-
                 --- EXAMPLE INPUTS AND OUTPUTS (FOR REFERENCE ONLY) ---
                 Example Input 1:
                 section context = "회사 소개: 우리는 혁신적인 기술 솔루션을 제공하는 선도적인 기업입니다."
                 tag list = ["h1_p", "h2_li_p", "h3_h5_p"]
-
                 Example Output 1:
                 {{"selected_tag": "h1_p"}}
-
                 Example Input 2:
                 section context = "제품 목록: 1. 스마트폰 2. 태블릿 3. 노트북"
                 tag list = ["p_li", "h2_ul_li", "h3_ol_li"]
-
                 Example Output 2:
                 {{"selected_tag": "h2_ul_li"}}
                 --- END OF EXAMPLES ---
                 """
-                
                 usr_prompt = f"""
                 section context = {only_section_context}
                 tag list = {tag_slice}
@@ -115,7 +75,6 @@ class OpenAIBlockSelector:
                         "required": ["selected_tag"]
                     }
                 }
-
                 result = await self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens, extra_body=extra_body)
                 print(f"result : {result}")
                 selected_Html_tag_json = self.extract_json(result.data['generations'][0][0]['text'])
@@ -162,30 +121,20 @@ class OpenAIBlockSelector:
         section_names_n_contents: List[str],
         section_names_n_block_lists: List[Dict[str, str]],
         max_tokens: int = 50) -> List[Dict[str, Any]]:
-    
+
         select_block_results = []
         for section_name, block_list in zip(section_names_n_contents, section_names_n_block_lists):
-            
-            
+
             # NOTE 250219 : 데이터가 들어오는 만큼 뭉텅이로 보낼 수 있게 설계
             temp_section_list = list(section_name.items())
             temp_block_list = list(block_list.items())
-            
+
             for n_temp_list, n_temp_block_list in zip(temp_section_list, temp_block_list):
                 
                 select_block_result = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
                 select_block_results.append(select_block_result)
-        
-        # NOTE 250220: batch 방식은 추후 적용
-        # tasks = []
-        # tasks = [
-        #     self.select_block(section_name, block_list)
-        #     for section_name, block_list in zip(section_names_n_contents, section_names_n_block_lists)
-        # ]
-        # task = self.select_block(n_temp_list, n_temp_block_list)
-        #         tasks.append(task)
-        # return await asyncio.gather(*tasks)
-        
+
+        # NOTE 250220: batch 방식은 추후 적용        
         return select_block_results
             
 

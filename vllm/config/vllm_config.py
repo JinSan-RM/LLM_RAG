@@ -18,7 +18,7 @@ class VLLMConfig:
     # 병렬 처리 관련 설정
     max_num_seqs: int = 256           # 동시 처리 가능한 최대 시퀀스 수
     max_batch_size: int = 50        # 단일 배치당 최대 요청 수
-    max_num_batched_tokens: int = 8192    # 배치당 최대 토큰 수
+    max_num_batched_tokens: int = 16384    # 배치당 최대 토큰 수
     max_model_len: int = 4096
 
     # 메모리 관련 설정

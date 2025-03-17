@@ -71,7 +71,7 @@ class OpenAIKeywordClient:
                 "required": ["keyword"]  # keyword 필수
             }
         }
-        
+
         result = await asyncio.wait_for(
             self.batch_handler.process_single_request({
                 "sys_prompt": sys_prompt,
@@ -86,15 +86,15 @@ class OpenAIKeywordClient:
             }, request_id=0),
             timeout=120
         )
-        
+
         temp_result = result.data['generations'][0][0]['text']
-        
+
         json_temp_result = json.loads(temp_result)
-        
+
         only_keywords = json_temp_result["keyword"]
-        
+
         result.data['generations'][0][0]['text'] = only_keywords
-        
+
         return result
 
     async def section_keyword_create_logic(self, context: str, max_tokens: int = 100) -> str:
