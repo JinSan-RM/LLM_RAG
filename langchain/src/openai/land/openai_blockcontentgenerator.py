@@ -4,6 +4,7 @@ import re
 import json
 from src.utils.emmet_parser import EmmetParser
 
+from collections import defaultdict
 
 class OpenAIBlockContentGenerator:
     def __init__(self, batch_handler):
@@ -23,8 +24,9 @@ class OpenAIBlockContentGenerator:
                             item_properties = {}
                             item_required = []
                             new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
+                            # new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
                             for sub_key, sub_value in item.items():
-                                max_length = int(sub_value) * 2  # 넉넉히 설정
+                                max_length = round(int(sub_value) * 2.5)  # 넉넉히 설정
                                 min_length = int(sub_value) // 2  # 예: 최소 절반
                                 item_properties[sub_key] = {
                                     "type": "string",
@@ -54,7 +56,7 @@ class OpenAIBlockContentGenerator:
                     required.append(key)
                 # 정수나 문자열인 경우 (최대/최소 길이 지정)
                 elif isinstance(value, (int, str)):
-                    max_length = int(value) * 2
+                    max_length = round(int(value) * 2.5)
                     min_length = int(value) // 2  # 예시로 절반 설정
                     properties[key] = {
                         "type": "string",
@@ -137,52 +139,59 @@ class OpenAIBlockContentGenerator:
             - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
             - h2: Major section headings, separating key parts of the page.
             - h3: Subheadings under h2, detailing specific topics within sections.
+            - h4: Same with h3.
             - h5: Brief supporting text around h tags, enhancing their meaning.
             - p: Paragraphs of plain text, grouping descriptive content.
             - li: List items are separated into li_0, li_1, li_2, etc., but share a context.
+            
             #### Instructions ####
-            1. **READ THE SECTION_CONTEXT AND USE IT AS THE BASIS FOR GENERATING CONTENT FOR EACH TAG IN JSON_TYPE_TAG_LIST.**
-            2. **FOR EACH KEY IN JSON_TYPE_TAG_LIST, THE VALUE REPRESENTS THE MAXIMUM CHARACTER LENGTH.**
-            - If the value is an integer, generate text that does NOT exceed this length.
-            - If text needs to be shortened, keep the core meaning while reducing words.
-            - Ensure readability and maintain natural sentence structure.
-            3. **PRESERVE THE EXACT JSON STRUCTURE PROVIDED IN JSON_TYPE_TAG_LIST, ONLY REPLACING VALUES WITH GENERATED CONTENT.**
-            4. **ENSURE CONTENT IS CONCISE, RELEVANT, AND AVOIDS REPETITION ACROSS TAGS.**
-            5. **OUTPUT ONLY THE RESULTING JSON, WITHOUT ADDITIONAL TAGS LIKE [SYSTEM] OR METADATA.**
-            6. **IF A LIST STRUCTURE EXISTS IN JSON_TYPE_TAG_LIST, GENERATE MULTIPLE ENTRIES WHILE ENSURING EACH MAINTAINS THE DESIGNATED MAXIMUM CHARACTER LENGTH.**
-            7. 출력은 반드시 **한국어**로 해.
-            [USER_EXAMPLE]
-            Section_context = "재밋은 AI 솔루션을 기반으로 사용자들에게 간단하고 편리하게 웹 사이트를 만들 수 있도록 도와주는 선도 서비스입니다. 기업 '위븐'은 AI 솔루션을 통해 일반인들도 쉽게 접근할 수 있으며, 전문가가 사용해도 무방한 에디터와 스튜디오 서비스를 보유하고 있어서 다방면에 능한 서비스를 갖고 있는 기업입니다."
-            json_type_tag_list = 
-            {{
-                "h1_0": "17",
-                "h2_0": "19",
-                "p_0": "31",
-                "li_0": [
-                    {{"h2_0": "15", "p_0": "40"}},
-                    {{"h2_0": "15", "p_0": "40"}}
-                ],
-                "p_1: "70"
-            }}
-            [ASSISTANT_EXAMPLE]
-            {{
-                "h1_0": "AI로 간편하게 만드는 웹사이트",
-                "h2_0": "누구나 쉽게 활용하는 AI 웹 제작",
-                "p_0": "위븐은 다방면에 능한 AI 웹 제작 서비스를 제공합니다.",
-                "li_0": [
-                    {{
-                        "h2_0": "AI 웹 제작 혁신",
-                        "p_0": "기업 '위븐'의 AI 솔루션은 누구나 직관적으로 웹사이트를 만들 수 있도록 지원합니다."
-                    }},
-                ],
-                "li_1": [
-                    {{
-                        "h2_0": "전문가도 만족하는 기능",
-                        "p_0": "초보자는 물론 전문가도 활용 가능한 강력한 에디터와 스튜디오 기능을 제공합니다."
-                    }},
-                "p_1": "재밋은 AI 기반 웹사이트 제작 솔루션을 제공하는 선도 서비스로, 일반 사용자부터 전문가까지 쉽게 활용할 수 있는 강력한 에디터와 스튜디오 서비스를 갖추고 있습니다."
-            }}          
+            0. 출력은 반드시 **한국어**로 해.
+            1. Format all headings (h tags) as concise phrases rather than complete sentences. For example, use 'Effective Marketing Strategies' instead of 'These are effective marketing strategies.' or 'Customer Satisfaction Improvement Methods' instead of 'We should implement customer satisfaction improvement methods.
+            2. READ THE SECTION_CONTEXT AND THE MAXIMUM CHARACTER LENGTH, USE THESE AS THE BASIS FOR GENERATING CONTENT FOR EACH TAG IN JSON_TYPE_TAG_LIST.
+            3. 2. FOR EACH KEY IN JSON_TYPE_TAG_LIST, THE VALUE REPRESENTS THE MAXIMUM CHARACTER LENGTH.
+            4. When generating text, be mindful of the max_length constraint. Plan your response so that it naturally concludes with a complete sentence well before reaching the token limit. Prioritize concise expression and avoid starting new thoughts or sentences if they might be cut off.
+            5. ENSURE CONTENT IS CONCISE, RELEVANT.
+            6. IF A LIST STRUCTURE EXISTS IN JSON_TYPE_TAG_LIST, GENERATE MULTIPLE ENTRIES WHILE ENSURING EACH MAINTAINS.
+            7. AVOIDS REPETITION ACROSS TAGS.
+            8. DO NOT INCLUDE MARKDOWN SYMBOLS and SECTION KEY.
+            9. After drafting your response, verify whether it exceeds the max_length constraint. If it does, modify your output to conclude with a natural, complete sentence that falls within the token limit. Avoid truncating mid-sentence or leaving thoughts incomplete.
+            
+          
         """
+        
+            #         [USER_EXAMPLE]
+            # Section_context = "재밋은 AI 솔루션을 기반으로 사용자들에게 간단하고 편리하게 웹 사이트를 만들 수 있도록 도와주는 선도 서비스입니다. 기업 '위븐'은 AI 솔루션을 통해 일반인들도 쉽게 접근할 수 있으며, 전문가가 사용해도 무방한 에디터와 스튜디오 서비스를 보유하고 있어서 다방면에 능한 서비스를 갖고 있는 기업입니다."
+            # json_type_tag_list = 
+            # {{
+            #     "h1_0": "17",
+            #     "h2_0": "19",
+            #     "p_0": "31",
+            #     "li_0": [
+            #         {{"h2_0": "15", "p_0": "40"}},
+            #         {{"h2_0": "15", "p_0": "40"}}
+            #     ],
+            #     "p_1: "70"
+            # }}
+
+            # [ASSISTANT_EXAMPLE]
+            # {{
+            #     "h1_0": "AI로 간편하게 만드는 웹사이트",
+            #     "h2_0": "누구나 쉽게 활용하는 AI 웹 제작",
+            #     "p_0": "위븐은 다방면에 능한 AI 웹 제작 서비스를 제공합니다.",
+            #     "li_0_0": [
+            #         {{
+            #             "h2_0": "AI 웹 제작 혁신",
+            #             "p_0": "기업 '위븐'의 AI 솔루션은 누구나 직관적으로 웹사이트를 만들 수 있도록 지원합니다."
+            #         }},
+            #     ],
+            #     "li_0_1": [
+            #         {{
+            #             "h2_0": "전문가도 만족하는 기능",
+            #             "p_0": "초보자는 물론 전문가도 활용 가능한 강력한 에디터와 스튜디오 기능을 제공합니다."
+            #         }},
+            #     "p_1": "재밋은 AI 기반 웹사이트 제작 솔루션을 제공하는 선도 서비스로, 일반 사용자부터 전문가까지 쉽게 활용할 수 있는 강력한 에디터와 스튜디오 서비스를 갖추고 있습니다."
+            # }}
+        
         usr_prompt = f"""
             Section_context: {section_context}
             json_type_tag_list: {tag_length}
@@ -218,7 +227,8 @@ class OpenAIBlockContentGenerator:
         # section_context에서 실제 컨텍스트 문자열 추출
 
         extra_body = self.create_extra_body(tag_length=tag_length)
-
+        print("extra_body를 보자아 : ", extra_body)
+        
         response = await self.generate_tag_structure(
             tag_length=tag_length,
             extra_body=extra_body,
@@ -227,20 +237,30 @@ class OpenAIBlockContentGenerator:
         )
         json_string = response.data['generations'][0][0]['text']
         # JSON 문자열 파싱
-
+        print("response를 보자아 : ", response)
+        
         parsed_data = json.loads(json_string)
 
-        combined_li = []
+        # combined_li = []
+        # for key, value in parsed_data.items():
+        #     if key.startswith('li_'):
+        #         combined_li.extend(value)
+
+        # # 새로운 데이터 구조 생성
+        # transformed_data = {key: value for key, value in parsed_data.items() if not key.startswith('li_')}
+        # transformed_data['li_0'] = combined_li
+
+        li_groups = defaultdict(list)
         for key, value in parsed_data.items():
             if key.startswith('li_'):
-                combined_li.extend(value)
+                group_key = '_'.join(key.split('_')[:2])
+                li_groups[group_key].extend(value)
 
-        # 새로운 데이터 구조 생성
         transformed_data = {key: value for key, value in parsed_data.items() if not key.startswith('li_')}
-        transformed_data['li_0'] = combined_li
+        transformed_data.update(li_groups)
 
         response.data['generations'][0][0]['text'] = transformed_data
-
+        # print("바뀐 response를 보자아 : ", response)
         return {'gen_content': {'data': {'generations': [[{'text': response.data['generations'][0][0]['text']}]]}}}
 
     def assign_content(self, result: Dict[str, Any], content: str, key_path: str):
