@@ -18,11 +18,13 @@ class OpenAIBlockContentGenerator:
         if isinstance(tag_length, dict):
             for key, value in tag_length.items():
                 # 리스트인 경우 (li_0, li_1 등 처리)
+                # 리스트인 경우 (li_0, li_1 등 처리)
                 if isinstance(value, list):
                     for i, item in enumerate(value):
                         if isinstance(item, dict):
                             item_properties = {}
                             item_required = []
+                            new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
                             new_key = f"{key}_{i}"  # li_0_0, li_0_1, li_1_0 등
                             for sub_key, sub_value in item.items():
                                 max_length = round(int(sub_value) * 2.5)  # 넉넉히 설정
@@ -31,15 +33,20 @@ class OpenAIBlockContentGenerator:
                                     "type": "string",
                                     "maxLength": max_length,
                                     "minLength": min_length  # 최소 길이 추가
+                                    "maxLength": max_length,
+                                    "minLength": min_length  # 최소 길이 추가
                                 }
                                 item_required.append(sub_key)
                             properties[new_key] = {
                                 "type": "array",
                                 "items": {
+                                "items": {
                                     "type": "object",
                                     "properties": item_properties,
                                     "required": item_required
                                 },
+                                "minItems": 1,
+                                "maxItems": 1
                                 "minItems": 1,
                                 "maxItems": 1
                             }
@@ -53,6 +60,7 @@ class OpenAIBlockContentGenerator:
                         "required": nested_schema["required"]
                     }
                     required.append(key)
+                # 정수나 문자열인 경우 (최대/최소 길이 지정)
                 # 정수나 문자열인 경우 (최대/최소 길이 지정)
                 elif isinstance(value, (int, str)):
                     max_length = round(int(value) * 2.5)
@@ -82,7 +90,6 @@ class OpenAIBlockContentGenerator:
                 "required": schema["required"]
             }
         }
-
     def extract_json(self, text):
         # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
         text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
@@ -112,12 +119,10 @@ class OpenAIBlockContentGenerator:
             except json.JSONDecodeError:
                 return None
 
-
     # async def send_request(self, prompt: str, max_tokens: int = 250) -> str:
     async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 1000) -> str:
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
-                # "prompt": prompt,
                 "sys_prompt": sys_prompt,
                 "usr_prompt": usr_prompt,
                 "extra_body": extra_body,
@@ -132,13 +137,11 @@ class OpenAIBlockContentGenerator:
         )
         return response
 
-    
     async def generate_tag_structure(self, tag_length: dict, extra_body: str, section_context: dict, max_tokens: int = 1000):
         sys_prompt = f"""
             You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
             When given Section_context and json_type_tag_list, read the Section_context first, then create content for each semantic tag key in the json_type_tag_list and replace its value with generated content. 
             Ensure each tag's content aligns with its purpose while strictly adhering to the maximum character length specified in json_type_tag_list.
-
             #### Semantic Tag Definitions ####
             - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
             - h2: Major section headings, separating key parts of the page.
@@ -199,10 +202,9 @@ class OpenAIBlockContentGenerator:
         usr_prompt = f"""
             Section_context: {section_context}
             json_type_tag_list: {tag_length}
-        """            
+        """
         extra_body = self.create_extra_body(tag_length)
-        
-        
+
         result = await asyncio.wait_for(
             self.batch_handler.process_single_request({
                 "sys_prompt": sys_prompt,
@@ -224,9 +226,9 @@ class OpenAIBlockContentGenerator:
 #             return await coro
 
     async def generate_content(
-        self, 
-        tag_length: Dict[str, Any], 
-        section_context: Dict[str, Any], 
+        self,
+        tag_length: Dict[str, Any],
+        section_context: Dict[str, Any],
         max_tokens: int = 1000
     ) -> Dict[str, Any]:
         # section_context에서 실제 컨텍스트 문자열 추출
@@ -281,5 +283,3 @@ class OpenAIBlockContentGenerator:
                 current = current[k]
         last_key = keys[-1]
         current[last_key] = content
-        
-

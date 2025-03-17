@@ -45,70 +45,78 @@ class OpenAIPDFSummaryClient:
 
     async def summarize_chunked_texts_with_CoD(self, pdf_texts: str, chunk_size: int, chunk_overlap: int) -> str:
         try:
-
-            # 0. 텍스트 청킹 수행
-            chunk_texts = self.chunking_text(content=pdf_texts,
-                                             chunk_size=chunk_size,
-                                             chunk_overlap=chunk_overlap)  # No need to await since it's now a regular function
+            # 텍스트 분할 작업
+            chunk_texts = self.chunking_text(content=pdf_texts, 
+                                            chunk_size=chunk_size, 
+                                            chunk_overlap=chunk_overlap)
             
-            # 1. 각 청크별 요약 수행
-            chunk_summaries = []
-            # NOTE : enumerate는 Debuging 용
-            for i, chunk in enumerate(chunk_texts):
-                summary = await self.summarize_text_with_CoD(
+            if not chunk_texts:
+                print("분할 결과가 없습니다.")
+                return ""
+                
+            # 병렬 처리
+            tasks = [
+                self.summarize_text_with_CoD(
                     content=chunk,
                     content_category="business report",
                     entity_range=1,
-                    max_words=150,
+                    max_words=300,
                     iterations=1
-                )
-                combined_denser_summary = []
-                text_result = summary.data['generations'][0][0]['text']
-                parsed_lists = json.loads(text_result)
-                for parsed_list in parsed_lists:
-                    combined_denser_summary.append(parsed_list["denser_summary"])
-                # NOTE : 나중에 chunk_size가 커져서 값이 많이 나오게 된다면 다시 [-1]로 바꾸기
-                str_combined_denser_summary = str(combined_denser_summary)
-                if str_combined_denser_summary:  # 빈 문자열이 아닌 경우만 추가
-                    chunk_summaries.append(str_combined_denser_summary)
+                ) for chunk in chunk_texts
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # 요약 결과가 없는 경우 처리
-            if not chunk_summaries:
-                print("모든 청크 요약에 실패했습니다.")
+            # 요약 추출 병합
+            all_summaries = []
+            for idx, result in enumerate(results):
+                if isinstance(result, Exception):
+                    continue
+                    
+                try:
+                    text_result = result.data['generations'][0][0]['text']
+                    text_result = re.sub(r'[\x00-\x1F\x7F]', '', text_result)  # 제어 문자 제거
+                    
+                    chunk_summaries = re.findall(r'"denser_summary"\s*:\s*"([^"]+)"', text_result)
+                    if chunk_summaries:
+                        all_summaries.extend(chunk_summaries)
+                    else:
+                        print(f"chunk 데이터 {idx}에서 요약 추출 실패")
+                        
+                except Exception as e:
+                    print(f"데이터 {idx} 결과 처리 오류: {str(e)}")
+                    continue
+
+            if not all_summaries:
+                print("모든 데이터 요약에 실패했습니다.")
                 return ""
-            
-            # 2. 모든 요약 데이터 종합합
-            combined_summaries = "\n\n".join(chunk_summaries)
-            
-            # 3. 최종 요약 수행
+
+            final_combined_string = " ".join(all_summaries)
+
+            # 최종 요약
             final_summary = await self.summarize_text_with_CoD(
-                content=combined_summaries,
+                content=final_combined_string,
                 content_category="business report",
                 entity_range=2,
                 max_words=1000,
                 iterations=2
             )
-            
-            # NOTE : 만약 텍스트가 모자라다면 여기도 위와 같이 리스트 만들어서 append 하기
-            
-            text_result = final_summary.data['generations'][0][0]['text']
+            try:
+                text_result = final_summary.data['generations'][0][0]['text']
+                final_summaries = re.findall(r'"denser_summary"\s*:\s*"([^"]+)"', text_result)
+                final_text = " ".join(final_summaries)
 
-            parsed_lists = json.loads(text_result)
-            
-            combined_denser_summary_final = []
-            
-            for parsed_list in parsed_lists:
-                combined_denser_summary_final.append(parsed_list["denser_summary"])
-            
-            str_combined_denser_summary_final = str(combined_denser_summary_final)           
-            
-            final_summary.data['generations'][0][0]['text'] = str_combined_denser_summary_final
-            
+                if final_text:
+                    final_summary.data['generations'][0][0]['text'] = final_text
+
+            except Exception as e:
+                print(f"최종 요약 처리 오류: {str(e)}")
+
             return final_summary
 
         except Exception as e:
-            print(f"Error during chunk summarization: {str(e)}")
+            print(f"요약 프로세스 오류: {str(e)}")
             return ""
+
 
     async def summarize_text_with_CoD(self, content: str, content_category: str = "business report", entity_range:int = 3, max_words:int = 80, iterations:int = 3) -> str:
 
@@ -125,7 +133,6 @@ class OpenAIPDFSummaryClient:
             - Read through the {content_category} and the all the below sections to get an understanding of the task.
             - Pick {entity_range} informative Descriptive Entities from the {content_category} (";" delimited, do not add spaces).
             - In your output JSON list of dictionaries, write an initial summary of max {max_words} words containing the Entities.
-            - You now have `[{{"missing_entities": "...", "denser_summary": "..."}}]`
 
             Then, repeat the below 2 steps {iterations} times:
 
@@ -140,7 +147,7 @@ class OpenAIPDFSummaryClient:
             - The first summary should be long (max {max_words} words) yet highly non-specific, containing little information beyond the Entities marked as missing. Use overly verbose language and fillers (e.g., "this {content_category} discusses") to reach ~{max_words} words.
             - Make every word count: re-write the previous summary to improve flow and make space for additional entities.
             - Make space with fusion, compression, and removal of uninformative phrases like "the {content_category} discusses".
-            - The summaries should become highly dense and concise yet self-contained, e.g., easily understood without the {content_category}.
+            - The summaries should become highly dense and concise yet self-contained.
             - Missing entities can appear anywhere in the new summary.
             - Never drop entities from the previous summary. If space cannot be made, add fewer new entities.
             - You're finished when your JSON list has 1+{iterations} dictionaries of increasing density.
@@ -153,10 +160,11 @@ class OpenAIPDFSummaryClient:
             - Answer with a minified JSON list of dictionaries with keys "missing_entities" and "denser_summary".
             - 출력은 반드시 **한국어**로 해.
 
-            ## Example output
-            [{{"missing_entities": "ent1;ent2", "denser_summary": "<vague initial summary with entities 'ent1','ent2'>"}}, {{"missing_entities": "ent3", "denser_summary": "denser summary with 'ent1','ent2','ent3'"}}, ...]
             """
+            # - You now have `[{{"missing_entities": "...", "denser_summary": "..."}}]`
         
+            # ## Example output
+            # [{{"missing_entities": "ent1;ent2", "denser_summary": "<vague initial summary with entities 'ent1','ent2'>"}}, {{"missing_entities": "ent3", "denser_summary": "denser summary with 'ent1','ent2','ent3'"}}, ...]
         usr_prompt = f"""
         {content_category}:
         {content}
@@ -179,13 +187,14 @@ class OpenAIPDFSummaryClient:
                             "maxItems": 4   # 최대 4개 항목 (정확히 4개 강제)
                         }
                     }
-
+        
             result = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                     "model": "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
                     "sys_prompt": sys_prompt,
                     "usr_prompt": usr_prompt,
                     "extra_body": extra_body,
+                    "max_tokens": 1000,
                     "temperature": 0.1,
                     "top_p": 0.3}, request_id=0),
                 timeout=240
