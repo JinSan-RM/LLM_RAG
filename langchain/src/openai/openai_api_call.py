@@ -121,6 +121,9 @@ class OpenAIService:
             sys_prompt = kwargs.get('sys_prompt', '')
             usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
+            temperature = kwargs.get('temperature')
+            
+            # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
             
             # usr_prompt 처리 최적화
@@ -142,7 +145,9 @@ class OpenAIService:
                 invoke_params["max_tokens"] = max_tokens
             if extra_body:
                 invoke_params["extra_body"] = extra_body
-                
+            if temperature:
+                invoke_params["temperature"] = temperature
+            
             # 단일 비동기 호출
             return await self.chat.ainvoke(**invoke_params)
             
