@@ -114,21 +114,21 @@ class OpenAIService:
             response += chunk
             print(chunk, end="", flush=True)
         return response
-    
+
     async def chat_completions(self, **kwargs):
         try:
             # kwargs에서 필요한 값들 추출
             sys_prompt = kwargs.get('sys_prompt')
             usr_prompt = kwargs.get('usr_prompt')
             max_tokens = kwargs.get('max_tokens')
-            
+
             # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
-            
+
             # usr_prompt가 없으면 messages에서 마지막 content를 사용
             if not usr_prompt and 'messages' in kwargs and kwargs['messages']:
                 usr_prompt = kwargs['messages'][-1]['content']
-            
+
             if not usr_prompt:
                 raise ValueError("No user prompt provided in 'usr_prompt' or 'messages'")
 
