@@ -13,12 +13,29 @@ class OpenAIDataMergeClient:
 
     async def contents_merge(self, max_tokens: int = 1000) -> dict:
         try:
-            sys_prompt = """
-            PDF 요약을 기반으로 랜딩페이지용 한국어 콘텐츠를 500~1000자 이내로 작성하세요.
-            사업 아이템, 슬로건, 타겟 고객, 핵심 가치, 기능, 비즈니스 모델, 마케팅 전략을 포함하며,
-            자연스럽고 간결한 문장으로 전달하세요.
+            sys_prompt = f"""
+            You are an expert at crafting landing page content. 
+            Create a concise business plan for a landing page using the user summary as the main focus. Mix in the PDF summary only to add supporting details where it fits. Follow these rules:
+
+            #### INSTRUCTIONS ####
+            1. Make the user summary the core of the content. It must drive the narrative and tone.
+            2. Use the PDF summary lightly to enhance the user summary, not to lead it.
+            3. Include these seven elements, filling gaps creatively based on the user summary:
+                - Business Item (what we offer)
+                - Slogan (short and catchy)
+                - Target Customers (who we serve)
+                - Core Value (why choose us)
+                - Features (key benefits)
+                - Business Model (how we profit)
+                - Marketing Strategy (how we reach customers)
+            4. Write a short, engaging Korean text for a landing page, as a single string with no tags or labels.
+            5. Keep it natural and flowing, prioritizing the user summary’s ideas.
+            6. If user and PDF summaries conflict, stick to the user summary.
             """
-            usr_prompt = self.pdf_summary
+            usr_prompt = f"""
+            user summary = {self.usr_msg}
+            pdf summary = {self.pdf_summary}
+            """
             logger.debug("병합 요청 시작")
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
