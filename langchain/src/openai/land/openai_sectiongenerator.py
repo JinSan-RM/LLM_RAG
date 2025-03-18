@@ -194,7 +194,7 @@ class OpenAISectionContentGenerator:
                 "stream": False,
                 "logprobs": None
             }, request_id=0),
-            timeout=300  # 적절한 타임아웃 값 설정
+            timeout=120  # 적절한 타임아웃 값 설정
         )
         return response
     
