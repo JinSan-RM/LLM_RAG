@@ -113,7 +113,7 @@ class OpenAIBlockContentGenerator:
                 return None
 
     # async def send_request(self, prompt: str, max_tokens: int = 250) -> str:
-    async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 1000) -> str:
+    async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 500) -> str:
         
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
@@ -155,14 +155,15 @@ class OpenAIBlockContentGenerator:
             0. 출력은 반드시 **한국어**로 해.
             1. The results of each tag should be within each max_length_CHARACTERS. The maximum output of each tag must be within 250 characters. If you follow this well, I will give you a tip.
             2. Format all headings (h tags) as concise phrases rather than complete sentences. For example, use 'Effective Marketing Strategies' instead of 'These are effective marketing strategies.'
-            3. READ THE SECTION_CONTEXT AND THE MAXIMUM CHARACTER LENGTH, USE THESE AS THE BASIS FOR GENERATING CONTENT FOR EACH TAG IN JSON_TYPE_TAG_LIST.
-            4. FOR EACH KEY IN JSON_TYPE_TAG_LIST, THE VALUE REPRESENTS THE MAXIMUM CHARACTER LENGTH.
-            5. When generating text, be mindful of the max_length_CHARACTERS constraint. Plan your response so that it naturally concludes with a complete sentence well before reaching the token limit. Prioritize concise expression and avoid starting new thoughts or sentences if they might be cut off.
-            6. ENSURE CONTENT IS CONCISE, RELEVANT.
-            7. IF A LIST STRUCTURE EXISTS IN JSON_TYPE_TAG_LIST, IT IS CREATED WITH A SIMILAR FORMAT BUT DIFFERENT CONTENT.
-            8. DO NOT REPEAT THE SAME SENTENCES OR PATTERNS, AND WRITE WITH UNIQUE CONTENT.
-            9. DO NOT INCLUDE MARKDOWN SYMBOLS, ICON and SECTION KEY.
-            10. After drafting your response, verify whether it exceeds the max_length_CHARACTERS constraint. If it does, modify your output to conclude with a natural, complete sentence that falls within the token limit. Avoid truncating mid-sentence or leaving thoughts incomplete.
+            3. p tag must express with narrative sentence. For example, use '위븐은 누구나 직관적으로 웹사이트를 만들 수 있게하며, 전문가도 활용가능한 기능을 제공합니다.' instead of '1. 위븐에선 직관적 웹사이트 제작 가능 2. 전문가도 활용가능한 기능 제공'
+            4. READ THE SECTION_CONTEXT AND THE MAXIMUM CHARACTER LENGTH, USE THESE AS THE BASIS FOR GENERATING CONTENT FOR EACH TAG IN JSON_TYPE_TAG_LIST.
+            5. FOR EACH KEY IN JSON_TYPE_TAG_LIST, THE VALUE REPRESENTS THE MAXIMUM CHARACTER LENGTH.
+            6. When generating text, be mindful of the max_length_CHARACTERS constraint. Plan your response so that it naturally concludes with a complete sentence well before reaching the token limit. Prioritize concise expression and avoid starting new thoughts or sentences if they might be cut off.
+            7. ENSURE CONTENT IS CONCISE, RELEVANT.
+            8. IF A LIST STRUCTURE EXISTS IN JSON_TYPE_TAG_LIST, IT IS CREATED WITH A SIMILAR FORMAT BUT DIFFERENT CONTENT.
+            9. DO NOT REPEAT THE SAME SENTENCES OR PATTERNS, AND WRITE WITH UNIQUE CONTENT.
+            10. DO NOT INCLUDE MARKDOWN SYMBOLS, ICON and SECTION KEY.
+            11. After drafting your response, verify whether it exceeds the max_length_CHARACTERS constraint. If it does, modify your output to conclude with a natural, complete sentence that falls within the token limit. Avoid truncating mid-sentence or leaving thoughts incomplete.
 
             #### Input Example ####
             Section_context = "재밋은 AI 솔루션을 기반으로 사용자들에게  단하고 편리하게 웹 사이트를 만들 수 있도록 도와주는 선도 서비스입니다. 기업 '위븐'은 AI 솔루션을 통해 일반인들도 쉽게 접근할 수 있으며, 전문가가 사용해도 무방한 에디터와 스튜디오 서비스를 보유하고 있어서 다방면에 능한 서비스를 갖고 있는 기업입니다."
