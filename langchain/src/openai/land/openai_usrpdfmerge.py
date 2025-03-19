@@ -1,67 +1,125 @@
 import asyncio
 import logging
-
+from typing import List
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-
-class OpenAIDataMergeClient:
-    def __init__(self, usr_msg: str, pdf_summary: str, batch_handler):
-        self.usr_msg = usr_msg
-        self.pdf_summary = pdf_summary
+class OpenAIComprehensiveProposalClient:
+    def __init__(self, usr_proposal: str, pdf_proposals: List[str], batch_handler):
+        self.usr_proposal = usr_proposal or ""  # 빈 문자열로 초기화
+        self.pdf_proposals = pdf_proposals or []  # 빈 리스트로 초기화
         self.batch_handler = batch_handler
 
-    async def contents_merge(self, max_tokens: int = 1000) -> dict:
+    async def generate_comprehensive_proposal(self) -> dict:
         try:
-            sys_prompt = f"""
-            You are an expert at crafting landing page content. 
-            Create a concise business plan for a landing page using the user summary as the main focus. Mix in the PDF summary only to add supporting details where it fits. Follow these rules:
+            # 입력 상황에 따라 프롬프트 동적 설정
+            if self.usr_proposal and self.pdf_proposals:  # 둘 다 있는 경우
+                sys_prompt = """
+                You are an expert at crafting business plan.
+                Create a concise business plan by using the user_proposal as the main focus. 
+                Mix in the Summary_of_all_pdfs only to add supporting details where it fits. 
 
-            #### INSTRUCTIONS ####
-            1. Make the user summary the core of the content. It must drive the narrative and tone.
-            2. Use the PDF summary lightly to enhance the user summary, not to lead it.
-            3. Include these seven elements, filling gaps creatively based on the user summary:
-                - Business Item (what we offer)
-                - Slogan (short and catchy)
-                - Target Customers (who we serve)
-                - Core Value (why choose us)
-                - Features (key benefits)
-                - Business Model (how we profit)
-                - Marketing Strategy (how we reach customers)
-            4. Write a short, engaging Korean text for a landing page, as a single string with no tags or labels.
-            5. Keep it natural and flowing, prioritizing the user summary’s ideas.
-            6. If user and PDF summaries conflict, stick to the user summary.
-            """
-            usr_prompt = f"""
-            user summary = {self.usr_msg}
-            pdf summary = {self.pdf_summary}
-            """
-            logger.debug("병합 요청 시작")
+                #### INSTRUCTIONS ####
+                1. Make the user_proposal the core of the content. It must drive the narrative and tone.
+                2. Use the Summary_of_all_pdfs lightly to enhance the user_proposal, not to lead it.
+                3. Include these seven elements, filling gaps creatively based on the user_proposal:
+                    - Business Item (what we offer)
+                    - Slogan (short and catchy)
+                    - Target Customers (who we serve)
+                    - Core Value (why choose us)
+                    - Features (key benefits)
+                    - Business Model (how we profit)
+                    - Marketing Strategy (how we reach customers)
+                4. Write a paragraph of 800 to 1200 characters to ensure the content is detailed and informative.
+                5. Include all the key information (numbers, examples, etc.) without missing anything.
+                6. If user_proposal and Summary_of_all_pdfs conflict, stick to the user_proposal.
+                7. 반드시 **한국어**로 작성해.
+                """
+                usr_prompt = f"user_proposal: {self.usr_proposal}\n" + "\n".join([f"Summary_of_all_pdfs {i+1}: {p}" for i, p in enumerate(self.pdf_proposals)])
+            
+            else:  # 둘 다 없는 경우
+                return {"error": "usr_proposal과 pdf_proposals 모두 비어 있음"}
+
+            # API 호출
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                     "sys_prompt": sys_prompt,
                     "usr_prompt": usr_prompt,
-                    "max_tokens": max_tokens,
-                    "temperature": 0.5,
-                    "top_p": 0.8
+                    "max_tokens": 800,
+                    "temperature": 0.3,
+                    "top_p": 0.9
                 }, request_id=0),
-                timeout=60
+                timeout=120
             )
-
-            if response is None or not hasattr(response, 'data') or 'generations' not in response.data:
-                logger.error("API 응답이 유효하지 않음")
-                return {"error": "API 응답 오류: 유효한 데이터 없음"}
-
-            text = response.data['generations'][0][0]['text'].replace("\n", " ")
-            response.data['generations'][0][0]['text'] = text
-            logger.debug(f"병합 완료 - 결과 길이: {len(text)}")
-            return response.data  # 딕셔너리 반환
-        except asyncio.TimeoutError:
-            logger.error("병합 타임아웃")
-            return {"error": "병합 요청 타임아웃"}
+            
+            # 응답 처리
+            if response and hasattr(response, 'data') and 'generations' in response.data:
+                text = response.data['generations'][0][0]['text'].replace("\n", " ")
+                response.data['generations'][0][0]['text'] = text
+                return response.data
+            return {"error": "종합 Proposal 생성 오류"}
+        
         except Exception as e:
-            logger.error(f"병합 오류: {str(e)}", exc_info=True)
+            logger.error(f"종합 Proposal 생성 오류: {str(e)}")
             return {"error": str(e)}
+
+# class OpenAIDataMergeClient:
+#     def __init__(self, usr_msg: str, pdf_summary: str, batch_handler):
+#         self.usr_msg = usr_msg
+#         self.pdf_summary = pdf_summary
+#         self.batch_handler = batch_handler
+
+#     async def contents_merge(self, max_tokens: int = 1000) -> dict:
+#         try:
+#             sys_prompt = f"""
+#             You are an expert at crafting landing page content. 
+#             Create a concise business plan for a landing page using the user summary as the main focus. Mix in the PDF summary only to add supporting details where it fits. Follow these rules:
+
+#             #### INSTRUCTIONS ####
+#             1. Make the user summary the core of the content. It must drive the narrative and tone.
+#             2. Use the PDF summary lightly to enhance the user summary, not to lead it.
+#             3. Include these seven elements, filling gaps creatively based on the user summary:
+#                 - Business Item (what we offer)
+#                 - Slogan (short and catchy)
+#                 - Target Customers (who we serve)
+#                 - Core Value (why choose us)
+#                 - Features (key benefits)
+#                 - Business Model (how we profit)
+#                 - Marketing Strategy (how we reach customers)
+#             4. Write a short, engaging Korean text for a landing page, as a single string with no tags or labels.
+#             5. Keep it natural and flowing, prioritizing the user summary’s ideas.
+#             6. If user and PDF summaries conflict, stick to the user summary.
+#             """
+#             usr_prompt = f"""
+#             user summary = {self.usr_msg}
+#             pdf summary = {self.pdf_summary}
+#             """
+#             logger.debug("병합 요청 시작")
+#             response = await asyncio.wait_for(
+#                 self.batch_handler.process_single_request({
+#                     "sys_prompt": sys_prompt,
+#                     "usr_prompt": usr_prompt,
+#                     "max_tokens": max_tokens,
+#                     "temperature": 0.5,
+#                     "top_p": 0.8
+#                 }, request_id=0),
+#                 timeout=60
+#             )
+
+#             if response is None or not hasattr(response, 'data') or 'generations' not in response.data:
+#                 logger.error("API 응답이 유효하지 않음")
+#                 return {"error": "API 응답 오류: 유효한 데이터 없음"}
+
+#             text = response.data['generations'][0][0]['text'].replace("\n", " ")
+#             response.data['generations'][0][0]['text'] = text
+#             logger.debug(f"병합 완료 - 결과 길이: {len(text)}")
+#             return response.data  # 딕셔너리 반환
+#         except asyncio.TimeoutError:
+#             logger.error("병합 타임아웃")
+#             return {"error": "병합 요청 타임아웃"}
+#         except Exception as e:
+#             logger.error(f"병합 오류: {str(e)}", exc_info=True)
+#             return {"error": str(e)}
 
 
 # from langchain.prompts import PromptTemplate

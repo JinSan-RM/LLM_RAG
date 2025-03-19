@@ -22,8 +22,11 @@ from src.openai.openai_api_call import OpenAIService
 from src.utils.batch_handler import BatchRequestHandler
 
 from src.openai.land.openai_usrmsgclient import OpenAIUsrMsgClient
-from src.openai.land.openai_pdfsummary import OpenAIPDFSummaryClient
-from src.openai.land.openai_usrpdfmerge import OpenAIDataMergeClient
+# from src.openai.land.openai_pdfsummary import OpenAIPDFSummaryClient, OpenAIComprehensiveProposalClient, OpenAIProposalClient
+# from src.openai.land.openai_pdfsummary import OpenAIPDFSummaryClient, OpenAIProposalClient
+from src.openai.land.openai_pdfsummary import OpenAIProposalClient
+# from src.openai.land.openai_usrpdfmerge import OpenAIDataMergeClient
+from src.openai.land.openai_usrpdfmerge import OpenAIComprehensiveProposalClient
 from src.openai.land.openai_sectiongenerator import OpenAISectionGenerator
 from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
@@ -454,104 +457,93 @@ async def batch_completions(requests: List[Completions]):
             status_code=500,
             detail=str(e)
         ) from e
-        
+
+
+# 동작 설명
+# """
+# 경우 1: PDF 1개, usr_msg 없음
+# 입력: req.pdf_data1 = "퓨처플레이 5000자", req.usr_msg = ""
+# 출력:
+# pdf_1_proposal: "퓨처플레이는 193개 스타트업에 투자하며 5.7조원 가치를..." (700~1000자)
+# final_result: 동일 내용 (API 호출 없이 바로 사용)
+
+# 경우 2: PDF 2개, usr_msg 없음
+# 입력: req.pdf_data1 = "PDF1", req.pdf_data2 = "PDF2", req.usr_msg = ""
+# 출력:
+# pdf_1_proposal: "PDF1 내용..." (700~1000자)
+# pdf_2_proposal: "PDF2 내용..." (700~1000자)
+# final_result: "PDF1과 PDF2를 합쳐서..." (1000~1500자, 통합 생성)
+
+# 경우 3: PDF 1개, usr_msg 있음
+# 입력: req.pdf_data1 = "PDF1", req.usr_msg = "삼쩜삼은 세무 서비스야"
+# 출력:
+# usr_msg: "삼쩜삼은 세무를 간단히..." (500~700자)
+# pdf_1_proposal: "PDF1 내용..." (700~1000자)
+# final_result: "삼쩜삼은 세무를 편리하게 하고, PDF1에서 영감을 받아..." (1000~1500자)
+
+# 경우 4: usr_msg만 있음, PDF 없음
+# 입력: req.pdf_data1 = "", req.usr_msg = "삼쩜삼은 세무 서비스야"
+# 출력:
+# usr_msg: "삼쩜삼은 세무를 간단히..." (500~700자)
+# final_result: 동일 내용 (API 호출 없이 바로 사용)"""
 async def inputDataProcess(req, req_idx):
     results = []
     try:
-        # PDF 데이터와 usr_msg 준비
-        pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "") if req.pdf_data1 else ""
+        # PDF 데이터 준비
+        pdf_data_list = [req.pdf_data1 or "", req.pdf_data2 or "", req.pdf_data3 or ""]
+        pdf_data_list = [pdf for pdf in pdf_data_list if pdf.strip()]
         usr_msg = req.usr_msg if hasattr(req, 'usr_msg') else ""
 
-        # 클라이언트 초기화
-        summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler) if pdf_data else None
-        usr_msg_client = OpenAIUsrMsgClient(usr_msg, batch_handler) if usr_msg else None
+        # 유저 Proposal 생성 (PDF와 독립)
+        usr_client = OpenAIUsrMsgClient(usr_msg, batch_handler)
+        usr_task = usr_client.usr_msg_proposal() if usr_msg else None
 
-        # 병렬 처리
-        summary_result, usr_result = await asyncio.gather(
-            summary_client.summarize_pdf(pdf_data) if summary_client else asyncio.sleep(0),
-            usr_msg_client.usr_msg_proposal() if usr_msg_client else asyncio.sleep(0)
-        )
-        print(f"summary_result, usr_result : {summary_result} \n {usr_result}")
-        # 사용자 입력 결과 추가 ("usr_msg_argument")
-        if usr_result:
-            if "error" not in usr_result:
-                results.append({
-                    "type": "usr_msg_argument",
-                    "result": {
-                        "success": True,
-                        "data": usr_result,
-                        "error": None,
-                        "error_details": None
-                    }
-                })
-            else:
-                results.append({
-                    "type": "usr_msg_argument",
-                    "result": {
-                        "success": False,
-                        "data": None,
-                        "error": usr_result["error"],
-                        "error_details": str(usr_result.get("error_details", ""))
-                    }
-                })
+        # PDF별 Proposal 생성 병렬 처리
+        proposal_clients = [OpenAIProposalClient(pdf, batch_handler) for pdf in pdf_data_list]
+        proposal_tasks = [client.generate_proposal() for client in proposal_clients]
 
-        # PDF 요약 결과 추가 ("pdf_summary")
-        if summary_result:
-            if "error" not in summary_result:
-                results.append({
-                    "type": "pdf_summary",
-                    "result": {
-                        "success": True,
-                        "data": summary_result,
-                        "error": None,
-                        "error_details": None
-                    }
-                })
-            else:
-                results.append({
-                    "type": "pdf_summary",
-                    "result": {
-                        "success": False,
-                        "data": None,
-                        "error": summary_result["error"],
-                        "error_details": str(summary_result.get("error_details", ""))
-                    }
-                })
+        # 유저 Proposal과 PDF Proposal 동시 처리
+        tasks = [task for task in [usr_task] + proposal_tasks if task]  # None 제외
+        if not tasks:  # usr_msg와 PDF 모두 없는 경우
+            return [{"type": "error", "result": {"success": False, "data": None, "error": "입력 데이터 없음"}}]
+        
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        usr_result = results_list[0] if usr_msg else None
+        pdf_proposal_results = results_list[1:] if usr_msg else results_list
 
-        # final_result 생성
-        if usr_result and "error" not in usr_result and not summary_result:  # usr_msg만 있는 경우
-            results.append({
-                "type": "final_result",
-                "result": {
-                    "success": True,
-                    "data": usr_result,  # usr_msg만 있을 때는 그대로 사용
-                    "error": None,
-                    "error_details": None
+        # 결과 추출
+        usr_proposal = usr_result['generations'][0][0]['text'] if isinstance(usr_result, dict) and "error" not in usr_result else ""
+        pdf_proposals = [
+            pr['generations'][0][0]['text'] if isinstance(pr, dict) and "error" not in pr else ""
+            for pr in pdf_proposal_results
+        ]
+        pdf_proposals = [p for p in pdf_proposals if p.strip()]
+
+        # 최종 Proposal 처리
+        if usr_proposal or pdf_proposals:
+            if usr_proposal and not pdf_proposals:  # usr_msg만 있는 경우
+                comp_result = {
+                    "generations": [[{"text": usr_proposal}]]  # 유저 Proposal 그대로 사용
                 }
-            })
-        elif summary_result and "error" not in summary_result and not usr_result:  # pdf만 있는 경우
-            results.append({
-                "type": "final_result",
-                "result": {
-                    "success": True,
-                    "data": summary_result,  # pdf만 있을 때는 그대로 사용
-                    "error": None,
-                    "error_details": None
+            elif len(pdf_proposals) == 1 and not usr_proposal:  # PDF 1개만 있는 경우
+                comp_result = {
+                    "generations": [[{"text": pdf_proposals[0]}]]  # PDF Proposal 그대로 사용
                 }
-            })
-        elif (summary_result and "error" not in summary_result) and (usr_result and "error" not in usr_result):  # 둘 다 있는 경우
-            summary_text = summary_result['generations'][0][0]['text']
-            usr_text = usr_result['generations'][0][0]['text']
-            merge_client = OpenAIDataMergeClient(usr_text, summary_text, batch_handler)
-            merge_result = await merge_client.contents_merge(max_tokens=800)
-            if merge_result and "error" not in merge_result:
-                re_text = merge_result['generations'][0][0]['text'].replace("\n", " ")
-                merge_result['generations'][0][0]['text'] = re_text
+            else:  # PDF 2개 이상이거나 usr_proposal과 PDF가 함께 있는 경우
+                proposal_client = OpenAIProposalClient("", batch_handler)  # 빈 pdf_content로 인스턴스 생성
+                if len(pdf_proposals) >= 2 and not usr_proposal:  # PDF 2개 이상, usr_msg 없음
+                    comp_result = await proposal_client.consolidate_proposals(pdf_proposals)
+                else:  # usr_proposal과 PDF가 함께 있거나 PDF 1개 + usr_proposal
+                    comp_client = OpenAIComprehensiveProposalClient(usr_proposal, pdf_proposals, batch_handler)
+                    comp_result = await comp_client.generate_comprehensive_proposal()
+
+            # 종합 Proposal 결과 추가
+            if "error" not in comp_result:
                 results.append({
                     "type": "final_result",
                     "result": {
                         "success": True,
-                        "data": merge_result,
+                        "data": comp_result,
                         "error": None,
                         "error_details": None
                     }
@@ -562,23 +554,235 @@ async def inputDataProcess(req, req_idx):
                     "result": {
                         "success": False,
                         "data": None,
-                        "error": merge_result.get("error", "Merge failed") if merge_result else "Merge result is None",
-                        "error_details": str(merge_result) if merge_result else "No merge result returned"
+                        "error": comp_result["error"],
+                        "error_details": None
                     }
                 })
+
+        # 개별 결과 추가
+        if usr_proposal:
+            results.append({
+                "type": "usr_msg",
+                "result": {"success": isinstance(usr_result, dict) and "error" not in usr_result, "data": usr_result}
+            })
+        for i, pr in enumerate(pdf_proposal_results):
+            results.append({
+                "type": f"pdf_{i+1}_proposal",
+                "result": {"success": isinstance(pr, dict) and "error" not in pr, "data": pr}
+            })
 
         return results
     except Exception as e:
-        logger.error(f"요청 {req_idx} 처리 오류: {str(e)}", exc_info=True)
-        return [{
-            "type": "error",
-            "result": {
-                "success": False,
-                "data": None,
-                "error": str(e),
-                "error_details": str(e.__traceback__)
-            }
-        }]
+        logger.error(f"요청 {req_idx} 처리 오류: {str(e)}")
+        return [{"type": "error", "result": {"success": False, "data": None, "error": str(e)}}]
+        
+# async def inputDataProcess(req, req_idx):
+#     results = []
+#     try:
+#         # PDF 데이터 준비
+#         pdf_data_list = [req.pdf_data1 or "", req.pdf_data2 or "", req.pdf_data3 or ""]
+#         pdf_data_list = [pdf for pdf in pdf_data_list if pdf.strip()]
+#         usr_msg = req.usr_msg if hasattr(req, 'usr_msg') else ""
+
+#         # 유저 Proposal 생성 (PDF와 독립)
+#         usr_client = OpenAIUsrMsgClient(usr_msg, batch_handler)
+#         usr_task = usr_client.usr_msg_proposal()
+
+#         # PDF별 요약 병렬 처리
+#         summary_clients = [OpenAIPDFSummaryClient(pdf, batch_handler) for pdf in pdf_data_list]
+#         summary_tasks = [client.summarize_pdf(pdf) for client, pdf in zip(summary_clients, pdf_data_list)]
+        
+#         # 유저 Proposal과 PDF 요약 동시 처리
+#         usr_result, *summary_results = await asyncio.gather(usr_task, *summary_tasks, return_exceptions=True)
+
+#         # PDF별 Proposal 생성 병렬 처리
+#         proposal_clients = [
+#             OpenAIProposalClient(
+#                 sr['generations'][0][0]['text'] if isinstance(sr, dict) and "error" not in sr else "",
+#                 batch_handler
+#             )
+#             for sr in summary_results
+#         ]
+#         proposal_tasks = [client.generate_proposal() for client in proposal_clients]
+#         pdf_proposal_results = await asyncio.gather(*proposal_tasks, return_exceptions=True)
+
+#         # 결과 추출
+#         usr_proposal = usr_result['generations'][0][0]['text'] if isinstance(usr_result, dict) and "error" not in usr_result else ""
+#         pdf_proposals = [
+#             pr['generations'][0][0]['text'] if isinstance(pr, dict) and "error" not in pr else ""
+#             for pr in pdf_proposal_results
+#         ]
+#         pdf_proposals = [p for p in pdf_proposals if p.strip()]
+
+#         # 종합 Proposal 생성
+#         if usr_proposal or pdf_proposals:
+#             comp_client = OpenAIComprehensiveProposalClient(usr_proposal, pdf_proposals, batch_handler)
+#             comp_result = await comp_client.generate_comprehensive_proposal()
+#             if "error" not in comp_result:
+#                 results.append({
+#                     "type": "final_result",
+#                     "result": {
+#                         "success": True,
+#                         "data": comp_result,
+#                         "error": None,
+#                         "error_details": None
+#                     }
+#                 })
+#             else:
+#                 results.append({
+#                     "type": "final_result",
+#                     "result": {
+#                         "success": False,
+#                         "data": None,
+#                         "error": comp_result["error"],
+#                         "error_details": None
+#                     }
+#                 })
+
+#         # 개별 결과 추가
+#         results.append({
+#             "type": "usr_msg",
+#             "result": {"success": isinstance(usr_result, dict) and "error" not in usr_result, "data": usr_result}
+#         })
+#         for i, (sr, pr) in enumerate(zip(summary_results, pdf_proposal_results)):
+#             results.append({
+#                 "type": f"pdf_{i+1}_summary",
+#                 "result": {"success": isinstance(sr, dict) and "error" not in sr, "data": sr}
+#             })
+#             results.append({
+#                 "type": f"pdf_{i+1}_proposal",
+#                 "result": {"success": isinstance(pr, dict) and "error" not in pr, "data": pr}
+#             })
+
+#         return results
+#     except Exception as e:
+#         logger.error(f"요청 {req_idx} 처리 오류: {str(e)}")
+#         return [{"type": "error", "result": {"success": False, "data": None, "error": str(e)}}]
+
+# async def inputDataProcess(req, req_idx):
+#     results = []
+#     try:
+#         # PDF 데이터와 usr_msg 준비
+#         pdf_data = req.pdf_data1 + (req.pdf_data2 or "") + (req.pdf_data3 or "") if req.pdf_data1 else ""
+#         usr_msg = req.usr_msg if hasattr(req, 'usr_msg') else ""
+
+#         # 클라이언트 초기화
+#         summary_client = OpenAIPDFSummaryClient(pdf_data, batch_handler) if pdf_data else None
+#         usr_msg_client = OpenAIUsrMsgClient(usr_msg, batch_handler) if usr_msg else None
+
+#         # 병렬 처리
+#         summary_result, usr_result = await asyncio.gather(
+#             summary_client.summarize_pdf(content=pdf_data) if summary_client else asyncio.sleep(0),
+#             usr_msg_client.usr_msg_proposal() if usr_msg_client else asyncio.sleep(0)
+#         )
+#         print(f"summary_result, usr_result : {summary_result} \n {usr_result}")
+#         # 사용자 입력 결과 추가 ("usr_msg_argument")
+#         if usr_result:
+#             if "error" not in usr_result:
+#                 results.append({
+#                     "type": "usr_msg_argument",
+#                     "result": {
+#                         "success": True,
+#                         "data": usr_result,
+#                         "error": None,
+#                         "error_details": None
+#                     }
+#                 })
+#             else:
+#                 results.append({
+#                     "type": "usr_msg_argument",
+#                     "result": {
+#                         "success": False,
+#                         "data": None,
+#                         "error": usr_result["error"],
+#                         "error_details": str(usr_result.get("error_details", ""))
+#                     }
+#                 })
+
+#         # PDF 요약 결과 추가 ("pdf_summary")
+#         if summary_result:
+#             if "error" not in summary_result:
+#                 results.append({
+#                     "type": "pdf_summary",
+#                     "result": {
+#                         "success": True,
+#                         "data": summary_result,
+#                         "error": None,
+#                         "error_details": None
+#                     }
+#                 })
+#             else:
+#                 results.append({
+#                     "type": "pdf_summary",
+#                     "result": {
+#                         "success": False,
+#                         "data": None,
+#                         "error": summary_result["error"],
+#                         "error_details": str(summary_result.get("error_details", ""))
+#                     }
+#                 })
+
+#         # final_result 생성
+#         if usr_result and "error" not in usr_result and not summary_result:  # usr_msg만 있는 경우
+#             results.append({
+#                 "type": "final_result",
+#                 "result": {
+#                     "success": True,
+#                     "data": usr_result,  # usr_msg만 있을 때는 그대로 사용
+#                     "error": None,
+#                     "error_details": None
+#                 }
+#             })
+#         elif summary_result and "error" not in summary_result and not usr_result:  # pdf만 있는 경우
+#             results.append({
+#                 "type": "final_result",
+#                 "result": {
+#                     "success": True,
+#                     "data": summary_result,  # pdf만 있을 때는 그대로 사용
+#                     "error": None,
+#                     "error_details": None
+#                 }
+#             })
+#         elif (summary_result and "error" not in summary_result) and (usr_result and "error" not in usr_result):  # 둘 다 있는 경우
+#             summary_text = summary_result['generations'][0][0]['text']
+#             usr_text = usr_result['generations'][0][0]['text']
+#             merge_client = OpenAIDataMergeClient(usr_text, summary_text, batch_handler)
+#             merge_result = await merge_client.contents_merge(max_tokens=800)
+#             if merge_result and "error" not in merge_result:
+#                 re_text = merge_result['generations'][0][0]['text'].replace("\n", " ")
+#                 merge_result['generations'][0][0]['text'] = re_text
+#                 results.append({
+#                     "type": "final_result",
+#                     "result": {
+#                         "success": True,
+#                         "data": merge_result,
+#                         "error": None,
+#                         "error_details": None
+#                     }
+#                 })
+#             else:
+#                 results.append({
+#                     "type": "final_result",
+#                     "result": {
+#                         "success": False,
+#                         "data": None,
+#                         "error": merge_result.get("error", "Merge failed") if merge_result else "Merge result is None",
+#                         "error_details": str(merge_result) if merge_result else "No merge result returned"
+#                     }
+#                 })
+
+#         return results
+#     except Exception as e:
+#         logger.error(f"요청 {req_idx} 처리 오류: {str(e)}", exc_info=True)
+#         return [{
+#             "type": "error",
+#             "result": {
+#                 "success": False,
+#                 "data": None,
+#                 "error": str(e),
+#                 "error_details": str(e.__traceback__)
+#             }
+#         }]
 
 # 상위 호출 코드
 @app.post("/api/input_data_process")

@@ -10,12 +10,28 @@ class OpenAIUsrMsgClient:
         try:
             # 프롬프트 템플릿 정의 (간결하게)
             sys_prompt = """
-            당신은 비즈니스 계획 전문가입니다. 주어진 사용자 입력을 기반으로 랜딩페이지용 콘텐츠를 한국어로 500~700자 이내로 작성하세요. 
-            입력에서 핵심 정보(제품/서비스, 고객, 가치 등)를 추출하고, 부족하면 적절히 보완하세요. 
-            포함할 요소: 사업 아이템, 슬로건, 타겟 고객, 핵심 가치, 기능, 비즈니스 모델, 마케팅 전략. 
-            자연스럽고 간결한 문장으로, 태그나 메타데이터 없이 출력하세요.
+            You are a professional in business plan writing. 
+            You are provided with user input in the form of a sentence or paragraph. 
+            Your task is to write a narrative paragraph to assist in creating a business plan based on this input. 
+
+            #### INSTRUCTIONS ####
+        
+            1. Do not expand the scope beyond the provided content.
+            2. Identify and include key information from the user input, such as below. If the usr_input is not enough, you can fill it yourself.
+                - Business Item (what we offer)
+                - Slogan (short and catchy)
+                - Target Customers (who we serve)
+                - Core Value (why choose us)
+                - Features (key benefits)
+                - Business Model (how we profit)
+                - Marketing Strategy (how we reach customers)            
+            3. Develop the business plan narrative step-by-step using only the keywords and details from the user input.
+            4. Write a paragraph of 800 to 1000 characters to ensure the content is detailed and informative.
+            5. Avoid repeating the same content to meet the character limit. Use varied expressions and vocabulary to enrich the narrative.
+            6. 출력은 반드시 **한국어**로 해.
             """
-            usr_prompt = self.usr_msg
+
+            usr_prompt = f"user_input : {self.usr_msg}"
 
             # API 호출
             response = await asyncio.wait_for(
@@ -29,7 +45,7 @@ class OpenAIUsrMsgClient:
                     "n": 1,
                     "stream": False
                 }, request_id=0),
-                timeout=30  # 타임아웃 줄여 효율성 증가
+                timeout=60  # 타임아웃 줄여 효율성 증가
             )
 
             # 응답 검증 및 처리

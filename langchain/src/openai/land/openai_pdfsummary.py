@@ -1,57 +1,229 @@
 import asyncio
 import logging
+import json
+import re
 from typing import List
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-class OpenAIPDFSummaryClient:
-    def __init__(self, pdf_data: str, batch_handler):
-        self.pdf_data = pdf_data or ""
+class OpenAIProposalClient:
+    def __init__(self, pdf_content: str, batch_handler):
+        self.pdf_content = pdf_content or ""
         self.batch_handler = batch_handler
 
-    async def summarize_pdf(self, pdf_texts: str, max_tokens: int = 500) -> dict:
+    async def generate_proposal(self) -> dict:
         try:
-            logger.debug(f"PDF 요약 시작 - 텍스트 길이: {len(pdf_texts)}")
-            if not pdf_texts.strip():
-                logger.warning("PDF 텍스트가 비어 있음. 기본 메시지로 대체.")
-                pdf_texts = "요약할 내용이 없습니다."
-
-            # if len(pdf_texts) > 4000:
-            #     pdf_texts = pdf_texts[:4000]
-            #     logger.debug("텍스트가 4000자를 초과하여 자름")
-
             sys_prompt = """
-            PDF 텍스트를 한국어로 500~700자 이내로 요약하세요. 
-            랜딩페이지용으로 핵심 정보만 간결히 전달하며, 반복 내용은 제거하고, 불필요한 태그나 메타데이터는 제외하세요.
+ 
+            You are an expert at crafting business plan. 
+            Create a concise business plan by using the pdf_content.
+            Mix two inputs and proceed with the below.
+            Only to add supporting details, if the informartion is not enough.
+
+            #### INSTRUCTIONS ####
+            1. It must drive the narrative and tone.
+            2. Include these seven elements, filling gaps creatively based on the pdf_content:
+                - Business Item (what we offer)
+                - Slogan (short and catchy)
+                - Target Customers (who we serve)
+                - Core Value (why choose us)
+                - Features (key benefits)
+                - Business Model (how we profit)
+                - Marketing Strategy (how we reach customers)
+            3. Write a paragraph of 500 to 800 characters to ensure the content is detailed and informative.
+            4. Include all the key information (numbers, examples, etc.) without missing anything.
+            5. 반드시 **한국어**로 작성해.
             """
-            logger.debug("요약 요청 시작")
+    
+            usr_prompt = f" pdf_content:{self.pdf_content}"
+ 
+            usr_prompt = f"PDF 내용: {self.pdf_content}"
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
                     "sys_prompt": sys_prompt,
-                    "usr_prompt": pdf_texts,
-                    "max_tokens": max_tokens,
+                    "usr_prompt": usr_prompt,
+                    "max_tokens": 500,  # 700~1000자에 적합
                     "temperature": 0.3,
-                    "top_p": 0.7
+                    "top_p": 0.9
                 }, request_id=0),
-                timeout=60
+                timeout=120
             )
-
-            if response is None or not hasattr(response, 'data') or 'generations' not in response.data:
-                logger.error("API 응답이 유효하지 않음")
-                return {"error": "API 응답 오류: 유효한 데이터 없음"}
-
-            text = response.data['generations'][0][0]['text'].replace("\n", " ")
-            response.data['generations'][0][0]['text'] = text
-            logger.debug(f"요약 완료 - 결과 길이: {len(text)}")
-            return response.data  # 딕셔너리 반환
-        except asyncio.TimeoutError:
-            logger.error("PDF 요약 타임아웃")
-            return {"error": "요약 요청 타임아웃"}
+            if response and hasattr(response, 'data') and 'generations' in response.data:
+                text = response.data['generations'][0][0]['text'].replace("\n", " ")
+                response.data['generations'][0][0]['text'] = text
+                logger.debug(f"Proposal 생성 완료 - 길이: {len(text)}")
+                return response.data
+            return {"error": "Proposal 생성 오류"}
         except Exception as e:
-            logger.error(f"PDF 요약 오류: {str(e)}", exc_info=True)
+            logger.error(f"Proposal 생성 오류: {str(e)}")
             return {"error": str(e)}
+        
+    async def consolidate_proposals(self, proposals: List[str]) -> dict:
+        """PDF가 2개 이상일 때 Proposal을 통합"""
+        try:
+            sys_prompt = """
+            You are an expert at crafting business plans. 
+            Consolidate proposals generated from multiple PDFs. The number of Proposals can be between 1 and 3.
+            Mix inputed Proposals and proceed with the below.
+            Only add supporting details if the information is not enough.
+
+            #### INSTRUCTIONS ####
+            1. Never create a hypothetical proposal, and only work within the input you are given.
+            2. It must drive the narrative and tone.
+            3. Include these seven elements, filling gaps creatively based on the inputed Proposals:
+                - Business Item (what we offer)
+                - Slogan (short and catchy)
+                - Target Customers (who we serve)
+                - Core Value (why choose us)
+                - Features (key benefits)
+                - Business Model (how we profit)
+                - Marketing Strategy (how we reach customers)
+            4. Write a paragraph of 800 to 1000 characters to ensure the content is detailed and informative.
+            5. Include all the key information (numbers, examples, etc.) without missing anything.
+            6. 반드시 **한국어**로 작성해.
+            """
+            usr_prompt = "\n".join([f"Proposal_{i+1}: {p}" for i, p in enumerate(proposals)])
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    "max_tokens": 800,  # 800~1000자에 적합
+                    "temperature": 0.3,
+                    "top_p": 0.9
+                }, request_id=0),
+                timeout=120
+            )
+            if response and hasattr(response, 'data') and 'generations' in response.data:
+                text = response.data['generations'][0][0]['text'].replace("\n", " ")
+                response.data['generations'][0][0]['text'] = text
+                logger.debug(f"Proposal 통합 완료 - 길이: {len(text)}")
+                return response.data
+            return {"error": "Proposal 통합 오류"}
+        except Exception as e:
+            logger.error(f"Proposal 통합 오류: {str(e)}")
+            return {"error": str(e)}
+        
+# class OpenAIPDFSummaryClient:
+#     def __init__(self, pdf_data: str, batch_handler):
+#         self.pdf_data = pdf_data or ""
+#         self.batch_handler = batch_handler
+#         self.text_splitter = RecursiveCharacterTextSplitter(
+#             chunk_size=3000,  # 청크당 최대 문자 수
+#             chunk_overlap=1000,  # 중복 문자 수 (문맥 유지)
+#             length_function=len,
+#             separators=["\n\n", "\n", ".", " ", ""]
+#         )
+
+#     @staticmethod
+#     def extract_json(text):
+#         """불완전한 JSON 문자열을 파싱하거나 보정"""
+#         try:
+#             text = text.strip()
+#             if text.endswith(','):
+#                 text = text[:-1]
+#             if not text.endswith(']'):
+#                 text += ']'
+#             return json.loads(text)
+#         except json.JSONDecodeError:
+#             logger.error(f"JSON 파싱 실패: {text[:50]}")
+#             return None
+
+#     async def summarize_chunk(self, chunk: str) -> dict:
+#         """개별 청크를 Chain of Density 방식으로 요약"""
+#         try:
+#             sys_prompt = """
+#             PDF 텍스트를 한국어로 500~700자 이내로 요약하세요.
+#             랜딩페이지용으로 핵심 정보만 간결히 전달하며, 반복 내용은 제거하고, 불필요한 태그나 메타데이터는 제외하세요.
+#             모든 주요 사실(숫자, 사례, 전략 등)을 누락 없이 포함하고 기획서 형태로 생성하세요.
+#             """
+#             usr_prompt = f"""
+#             {chunk}
+#             """
+#             response = await asyncio.wait_for(
+#                 self.batch_handler.process_single_request({
+#                     "sys_prompt": sys_prompt,
+#                     "usr_prompt": usr_prompt,
+#                     "max_tokens": 1000,
+#                     "temperature": 0.2,
+#                     "top_p": 0.9
+#                 }, request_id=0),
+#                 timeout=120
+#             )
+
+#             if response is None or not hasattr(response, 'data') or 'generations' not in response.data:
+#                 logger.error("청크 요약 API 응답 오류")
+#                 return {"error": "API 응답 오류: 유효한 데이터 없음"}
+
+#             text = response.data['generations'][0][0]['text'].replace("\n", " ")
+#             response.data['generations'][0][0]['text'] = text
+#             logger.debug(f"청크 요약 완료 - 결과 길이: {len(text)}")
+#             return response.data
+#         except asyncio.TimeoutError:
+#             logger.error("청크 요약 타임아웃")
+#             return {"error": "청크 요약 타임아웃"}
+#         except Exception as e:
+#             logger.error(f"청크 요약 오류: {str(e)}", exc_info=True)
+#             return {"error": str(e)}
+
+#     async def summarize_pdf(self, pdf_content: str) -> dict:
+#             try:
+#                 if not pdf_content.strip():
+#                     return {"error": "PDF 내용이 비어 있음"}
+
+#                 # PDF를 2개 청크로 분할 (약 2500자씩)
+#                 mid_point = len(pdf_content) // 2
+#                 chunks = [pdf_content[:mid_point], pdf_content[mid_point:]]
+#                 logger.debug(f"PDF 청킹 완료 - 청크 수: {len(chunks)}, 크기: {len(chunks[0])}, {len(chunks[1])}")
+
+#                 # 2개 청크 병렬 요약
+#                 tasks = [self.summarize_chunk(chunk) for chunk in chunks]
+#                 chunk_summaries = await asyncio.gather(*tasks, return_exceptions=True)
+
+#                 # 요약 결과 통합
+#                 all_summaries = [r['generations'][0][0]['text'] for r in chunk_summaries if isinstance(r, dict) and "error" not in r]
+#                 if not all_summaries:
+#                     return {"error": "모든 청크 요약 실패"}
+#                 combined_summary = " ".join(all_summaries)
+#                 return {"generations": [[{"text": combined_summary}]]}
+#             except Exception as e:
+#                 logger.error(f"PDF 요약 오류: {str(e)}")
+#                 return {"error": str(e)}
+            
+
+
+        
+# class OpenAIProposalClient:
+#     def __init__(self, summary_text: str, batch_handler):
+#         self.summary_text = summary_text
+#         self.batch_handler = batch_handler
+
+#     async def generate_proposal(self) -> dict:
+#         try:
+#             sys_prompt = """
+#             PDF 요약 데이터를 기반으로 랜딩페이지용 Proposal을 700~1000자로 작성하세요.
+#             모든 핵심 정보(숫자, 사례 등)를 누락 없이 포함하고, 20~30대 타겟에 맞춘 캐주얼하고 매력적인 톤으로 작성하세요.
+#             """
+#             usr_prompt = f"summary_text: {self.summary_text}"
+#             response = await asyncio.wait_for(
+#                 self.batch_handler.process_single_request({
+#                     "sys_prompt": sys_prompt,
+#                     "usr_prompt": usr_prompt,
+#                     "max_tokens": 500,
+#                     "temperature": 0.3,
+#                     "top_p": 0.9
+#                 }, request_id=0),
+#                 timeout=120
+#             )
+#             if response and hasattr(response, 'data') and 'generations' in response.data:
+#                 text = response.data['generations'][0][0]['text'].replace("\n", " ")
+#                 response.data['generations'][0][0]['text'] = text
+#                 return response.data
+#             return {"error": "Proposal 생성 오류"}
+#         except Exception as e:
+#             logger.error(f"Proposal 생성 오류: {str(e)}")
+#             return {"error": str(e)}
 # ==========================================================
 # test
 # ==========================================================
