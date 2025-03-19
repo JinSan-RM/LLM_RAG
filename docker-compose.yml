@@ -167,6 +167,7 @@ services:
       shm_size: '72gb'
       ports:
         - "8002:8002"
+        - "8022:8022"
       volumes:
         - ./vllm:/app/models  # 경로 일치
       networks:
@@ -174,7 +175,11 @@ services:
       # NOTE_250311 : run_server.py 사용을 위한 테스트
       #               이렇게 자세하게 적어서 api_server를 열어놓기.
       #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
-      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
+      # NOTE 250319 gemma-2-2b-it 테스트 및 복수 모델 테스트트
+      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines &
+          python3 -m vllm.entrypoints.openai.api_server --port 8022 --host 0.0.0.0 --model '/usr/local/bin/models/gemma-2-2b-it' --dtype float16 --gpu-memory-utilization 0.45 --max-model-len 8192 --guided-decoding-backend outliness
+
+      
       # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
       # command: python3 /app/models/src/run_server.py
       healthcheck:
@@ -189,6 +194,10 @@ services:
               - driver: nvidia
                 count: 1
                 capabilities: [gpu]
+
+
+    # 여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
+    # NOTE 250319 gemma-2-2b-it 테스트 및 복수 모델 테스트트
 
 networks:
   service_network:

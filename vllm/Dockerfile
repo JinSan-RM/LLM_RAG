@@ -24,6 +24,9 @@ ENV VLLM_GPU_MEMORY_UTILIZATION=1.0
 COPY requirements.txt .
 COPY /models/EEVE-Korean-Instruct-10.8B-v1.0 /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0
 
+# NOTE 250319 : gemma-2-2b-it 테스트
+COPY /models/gemma-2-2b-it /usr/local/bin/models/gemma-2-2b-it
+
 RUN apt-get update && apt-get install -y python3-pip
 
 # pip 업그레이드 후 requirements.txt 설치
