@@ -294,7 +294,6 @@ class OpenAIBlockContentGenerator:
         # NOTE : JSON 형식 보정 추가
         try:
             json_string = response.data['generations'][0][0]['text']
-            print("json 잘 만들어졌는지 보자아 : ", json_string)
             
             # JSON 문자열 파싱 시도
             try:
@@ -308,7 +307,6 @@ class OpenAIBlockContentGenerator:
                     fixed_json = stripped_json + '"}'
                     try:
                         parsed_data = json.loads(fixed_json)
-                        print("보정 성공: ", fixed_json)
                     except json.JSONDecodeError:
                         return {'gen_content': {'error': f"JSON 보정 실패: {json_string}"}}
                 elif stripped_json.endswith('{'):
@@ -316,7 +314,6 @@ class OpenAIBlockContentGenerator:
                     fixed_json = stripped_json + '"p_2": "기본 값"}'
                     try:
                         parsed_data = json.loads(fixed_json)
-                        print("보정 성공: ", fixed_json)
                     except json.JSONDecodeError:
                         return {'gen_content': {'error': f"JSON 보정 실패: {json_string}"}}
                 else:
@@ -324,7 +321,6 @@ class OpenAIBlockContentGenerator:
                     fixed_json = stripped_json + '"}'
                     try:
                         parsed_data = json.loads(fixed_json)
-                        print("보정 성공 (그 외): ", fixed_json)
                     except json.JSONDecodeError:
                         return {'gen_content': {'error': f"JSON 보정 실패: {json_string}"}}
 
@@ -341,7 +337,6 @@ class OpenAIBlockContentGenerator:
 
             # response 업데이트
             response.data['generations'][0][0]['text'] = transformed_data
-            print("바뀐 response를 보자아 : ", response.data)
             
             return {
                 'gen_content': {

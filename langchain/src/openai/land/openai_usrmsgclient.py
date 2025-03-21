@@ -55,7 +55,6 @@ class OpenAIUsrMsgClient:
 
             text = response.data['generations'][0][0]['text'].replace("\n", " ").strip()
             response.data['generations'][0][0]['text'] = text
-            print(f"생성된 콘텐츠 길이: {len(text)}자")
             return response.data  # 딕셔너리 반환
         except asyncio.TimeoutError:
             print("사용자 메시지 처리 타임아웃")

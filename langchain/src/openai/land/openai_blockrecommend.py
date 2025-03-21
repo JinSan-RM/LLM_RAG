@@ -76,7 +76,6 @@ class OpenAIBlockSelector:
                     }
                 }
                 result = await self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens, extra_body=extra_body)
-                print(f"result : {result}")
                 selected_Html_tag_json = self.extract_json(result.data['generations'][0][0]['text'])
                 if selected_Html_tag_json and 'selected_tag' in selected_Html_tag_json:
                     selected_Html_tag_str = selected_Html_tag_json['selected_tag']
@@ -92,7 +91,6 @@ class OpenAIBlockSelector:
                         }
 
             except Exception as e:
-                print("block recommend error :", e)
                 if (attempt + 1) == 3:
 
                     random_index = random.randint(0, len(block_list[1].keys()) - 1)

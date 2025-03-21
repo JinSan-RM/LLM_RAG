@@ -53,7 +53,6 @@ class OpenAIProposalClient:
             if response and hasattr(response, 'data') and 'generations' in response.data:
                 text = response.data['generations'][0][0]['text'].replace("\n", " ")
                 response.data['generations'][0][0]['text'] = text
-                logger.debug(f"Proposal 생성 완료 - 길이: {len(text)}")
                 return response.data
             return {"error": "Proposal 생성 오류"}
         except Exception as e:
@@ -98,7 +97,6 @@ class OpenAIProposalClient:
             if response and hasattr(response, 'data') and 'generations' in response.data:
                 text = response.data['generations'][0][0]['text'].replace("\n", " ")
                 response.data['generations'][0][0]['text'] = text
-                logger.debug(f"Proposal 통합 완료 - 길이: {len(text)}")
                 return response.data
             return {"error": "Proposal 통합 오류"}
         except Exception as e:

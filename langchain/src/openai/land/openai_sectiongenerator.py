@@ -336,11 +336,9 @@ class OpenAISectionGenerator:
         while cnt < 3:
             try:
                 section_structure_LLM_result = await self.structure_generator.create_section_structure(combined_data, max_tokens)
-                print(f"\n section_structure_LLM_result before : {section_structure_LLM_result} \n")
                 
                 # 결과 타입 확인 및 처리
                 if not section_structure_LLM_result.success:
-                    print(f"Section structure generation error: {section_structure_LLM_result.error}")
                     return None
                     
                 # 문자열인지 객체인지 확인하여 처리
@@ -351,8 +349,6 @@ class OpenAISectionGenerator:
                 return None
                 # 예외 처리: 객체 구조가 예상과 다를 경우
             section_structure_LLM_result.data['generations'][0][0]['text'] = self.extract_json(section_structure)
-                
-            print(f"\n section_structure_LLM_result after : {section_structure_LLM_result} \n")
             updated_structure = {}
             # section_structure = section_structure_LLM_result.data.generations[0][0].text
             section_structure = section_structure_LLM_result.data['generations'][0][0]['text']
@@ -364,12 +360,10 @@ class OpenAISectionGenerator:
                 for section_key in allowed_values.keys():
                     # 해당 섹션에 대해 허용된 값들 중에서 랜덤으로 하나 선택
                     section_structure[section_key] = random.choice(allowed_values[section_key])
-                print(f"section에 dict가 없어서 새로 생성. 1{section_structure}")
             for section, value in section_structure.items():
                 if section in allowed_values:
                     if value not in allowed_values[section]:
                         # 허용되지 않은 값일 경우 해당 섹션의 허용된 값 중 무작위 선택
-                        print()
                         value = random.choice(allowed_values[section])
                     
                     # 이미 사용된 값인지 확인
@@ -378,10 +372,6 @@ class OpenAISectionGenerator:
                         used_values.add(value)
                         updated_structure[section] = value
                     # 이미 사용된 값이면 해당 섹션은 건너뜀 (중복 제거)
-                else:
-                    print(f"Warning: Undefined section '{section}' encountered.")
-
-            # section_structure_LLM_result.data.generations[0][0].text = updated_structure
             section_structure_LLM_result.data['generations'][0][0]['text'] = updated_structure
 
             # if not isinstance(section_structure_LLM_result.data.generations[0][0].text, dict) or section_structure_LLM_result.data.generations[0][0].text is None:
@@ -390,7 +380,6 @@ class OpenAISectionGenerator:
                 for section_key in allowed_values.keys():
                     # 해당 섹션에 대해 허용된 값들 중에서 랜덤으로 하나 선택
                     section_structure[section_key] = random.choice(allowed_values[section_key])
-                print(f"section에 dict가 없어서 새로 생성. 2 {section_structure}")
             else:
                 break
         # create_section = section_structure_LLM_result.data.generations[0][0].text

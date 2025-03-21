@@ -112,7 +112,6 @@ class OpenAIKeywordClient:
                 except Exception as e:
                     print(f"[WARN] Unexpected error (attempt {repeat_count + 1}): {e}")
                     repeat_count += 1
-            print("[ERROR] All retry attempts failed")
             return "Error: All retry attempts failed"
         except Exception as e:
             print(f"[ERROR] Fatal error processing keywords: {e}")
