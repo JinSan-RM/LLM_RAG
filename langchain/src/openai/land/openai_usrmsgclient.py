@@ -45,7 +45,7 @@ class OpenAIUsrMsgClient:
                     "n": 1,
                     "stream": False
                 }, request_id=0),
-                timeout=60  # 타임아웃 줄여 효율성 증가
+                timeout=120  # 타임아웃 줄여 효율성 증가
             )
 
             # 응답 검증 및 처리
@@ -57,7 +57,7 @@ class OpenAIUsrMsgClient:
             response.data['generations'][0][0]['text'] = text
             return response.data  # 딕셔너리 반환
         except asyncio.TimeoutError:
-            print("사용자 메시지 처리 타임아웃")
+            print("오류 사용자 메시지 처리 타임아웃")
             return {"error": "요청 타임아웃"}
         except Exception as e:
             print(f"usr_msg_proposal 오류: {str(e)}")
