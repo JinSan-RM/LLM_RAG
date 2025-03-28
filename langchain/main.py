@@ -32,8 +32,6 @@ from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
 from src.openai.land.openai_keywordforimage import OpenAIKeywordClient
 
-from src.openai.modoo.openai_modoo import ModooDataProcessor
-
 from common.redis_client import get_current_users, increment_users, decrement_users
 
 
