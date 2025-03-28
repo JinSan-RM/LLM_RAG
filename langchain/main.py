@@ -32,6 +32,10 @@ from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
 from src.openai.land.openai_keywordforimage import OpenAIKeywordClient
 
+from src.openai.modoo.openai_modoo import ModooDataProcessor
+
+from common.redis_client import get_current_users, increment_users, decrement_users
+
 
 # local lib
 # ------------------------------------------------------------------------ #
@@ -462,6 +466,9 @@ async def batch_completions(requests: List[Completions]):
 @app.post("/api/input_data_process")
 async def openai_input_data_process(requests: List[Completions]):
     try:
+        request_id = increment_users()
+        if not request_id:
+            raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
         start = time.time()
         tasks = [inputDataProcess(req, idx) for idx, req in enumerate(requests)]
         processed_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -487,7 +494,8 @@ async def openai_input_data_process(requests: List[Completions]):
             "total_requests": len(requests),
             "successful_requests": sum(1 for r in results if r["result"]["success"]),
             "failed_requests": sum(1 for r in results if not r["result"]["success"]),
-            "results": results
+            "results": results,
+            "current_users": get_current_users()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -632,7 +640,8 @@ async def openai_section_select(requests: List[Completions]):
             "total_requests": len(requests),
             "successful_requests": sum(1 for r in results if all(r.values())),
             "failed_requests": sum(1 for r in results if not all(r.values())),
-            "results": results
+            "results": results,
+            "current_users": get_current_users()
         }
 
         return response
@@ -679,7 +688,8 @@ async def openai_block_select(requests: List[Completions]):
             "total_requests": len(requests),
             "successful_requests": len(flat_results),
             "failed_requests": len(requests) - len(flat_results),
-            "results": final_results
+            "results": final_results,
+            "current_users": get_current_users()
         }
         
         return response
@@ -730,7 +740,9 @@ async def openai_block_content_generate(requests: List[Completions]):
                 processed_results.append({"error": str(result)})
             else:
                 processed_results.append(result)
-                
+        
+        decrement_users()  # 사용자 수 감소
+        
         end = time.time()
         processing_time = end - start
         response = {
@@ -738,7 +750,8 @@ async def openai_block_content_generate(requests: List[Completions]):
             "total_requests": len(requests),
             "successful_requests": sum(1 for r in processed_results if "error" not in r),
             "failed_requests": sum(1 for r in processed_results if "error" in r),
-            "results": processed_results
+            "results": processed_results,
+            "current_users": get_current_users()
         }
         return response
     except ValueError as ve:
@@ -747,5 +760,3 @@ async def openai_block_content_generate(requests: List[Completions]):
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-

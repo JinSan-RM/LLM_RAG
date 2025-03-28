@@ -1,4 +1,121 @@
 services:
+      
+  langchain:
+    build:
+      context: ./langchain  # 현재 디렉토리를 컨텍스트로 사용
+      dockerfile: Dockerfile
+    container_name: langchain
+    depends_on:
+      - vllm           # ollama → vllm로 변경
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./langchain:/app/langchain
+    environment:
+      - ollama_IP=172.19.0.6   # 필요에 따라 변수명(vllm_IP)으로 변경 가능
+      # - CUDA_VISIBLE_DEVICES=0  # GPU 0번만 사용
+      # - TF_FORCE_GPU_ALLOW_GROWTH=true  # 메모리 동적 할당
+      - OPENAI_API_BASE=http://vllm:8002/v1
+      - OPENAI_API_KEY=KIMJINSAN
+      - REDIS_HOST=redis  # Redis 호스트명
+      - REDIS_PORT=6379
+      - MAX_USERS=40      # 최대 사용자 수
+      - TTL_SECONDS=3600  # TTL 1시간
+    networks:
+      - service_network   # 공통 네트워크 사용
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+
+  vllm:
+      build:
+        context: ./vllm
+        dockerfile: Dockerfile
+      environment:
+        - VLLM_GPU_MEMORY_UTILIZATION=1.0
+        - CUDA_VISIBLE_DEVICES=0
+        - VLLM_NO_FALLBACK=True
+        - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+      restart: always
+      shm_size: '50gb'
+      ports:
+        - "8002:8002"
+      volumes:
+        - ./vllm:/app/models  # 경로 일치
+      networks:
+        - service_network
+      # NOTE_250311 : run_server.py 사용을 위한 테스트
+      #               이렇게 자세하게 적어서 api_server를 열어놓기.
+      #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
+      # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
+      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --max-num-batched-tokens 8192 --max-num-seqs 50 --tensor-parallel-size 1
+      # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
+      # command: python3 /app/models/src/run_server.py
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
+        interval: 30s
+        timeout: 5s
+        retries: 20
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: 1
+                capabilities: [gpu]
+  
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - service_network
+    
+networks:
+  service_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+
+# volumes:
+#   etcd-data:
+#   minio-data:
+
+  # locust-master:
+  #     image: locustio/locust
+  #     volumes:
+  #       - ./locust/locustfile.py:/locustfile.py
+  #     ports:
+  #       - "8089:8089"  # 웹 UI 포트
+  #       - "5557:5557"  # 마스터-워커 통신 포트
+  #     command: -f /locustfile.py --master --host=http://langchain:8001 --loglevel DEBUG
+  #     # healthcheck:
+  #     #   test: ["CMD", "nc", "-z", "localhost", "5557"]  # 5557 포트가 열렸는지 확인
+  #     #   interval: 5s
+  #     #   timeout: 100s
+  #     #   retries: 10
+  #     networks:
+  #       - service_network
+
+  # locust-worker:
+  #   image: locustio/locust
+  #   volumes:
+  #     - ./locust/locustfile.py:/locustfile.py
+  #   command: -f /locustfile.py --worker --master-host=locust-master --loglevel DEBUG
+  #   # depends_on:
+  #   #   locust-master:
+  #   #     condition: service_healthy  # locust-master가 healthy 상태일 때 시작
+  #   networks:
+  #     - service_network
+
   # etcd:
   #   container_name: milvus-etcd
   #   image: quay.io/coreos/etcd:v3.5.14
@@ -91,112 +208,3 @@ services:
   #         - driver: nvidia
   #           count: 1
   #           capabilities: [gpu]
-      
-  langchain:
-    build:
-      context: ./langchain  # 현재 디렉토리를 컨텍스트로 사용
-      dockerfile: Dockerfile
-    container_name: langchain
-    depends_on:
-      - vllm           # ollama → vllm로 변경
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./langchain:/app/langchain
-    environment:
-      - ollama_IP=172.19.0.6   # 필요에 따라 변수명(vllm_IP)으로 변경 가능
-      - CUDA_VISIBLE_DEVICES=0  # GPU 0번만 사용
-      - TF_FORCE_GPU_ALLOW_GROWTH=true  # 메모리 동적 할당
-      - OPENAI_API_BASE=http://vllm:8002/v1
-      - OPENAI_API_KEY=KIMJINSAN
-    networks:
-      - service_network   # 공통 네트워크 사용
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
-#   vllm:
-#     image: vllm/vllm-openai:latest
-#     environment:
-#       - VLLM_GPU_MEMORY_UTILIZATION=0.8
-#       - VLLM_MAX_SEQ_LEN=2048
-#       - CUDA_VISIBLE_DEVICES=0
-#       - VLLM_NO_FALLBACK=True    
-#     build:
-#       context: ./vllm
-#       dockerfile: Dockerfile
-#     restart: always
-#     shm_size: '72gb'
-#     ports:
-#       - "8002:8002"
-#     volumes:
-#       - ./vllm:/app/models
-#     networks:
-#       - service_network   # h2ogpt → service_network로 변경
-#     entrypoint: python3
-#     tty: true
-#     stdin_open: true
-#     command: -m vllm.entrypoints.openai.api_server --port=8002 --host=0.0.0.0 ${LANGCHAIN_VLLM_ARGS} --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16
-#     healthcheck:
-#       test: [ "CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models" ]
-#       interval: 30s
-#       timeout: 5s
-#       retries: 20
-#     deploy:
-#       resources:
-#         reservations:
-#           devices:
-#             - driver: nvidia
-#               count: 1
-#               capabilities: [gpu]
-
-  vllm:
-      build:
-        context: ./vllm
-        dockerfile: Dockerfile
-      environment:
-        - VLLM_GPU_MEMORY_UTILIZATION=1.0
-        - CUDA_VISIBLE_DEVICES=0
-        - VLLM_NO_FALLBACK=True
-      restart: always
-      shm_size: '72gb'
-      ports:
-        - "8002:8002"
-      volumes:
-        - ./vllm:/app/models  # 경로 일치
-      networks:
-        - service_network
-      # NOTE_250311 : run_server.py 사용을 위한 테스트
-      #               이렇게 자세하게 적어서 api_server를 열어놓기.
-      #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
-      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
-      # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
-      # command: python3 /app/models/src/run_server.py
-      healthcheck:
-        test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
-        interval: 30s
-        timeout: 5s
-        retries: 20
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-
-networks:
-  service_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.19.0.0/16
-
-# volumes:
-#   etcd-data:
-#   minio-data:
