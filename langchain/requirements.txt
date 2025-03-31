@@ -16,4 +16,5 @@ tiktoken
 langchain_ollama
 langgraph
 langchain_openai
-openai
+openai == 1.68.2
+redis
