@@ -19,7 +19,7 @@ services:
       - OPENAI_API_KEY=KIMJINSAN
       - REDIS_HOST=redis  # Redis 호스트명
       - REDIS_PORT=6379
-      - MAX_USERS=40      # 최대 사용자 수
+      - MAX_USERS=20      # 최대 사용자 수
       - TTL_SECONDS=3600  # TTL 1시간
     networks:
       - service_network   # 공통 네트워크 사용
@@ -54,7 +54,7 @@ services:
       #               이렇게 자세하게 적어서 api_server를 열어놓기.
       #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
       # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
-      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --max-num-batched-tokens 8192 --max-num-seqs 50 --tensor-parallel-size 1
+      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --max-num-batched-tokens 8192 --max-num-seqs 50 --tensor-parallel-size 1 --guided-decoding-backend outlines
       # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
       # command: python3 /app/models/src/run_server.py
       healthcheck:
