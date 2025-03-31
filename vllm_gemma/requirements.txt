@@ -1,0 +1,25 @@
+# vLLM 자체 (최신 버전 설치 권장)
+vllm>=0.6.5
+
+# PyTorch (CUDA 12.6 지원 버전)
+torch>=2.4.0
+
+# 비동기 HTTP 클라이언트
+aiohttp>=3.9.5
+
+# Hugging Face Transformers
+transformers>=4.45.0
+
+# Numpy (수치 연산에 필요)
+numpy<2.0.0
+
+# tqdm
+tqdm>=4.66.5
+
+# huggingface_hub
+huggingface_hub>=0.23.0
+
+# FastAPI 서버 관련
+uvicorn>=0.30.0
+fastapi>=0.115.0
+pydantic>=2.8.0

@@ -3,12 +3,11 @@ ARG PYTHON_VERSION=3.10
 # GPU 사용을 위한 CUDA 베이스 이미지 선택 (CUDA 버전은 필요에 따라 조정)
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 AS base
 
-
 # 필수 시스템 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
-    # python3-pip \
+    python3-pip \
     git \
     ca-certificates \
 # NOTE : 하위 3가지는 extra_body={"guided_json" ~ }를 위한 패키지지
@@ -22,10 +21,19 @@ WORKDIR /app
 ENV VLLM_GPU_MEMORY_UTILIZATION=1.0
 # requirements.txt 복사 (여기에는 vllm, torch, aiohttp, fastapi 등 필요한 라이브러리들이 포함되어 있어야 합니다.)
 COPY requirements.txt .
-COPY /models/EEVE-Korean-Instruct-10.8B-v1.0 /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0
 
 # NOTE 250319 : gemma-2-2b-it 테스트
-COPY /models/gemma-2-2b-it /usr/local/bin/models/gemma-2-2b-it
+# COPY /models/gemma-2-2b-it /usr/local/bin/models/gemma-2-2b-it
+
+# NOTE 250320 : gemma-2-9b-it / EXAONE-Deep-2.4B / EXAONE-Deep-7.8B 테스트
+COPY /models/gemma-2-9b-it /usr/local/bin/models/gemma-2-9b-it
+# COPY /models/EXAONE-Deep-2.4B /usr/local/bin/models/EXAONE-Deep-2.4B
+# COPY /models/EXAONE-Deep-7.8B /usr/local/bin/models/EXAONE-Deep-7.8B
+
+# NOTE 250321
+# COPY /models/gemma-3-4b-it /usr/local/bin/models/gemma-3-4b-it
+# COPY /models/gemma-3-12b-it /usr/local/bin/models/gemma-3-12b-it
+
 
 RUN apt-get update && apt-get install -y python3-pip
 
@@ -36,11 +44,11 @@ RUN pip install --upgrade pip && pip3 install --only-binary=:all: -r requirement
 COPY . .
 
 # API 서버가 사용할 포트 노출 (예: 8000)
-EXPOSE 8002
+EXPOSE 8022
 
 # vLLM 추론 서버 실행 (추가 인자가 필요하면 환경변수나 CMD 인자에 포함)
 
-CMD ["python3", "-m", "vllm.entrypoints.openai.api_server", "--port=8002", "--host=0.0.0.0"]
+CMD ["python3", "-m", "vllm.entrypoints.openai.api_server", "--port=8022", "--host=0.0.0.0"]
 
 # NOTE_250311 : run_server.py 사용을 위한 테스트
 #               api_server는 CLI로 실행하는게 낫다는 판단

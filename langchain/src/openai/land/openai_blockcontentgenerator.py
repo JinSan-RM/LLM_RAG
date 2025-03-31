@@ -83,34 +83,34 @@ class OpenAIBlockContentGenerator:
                 "required": schema["required"]
             }
         }
-    def extract_json(self, text):
-        # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
-        text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
-        json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-        else:
-            # Handle case where only opening brace is found
-            json_str = re.search(r'\{.*', text, re.DOTALL)
-            if json_str:
-                json_str = json_str.group() + '}'
-            else:
-                return None
+    # def extract_json(self, text):
+    #     # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
+    #     text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
+    #     json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
+    #     if json_match:
+    #         json_str = json_match.group()
+    #     else:
+    #         # Handle case where only opening brace is found
+    #         json_str = re.search(r'\{.*', text, re.DOTALL)
+    #         if json_str:
+    #             json_str = json_str.group() + '}'
+    #         else:
+    #             return None
 
-        # Balance braces if necessary
-        open_braces = json_str.count('{')
-        close_braces = json_str.count('}')
-        if open_braces > close_braces:
-            json_str += '}' * (open_braces - close_braces)
+    #     # Balance braces if necessary
+    #     open_braces = json_str.count('{')
+    #     close_braces = json_str.count('}')
+    #     if open_braces > close_braces:
+    #         json_str += '}' * (open_braces - close_braces)
 
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError:
-            # Try a more lenient parsing approach
-            try:
-                return json.loads(json_str.replace("'", '"'))
-            except json.JSONDecodeError:
-                return None
+    #     try:
+    #         return json.loads(json_str)
+    #     except json.JSONDecodeError:
+    #         # Try a more lenient parsing approach
+    #         try:
+    #             return json.loads(json_str.replace("'", '"'))
+    #         except json.JSONDecodeError:
+    #             return None
 
     # async def send_request(self, prompt: str, max_tokens: int = 250) -> str:
     async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 500) -> str:
@@ -178,29 +178,28 @@ class OpenAIBlockContentGenerator:
                 ],
                 "p_1: "70"
             }}
-
-            #### Output Example ####
-            {{
-                "h1_0": "AI로 간편하게 만드는 웹사이트",
-                "h2_0": "누구나 쉽게 활용하는 AI 웹 제작",
-                "p_0": "위븐은 다방면에 능한 AI 웹 제작 서비스를 제공합니다.",
-                "li_0_0": [
-                    {{
-                        "h2_0": "AI 웹 제작 혁신",
-                        "p_0": "기업 '위븐'의 AI 솔루션은 누구나 직관적으로 웹사이트를 만들 수 있도록 지원합니다."
-                    }},
-                ],
-                "li_0_1": [
-                    {{
-                        "h2_0": "전문가도 만족하는 기능",
-                        "p_0": "초보자는 물론 전문가도 활용 가능한 강력한 에디터와 스튜디오 기능을 제공합니다."
-                    }},
-                "p_1": "재밋은 AI 기반 웹사이트 제작 솔루션을 제공하는 선도 서비스로, 일반 사용자부터 전문가까지 쉽게 활용할 수 있는 강력한 에디터와 스튜디오 서비스를 갖추고 있습니다."
-            }}        
+    
 
         """
 
-
+            # #### Output Example ####
+            # {{
+            #     "h1_0": "AI로 간편하게 만드는 웹사이트",
+            #     "h2_0": "누구나 쉽게 활용하는 AI 웹 제작",
+            #     "p_0": "위븐은 다방면에 능한 AI 웹 제작 서비스를 제공합니다.",
+            #     "li_0_0": [
+            #         {{
+            #             "h2_0": "AI 웹 제작 혁신",
+            #             "p_0": "기업 '위븐'의 AI 솔루션은 누구나 직관적으로 웹사이트를 만들 수 있도록 지원합니다."
+            #         }},
+            #     ],
+            #     "li_0_1": [
+            #         {{
+            #             "h2_0": "전문가도 만족하는 기능",
+            #             "p_0": "초보자는 물론 전문가도 활용 가능한 강력한 에디터와 스튜디오 기능을 제공합니다."
+            #         }},
+            #     "p_1": "재밋은 AI 기반 웹사이트 제작 솔루션을 제공하는 선도 서비스로, 일반 사용자부터 전문가까지 쉽게 활용할 수 있는 강력한 에디터와 스튜디오 서비스를 갖추고 있습니다."
+            # }}    
 
 
         # Test용 ==========
@@ -282,7 +281,7 @@ class OpenAIBlockContentGenerator:
         # section_context에서 실제 컨텍스트 문자열 추출
 
         extra_body = self.create_extra_body(tag_length=tag_length)
-        # print("extra_body를 보자아 : ", extra_body)
+        print("extra_body를 보자아 : ", extra_body)
         
         response = await self.generate_tag_structure(
             tag_length=tag_length,

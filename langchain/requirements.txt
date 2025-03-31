@@ -1,5 +1,5 @@
 langchain
-langchain_community  
+langchain_community
 transformers
 torch
 sentencepiece
@@ -17,3 +17,4 @@ langchain_ollama
 langgraph
 langchain_openai
 openai
+# langchain-google-genai

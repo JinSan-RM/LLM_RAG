@@ -1,6 +1,9 @@
 """This module handles openai requests."""
 from langchain_openai import OpenAI
-from langchain.chat_models import ChatOpenAI
+# from langchain.chat_models import ChatOpenAI
+# from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI # NOTE 250324 : For Gemini Test
 from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langchain.callbacks.manager import AsyncCallbackManager, CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
@@ -45,7 +48,7 @@ class OpenAIService:
         
         # NOTE : 여기에서 분기를 태울까? 괜찮아보이는데?
         
-        print("openai_config.openai_api_base : ", openai_config.openai_api_base)
+        # print("openai_config.openai_api_base : ", openai_config.openai_api_base)
         
         self.llm = OpenAI(
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
@@ -60,41 +63,83 @@ class OpenAIService:
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             openai_api_key=openai_config.openai_api_key,
             # openai_api_base=openai_config.openai_api_base,
-            openai_api_base="http://vllm:8002/v1",
+            openai_api_base="http://vllm_eeve:8002/v1",
             streaming=streaming,
             max_tokens=2000
         )
 
-        self.chatmsg = ChatOpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+        self.chat_gemma_2b = ChatOpenAI(
+            model="/usr/local/bin/models/gemma-2-2b-it",
             openai_api_key=openai_config.openai_api_key,
-            openai_api_base=openai_config.openai_api_base,
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
             streaming=streaming,
             max_tokens=2000
         )
-        self.chatguided = ChatOpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+
+        self.chat_gemma_9b = ChatOpenAI(
+            model="/usr/local/bin/models/gemma-2-9b-it",
             openai_api_key=openai_config.openai_api_key,
-            openai_api_base="http://vllm:8002/v1",
-            extra_body={"guided_json": {
-                "type": "object",
-                "properties": {"question": {"type": "string"}, "answer": {"type": "string"}},
-                "required": ["question", "answer"]
-            }}
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
+            streaming=streaming,
+            max_tokens=2000
+        )
+
+        self.chat_exaone_2b = ChatOpenAI(
+            model="/usr/local/bin/models/EXAONE-Deep-2.4B",
+            openai_api_key=openai_config.openai_api_key,
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
+            streaming=streaming,
+            max_tokens=2000
         )
         
-        self.chatguided = ChatOpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+        self.chat_exaone_8b = ChatOpenAI(
+            model="/usr/local/bin/models/EXAONE-Deep-7.8B",
             openai_api_key=openai_config.openai_api_key,
-            openai_api_base="http://vllm:8002/v1",
-            extra_body={"guided_json": {
-                "type": "object",
-                "properties": {"question": {"type": "string"}, "answer": {"type": "string"}},
-                "required": ["question", "answer"]
-            }}
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
+            streaming=streaming,
+            max_tokens=2000
         )
 
+        self.chat_gemma_3_4b = ChatOpenAI(
+            model="/usr/local/bin/models/gemma-3-4b-it",
+            openai_api_key=openai_config.openai_api_key,
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
+            streaming=streaming,
+            max_tokens=50
+        )
+
+        self.chat_gemma_3_12b = ChatOpenAI(
+            model="/usr/local/bin/models/gemma-3-12b-it",
+            openai_api_key=openai_config.openai_api_key,
+            # openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
+            streaming=streaming,
+            max_tokens=2000
+        )
+
+        # NOTE 20250324 : For OpenAI & Google gemini
+        self.chat_openai = ChatOpenAI(
+            model="gpt-4o",
+            openai_api_key="Have_to_change",
+            openai_api_base="https://api.openai.com/v1",
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        self.chat_gemini = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash-lite", # gemini-1.5-pro
+            google_api_key="Have_to_change",
+            temperature=0.7,
+            max_tokens=512
+        )
+        
     async def completions(self, **kwargs):
+        
         max_tokens = kwargs.get("max_tokens", self.llm.max_tokens)
         try:
             if self.streaming:
@@ -150,8 +195,46 @@ class OpenAIService:
                 invoke_params["temperature"] = temperature
             # if repetition_penalty:
             #     invoke_params["repetition_penalty"] = repetition_penalty
+            
+            
+            # NOTE : gemma 테스트 =========================
+            # messages_gemma_exaone = [
+            #     # AI나 System Message 안됨
+            #     # SystemMessage(content=sys_prompt),
+            #     # AIMessage(content="빅맥은 45,000원이야."),
+            #     HumanMessage(content=f"HumanMessage : Hello") # {usr_prompt}   
+            # ]
+            
+            invoke_params_gemma = {"input": messages} # 
+            if max_tokens:
+                invoke_params_gemma["max_tokens"] = max_tokens
+            if extra_body:
+                invoke_params_gemma["extra_body"] = extra_body
+            if temperature:
+                invoke_params_gemma["temperature"] = temperature
+            
+            # result = self.chat.invoke(**invoke_params_gemma)
+            # self.chat_gemma_3_12b['max_token'] = kwargs.get("max_tokens", self.chat_gemma_3_12b)
+            
+            # print(f"messages_gemma_exaone_invoke_params_gemma : {invoke_params_gemma}")
+            result = self.chat_gemini.invoke(input = messages,
+                                             config={
+                                                 "temperature" : 0.7,
+                                                 "max_tokens" : 200,
+                                                "extra_body": {'guided_json': {'type': 'object', 'properties': {'h1_0': {'type': 'string'}, 'h2_0': {'type': 'string'}, 'li_0_0': {'type': 'array', 'items': {'type': 'object', 'properties': {'h2_0': {'type': 'string'}, 'p_0': {'type': 'string'}, 'h5_0': {'type': 'string'}, 'p_1': {'type': 'string'}}, 'required': ['h2_0', 'p_0', 'h5_0', 'p_1']}, 'minItems': 1, 'maxItems': 1}, 'li_0_1': {'type': 'array', 'items': {'type': 'object', 'properties': {'h2_0': {'type': 'string'}, 'p_0': {'type': 'string'}, 'h5_0': {'type': 'string'}, 'p_1': {'type': 'string'}}, 'required': ['h2_0', 'p_0', 'h5_0', 'p_1']}, 'minItems': 1, 'maxItems': 1}}, 'required': ['h1_0', 'h2_0', 'li_0_0', 'li_0_1']}}
+                                             })
+            # result = self.chat_gemini.invoke(messages,
+            #                                     max_tokens=max_tokens,
+            #                                     temperature=temperature,
+            #                                     extra_body=extra_body)
+            print("젬마_gemma_test : ", result)
+            return result
+            # =============================================
+            
             # 단일 비동기 호출
-            return await self.chat.ainvoke(**invoke_params)
+            # result = await self.chat.ainvoke(**invoke_params)
+            # print(result)
+            # return result
             
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
