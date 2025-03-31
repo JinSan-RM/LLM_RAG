@@ -31,7 +31,7 @@ class Completions(BaseModel):
     tag_length: Optional[Dict[str, Any]] = Field(default_factory=dict)
     section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
     all_usr_data: Optional[str] = None
-
+    section_html: Optional[str] = None
 
 class ChatCompletions(BaseModel):
     """Custom class for Chat Completions data"""

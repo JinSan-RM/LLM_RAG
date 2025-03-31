@@ -54,3 +54,5 @@ langchain/utils/ollama/__pycache__/ollama_summary.cpython-39.pyc
 vllm/models/EEVE-Korean-Instruct-10.8B-v1.0
 *.pyc
 vllm/src/pydantic_test.py
+vllm_eeve/
+vllm_gemma/
