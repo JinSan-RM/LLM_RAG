@@ -9,10 +9,106 @@ from typing import Dict, Any
 from collections import defaultdict
 import random
 
-class OpenAISectionStructureSelector:
-    def __init__(self, batch_handler, model="gpt-3.5-turbo"):
+
+class OpenAISectionSlicer:
+    def __init__(self, batch_handler): # , model="gpt-3.5-turbo"
         self.batch_handler = batch_handler
-        self.model = model
+        # self.model = model
+        self.extra_body = {}  # 기본값으로 초기화
+    
+    def set_extra_body(self, extra_body):
+        """extra_body 설정 메서드"""
+        self.extra_body = extra_body
+        
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 150, extra_body: dict = None) -> str:
+        if extra_body is None:
+            extra_body = self.extra_body
+            
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
+                # "prompt": prompt,
+                "sys_prompt": sys_prompt,
+                "usr_prompt": usr_prompt,
+                "extra_body": extra_body,
+                "max_tokens": max_tokens,
+                "temperature": 0.1,
+                "top_p": 0.1,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=300  # 적절한 타임아웃 값 설정
+        )
+        return response
+    
+    async def slice_sub_page_to_sections(self, converted_html_tag: str, max_tokens: int = 150):
+    
+        sys_prompt = f"""
+        You are a professional designer who creates website.
+        Slice the HumanMessage to the best fit html tag in the candidate list.
+        
+        #### INSTRUCTIONS ####
+        
+        1. THE BASIC RULE IS FOLLOW SYMENTIC TAG. SO "h" tags mean heading and "p" tag means description.
+        2. THE ORDER OF TAGS MEAN THE POSITION ON THE WEBSITE.
+        3. IN THE "usr_prompt", THERE IS NO LIST STRUCTURE. BUT IF YOU THINK IT INCLUDES LIST STRUCTURE, YOU CAN CHOOSE THE ONE HAVE LIST STRUCTURE.
+        
+        #### Example ####
+        HumanMessage = "img*1_h4_p_h4_p_h4_p
+        
+        AIMessage =
+        {{
+            "Section_1": "img*1_h4_p",
+            "Section_2": "h4_p",
+            "Section_3": "h4_p"
+        }}
+        """
+        
+        usr_prompt = f"""
+        {converted_html_tag}
+        """
+        extra_body = {
+            "guided_json": {
+                "type": "object",
+                "properties": {
+                    "Section_1": {"type": "string"},
+                    "Section_2": {"type": "string"},
+                    "Section_3": {"type": "string"},
+                    "Section_4": {"type": "string"},
+                    "Section_5": {"type": "string"},
+                    "Section_6": {"type": "string"},
+                    "Section_7": {"type": "string"},
+                    "Section_8": {"type": "string"},
+                    "Section_9": {"type": "string"},
+                    "Section_10": {"type": "string"}
+                },
+                "required": ["Section_1"],
+                "additionalProperties": False,
+                "minProperties": 1,
+                "maxProperties": 10
+            }
+        }
+
+
+        result = await self.send_request(
+            sys_prompt=sys_prompt,
+            usr_prompt=usr_prompt,
+            max_tokens=max_tokens,
+            extra_body=extra_body
+            )
+
+        if result.success:
+            response = result
+            return response
+        else:
+            print(f"Section structure generation error: {result.error}")
+            return ""
+
+
+class OpenAISectionStructureSelector:
+    def __init__(self, batch_handler): # , model="gpt-3.5-turbo"
+        self.batch_handler = batch_handler
+        # self.model = model
         self.extra_body = {}  # 기본값으로 초기화
     
     def set_extra_body(self, extra_body):
@@ -74,7 +170,6 @@ class OpenAISectionStructureSelector:
         else:
             print(f"Section structure generation error: {result.error}")
             return ""
-        
         
         
         
@@ -358,15 +453,18 @@ class OpenAISectionTextGenerator:
         
         
 
-class OpenAIhtmltosectioncontents:
+class OpenAIhtmltopagecontents:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
+        self.section_slicer = OpenAISectionSlicer(batch_handler)
         self.structure_selector = OpenAISectionStructureSelector(batch_handler)
         self.tag_text_generator = OpenAISectionTextGenerator(batch_handler)
         self.block_dataframe = pd.read_excel("src/openai/modoo/matching_block_data/Modoo_matching_blocks.xlsx", index_col=0)
         
         
-    async def generate_main_section(self, requests, max_tokens: int = 200):
+    async def generate_sub_page_process(self, requests, max_tokens: int = 200):
+        
+        
         results = []
         extra_body = {
             "guided_json": {
@@ -388,13 +486,23 @@ class OpenAIhtmltosectioncontents:
             converted_html_tag = await self.converting_html_tag(req.section_html)
             extracted_context = await self.extracting_context(req.section_html)
             
-            section_data = await self.generate_section(converted_html_tag, extracted_context, max_tokens)
-            results.append(section_data)
+            sliced_sections = await self.section_slicer.slice_sub_page_to_sections(converted_html_tag)
+
+            sliced_sections_dict = json.loads(sliced_sections.data['generations'][0][0]['text'].strip())            
+            
+            splited_section_context = await self.split_html_by_tags(extracted_context, sliced_sections_dict)
+            
+            sumed_section_dict = await self.sum_section_dict(sliced_sections_dict, splited_section_context)
+            
+            for converted_html_tag, extracted_context in sumed_section_dict.items():
+                section_data = await self.generate_sub_page(converted_html_tag, extracted_context, max_tokens)
+                results.append(section_data)
         return results
 
     async def converting_html_tag(self, section_html: str):
         
         # 정규 표현식으로 태그 추출
+        # NOTE 250331 : Modoo에서 다른 tag가 나오면 여기 추가해줘야 함
         tags = re.findall(r'<(img|h4|p)[^>]*>', section_html)
         
         result = []
@@ -418,6 +526,7 @@ class OpenAIhtmltosectioncontents:
         
         # 모든 <img> 태그를 제거하는 정규표현식
         # pattern_img = r'<img[^>]*>'
+        
         pattern_nbsp = r'&nbsp;'
         pattern_enter = r'\n'
         
@@ -428,13 +537,97 @@ class OpenAIhtmltosectioncontents:
         
         return result
 
+    async def split_html_by_tags(self, extracted_context: str, sliced_html_tags: dict):
+        result = {}
+        
+        # 태그 패턴 정의
+        tag_patterns = {
+            'img': r'<img>',
+            'h4': r'<h4>.*?</h4>',
+            'p': r'<p>.*?</p>'
+        }
+        
+        # 모든 태그 매칭
+        matches = []
+        for tag_name, pattern in tag_patterns.items():
+            for match in re.finditer(pattern, extracted_context, re.DOTALL):
+                matches.append({
+                    'tag': tag_name,
+                    'start': match.start(),
+                    'end': match.end(),
+                    'content': match.group()
+                })
+        
+        # 시작 위치 기준으로 정렬
+        matches.sort(key=lambda x: x['start'])
+        
+        # 태그 리스트 만들기
+        all_tags = []
+        for match in matches:
+            if match['tag'] == 'img':
+                all_tags.append('img')
+            else:
+                all_tags.append(match['tag'])
+        
+        # 각 섹션별로 태그 패턴 파싱
+        section_ranges = {}
+        current_pos = 0
+        
+        for section_name, section_pattern in sliced_html_tags.items():
+            # img*1_h4_img*1_p 같은 패턴 파싱
+            pattern_parts = section_pattern.split('_')
+            expected_tags = []
+            
+            for part in pattern_parts:
+                if '*' in part:
+                    tag, count = part.split('*')
+                    expected_tags.extend([tag] * int(count))
+                else:
+                    expected_tags.append(part)
+            
+            # 예상 태그 수 계산
+            expected_count = len(expected_tags)
+            
+            # 현재 위치부터 예상 태그 수만큼의 태그 찾기
+            if current_pos + expected_count <= len(matches):
+                section_tags = matches[current_pos:current_pos + expected_count]
+                section_ranges[section_name] = {
+                    'start': section_tags[0]['start'],
+                    'end': section_tags[-1]['end'],
+                    'content': extracted_context[section_tags[0]['start']:section_tags[-1]['end']]
+                }
+                current_pos += expected_count
+        
+        # 결과 반환
+        for section_name, section_range in section_ranges.items():
+            result[section_name] = section_range['content']
+        
+        return result
+
+
+    async def sum_section_dict(self, dict_A, dict_B):
+        # dict_A와 dict_B가 동일한 키를 가지고 있는지 확인
+        if set(dict_A.keys()) != set(dict_B.keys()):
+            print("경고: dict_A와 dict_B의 키가 일치하지 않습니다.")
+            
+        # 새 dictionary 생성
+        new_dict = {}
+        
+        # dict_A와 dict_B에 공통으로 있는 키에 대해서만 처리
+        for key in set(dict_A.keys()) & set(dict_B.keys()):
+            # dict_A의 value가 new_dict의 key가 되고, dict_B의 value가 new_dict의 value가 됨
+            new_dict[dict_A[key]] = dict_B[key]
+        
+        return new_dict
+
+
     # NOTE : merged된 데이터가 들어오면서 기존 2개를 합치던 방식이 1개로 바뀜
-    async def generate_section(self, converted_html_tag: str, extracted_context: str, max_tokens: int = 200):
-        
-        
+    async def generate_sub_page(self, converted_html_tag: str, extracted_context: str, max_tokens: int = 200):
 
         try:
-            section_html_tag_LLM_result = await self.structure_selector.select_section_structure(converted_html_tag, max_tokens)            
+            section_html_tag_LLM_result = await self.structure_selector.select_section_structure(converted_html_tag, max_tokens)
+            # print(f"\n section_html_tag_LLM_result before : {section_html_tag_LLM_result} \n")
+            
             # 결과 타입 확인 및 처리
             if not section_html_tag_LLM_result.success:
                 print(f"Section structure generation error: {section_html_tag_LLM_result.error}")
@@ -442,19 +635,30 @@ class OpenAIhtmltosectioncontents:
                 
             # 문자열인지 객체인지 확인하여 처리
             selected_html_tag = section_html_tag_LLM_result.data['generations'][0][0]['text'].strip()
-            
+                
         except Exception as e:
             print(f"Error in generate_section: {str(e)}")
             return None
             # 예외 처리: 객체 구조가 예상과 다를 경우
-       
-        converted_section_html_tag = json.loads(selected_html_tag)        
+            
+        # print(f"\n section_html_tag_LLM_result after : {section_html_tag_LLM_result} \n")
+        
+        
+        converted_section_html_tag = json.loads(selected_html_tag)
+        
         block_ids = self.block_dataframe[self.block_dataframe["converted_html_tag"] == converted_section_html_tag["selected_tag"]].index.tolist()
-        choiced_block_id = random.choice(block_ids)        
+        
+        choiced_block_id = random.choice(block_ids)
+        
         choiced_section_tag_length = self.block_dataframe.loc[choiced_block_id, "tag_length"]
+
         dict_choiced_section_tag_length = json.loads(choiced_section_tag_length)
+        
         kv_extracted_context = {"Content" : extracted_context}
+        
+        
         tag_text_generator_result = await self.tag_text_generator.generate_tag_text_process(dict_choiced_section_tag_length, kv_extracted_context)
+        
         
         return {
             "block_id": {

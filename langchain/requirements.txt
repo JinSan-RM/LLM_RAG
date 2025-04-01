@@ -18,3 +18,4 @@ langgraph
 langchain_openai
 openai == 1.68.2
 redis
+openpyxl
