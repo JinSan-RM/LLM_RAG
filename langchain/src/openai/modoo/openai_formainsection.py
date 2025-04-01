@@ -432,9 +432,7 @@ class OpenAIhtmltosectioncontents:
         
 
         try:
-            section_html_tag_LLM_result = await self.structure_selector.select_section_structure(converted_html_tag, max_tokens)
-            print(f"\n section_html_tag_LLM_result before : {section_html_tag_LLM_result} \n")
-            
+            section_html_tag_LLM_result = await self.structure_selector.select_section_structure(converted_html_tag, max_tokens)            
             # 결과 타입 확인 및 처리
             if not section_html_tag_LLM_result.success:
                 print(f"Section structure generation error: {section_html_tag_LLM_result.error}")
@@ -442,44 +440,19 @@ class OpenAIhtmltosectioncontents:
                 
             # 문자열인지 객체인지 확인하여 처리
             selected_html_tag = section_html_tag_LLM_result.data['generations'][0][0]['text'].strip()
-            print("TEST_selected_html_tag : ", selected_html_tag)
-            print("TEST_type(selected_html_tag) : ", type(selected_html_tag))
             
         except Exception as e:
             print(f"Error in generate_section: {str(e)}")
             return None
             # 예외 처리: 객체 구조가 예상과 다를 경우
-            
-        
-            
-        print(f"\n section_html_tag_LLM_result after : {section_html_tag_LLM_result} \n")
-        
-        
-        converted_section_html_tag = json.loads(selected_html_tag)
-        print("TEST_type(converted_section_html_tag) : ", type(converted_section_html_tag))
-        print("TEST_converted_section_html_tag : ", converted_section_html_tag["selected_tag"])
-        
+       
+        converted_section_html_tag = json.loads(selected_html_tag)        
         block_ids = self.block_dataframe[self.block_dataframe["converted_html_tag"] == converted_section_html_tag["selected_tag"]].index.tolist()
-        print("TEST_block_ids : ", block_ids)
-        
-        choiced_block_id = random.choice(block_ids)
-        print("TEST_choiced_block_id : ", choiced_block_id)
-        
+        choiced_block_id = random.choice(block_ids)        
         choiced_section_tag_length = self.block_dataframe.loc[choiced_block_id, "tag_length"]
-        print("TEST_choiced_section_tag_length : ", choiced_section_tag_length)
-        print("TEST_type(choiced_section_tag_length) : ", type(choiced_section_tag_length))
-
         dict_choiced_section_tag_length = json.loads(choiced_section_tag_length)
-        print("TEST_dict_choiced_section_tag_length : ", dict_choiced_section_tag_length)
-        print("TEST_type(dict_choiced_section_tag_length) : ", type(dict_choiced_section_tag_length))
-        
         kv_extracted_context = {"Content" : extracted_context}
-        print("TEST_kv_extracted_context : ", kv_extracted_context)
-        print("TEST_type(kv_extracted_context) : ", type(kv_extracted_context))
-        
-        
         tag_text_generator_result = await self.tag_text_generator.generate_tag_text_process(dict_choiced_section_tag_length, kv_extracted_context)
-        
         
         return {
             "block_id": {
@@ -496,4 +469,3 @@ class OpenAIhtmltosectioncontents:
             },  # 그대로 유지
             "content": tag_text_generator_result
         }
-        
