@@ -32,6 +32,8 @@ from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
 from src.openai.land.openai_keywordforimage import OpenAIKeywordClient
 
+from src.openai.modoo.openai_formainsection import OpenAIhtmltosectioncontents
+
 from common.redis_client import get_current_users, increment_users, decrement_users
 
 
@@ -760,8 +762,8 @@ async def openai_block_content_generate(requests: List[Completions]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# =============== Modoo 관련
-from src.openai.modoo.openai_formainsection import OpenAIhtmltosectioncontents
+# ================================================== Modoo 관련
+
 
 @app.post("/api/formainsection")
 async def openai_for_main_section(requests: List[Completions]):
