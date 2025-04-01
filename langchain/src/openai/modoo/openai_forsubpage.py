@@ -462,9 +462,7 @@ class OpenAIhtmltopagecontents:
         self.block_dataframe = pd.read_excel("src/openai/modoo/matching_block_data/Modoo_matching_blocks.xlsx", index_col=0)
         
         
-    async def generate_sub_page_process(self, requests, max_tokens: int = 200):
-        
-        
+    async def generate_sub_page_process(self, req, max_tokens: int = 200):        
         results = []
         extra_body = {
             "guided_json": {
@@ -480,23 +478,25 @@ class OpenAIhtmltopagecontents:
         }
         
         self.structure_selector.set_extra_body(extra_body)
+        converted_html_tag = await self.converting_html_tag(req)
+        extracted_context = await self.extracting_context(req)
         
-        for req in requests:
-            
-            converted_html_tag = await self.converting_html_tag(req.section_html)
-            extracted_context = await self.extracting_context(req.section_html)
-            
-            sliced_sections = await self.section_slicer.slice_sub_page_to_sections(converted_html_tag)
+        sliced_sections = await self.section_slicer.slice_sub_page_to_sections(converted_html_tag)
 
-            sliced_sections_dict = json.loads(sliced_sections.data['generations'][0][0]['text'].strip())            
-            
-            splited_section_context = await self.split_html_by_tags(extracted_context, sliced_sections_dict)
-            
-            sumed_section_dict = await self.sum_section_dict(sliced_sections_dict, splited_section_context)
-            
-            for converted_html_tag, extracted_context in sumed_section_dict.items():
-                section_data = await self.generate_sub_page(converted_html_tag, extracted_context, max_tokens)
-                results.append(section_data)
+        sliced_sections_dict = json.loads(sliced_sections.data['generations'][0][0]['text'].strip())            
+        
+        splited_section_context = await self.split_html_by_tags(extracted_context, sliced_sections_dict)
+        
+        sumed_section_dict = await self.sum_section_dict(sliced_sections_dict, splited_section_context)
+        
+        tasks = [await self.generate_sub_page(converted_html_tag, extracted_context, max_tokens) for converted_html_tag, extracted_context in sumed_section_dict.items()]
+        for task in tasks:
+            try:
+                result = task
+                if result:
+                    results.append(result)
+            except Exception as e:
+                print(f"Error processing task: {e}")
         return results
 
     async def converting_html_tag(self, section_html: str):

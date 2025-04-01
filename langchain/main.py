@@ -773,8 +773,8 @@ async def openai_for_main_section(requests: List[Completions]):
         # logger.info(f"Received section generation request: {requests}")
         
         generator = OpenAIhtmltosectioncontents(batch_handler)
-
-        results = await generator.generate_main_section(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
+        tasks = [await generator.generate_main_section(req.section_html) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
         end = time.time()
         processing_time = end - start
@@ -801,18 +801,14 @@ async def openai_for_sub_page(requests: List[Completions]):
         # logger.info(f"Received section generation request: {requests}")
         
         generator = OpenAIhtmltopagecontents(batch_handler)
-
-        results = await generator.generate_sub_page_process(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
-        
+        tasks = [generator.generate_sub_page_process(req.section_html) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         end = time.time()
         processing_time = end - start
         # logger.info(f"Processing time: {processing_time} seconds")s
-        
         response = {
             "timestamp": processing_time,
             "total_requests": len(requests),
-            "successful_requests": sum(1 for r in results if all(r.values())),
-            "failed_requests": sum(1 for r in results if not all(r.values())),
             "results": results
         }
 
