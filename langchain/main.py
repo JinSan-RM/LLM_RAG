@@ -32,6 +32,9 @@ from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
 from src.openai.land.openai_keywordforimage import OpenAIKeywordClient
 
+from src.openai.modoo.openai_formainsection import OpenAIhtmltosectioncontents
+from src.openai.modoo.openai_forsubpage import OpenAIhtmltopagecontents
+
 from common.redis_client import get_current_users, increment_users, decrement_users
 
 
@@ -761,8 +764,6 @@ async def openai_block_content_generate(requests: List[Completions]):
 
 
 # =============== Modoo 관련
-from src.openai.modoo.openai_formainsection import OpenAIhtmltosectioncontents
-
 @app.post("/api/formainsection")
 async def openai_for_main_section(requests: List[Completions]):
     try:
@@ -772,6 +773,34 @@ async def openai_for_main_section(requests: List[Completions]):
         generator = OpenAIhtmltosectioncontents(batch_handler)
 
         results = await generator.generate_main_section(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
+        
+        end = time.time()
+        processing_time = end - start
+        # logger.info(f"Processing time: {processing_time} seconds")s
+        
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in results if all(r.values())),
+            "failed_requests": sum(1 for r in results if not all(r.values())),
+            "results": results
+        }
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in section generation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/api/forsubpage")
+async def openai_for_sub_page(requests: List[Completions]):
+    try:
+        start = time.time()
+        # logger.info(f"Received section generation request: {requests}")
+        
+        generator = OpenAIhtmltopagecontents(batch_handler)
+
+        results = await generator.generate_sub_page_process(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
         
         end = time.time()
         processing_time = end - start
