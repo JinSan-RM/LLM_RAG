@@ -773,7 +773,7 @@ async def openai_for_main_section(requests: List[Completions]):
         # logger.info(f"Received section generation request: {requests}")
         
         generator = OpenAIhtmltosectioncontents(batch_handler)
-        tasks = [await generator.generate_main_section(req.section_html) for req in requests]
+        tasks = [generator.generate_main_section(req.section_html) for req in requests]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         end = time.time()

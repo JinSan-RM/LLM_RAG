@@ -366,8 +366,8 @@ class OpenAIhtmltosectioncontents:
         self.block_dataframe = pd.read_excel("src/openai/modoo/matching_block_data/Modoo_matching_blocks.xlsx", index_col=0)
         
         
-    async def generate_main_section(self, requests, max_tokens: int = 200):
-        results = []
+    async def generate_main_section(self, req, max_tokens: int = 200):
+        
         extra_body = {
             "guided_json": {
                 "type": "object",
@@ -383,14 +383,12 @@ class OpenAIhtmltosectioncontents:
         
         self.structure_selector.set_extra_body(extra_body)
         
-        for req in requests:
-            
-            converted_html_tag = await self.converting_html_tag(req.section_html)
-            extracted_context = await self.extracting_context(req.section_html)
-            
-            section_data = await self.generate_section(converted_html_tag, extracted_context, max_tokens)
-            results.append(section_data)
-        return results
+        
+        converted_html_tag = await self.converting_html_tag(req)
+        extracted_context = await self.extracting_context(req)
+        
+        result = await self.generate_section(converted_html_tag, extracted_context, max_tokens)
+        return result
 
     async def converting_html_tag(self, section_html: str):
         
