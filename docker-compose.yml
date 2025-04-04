@@ -6,7 +6,8 @@ services:
       dockerfile: Dockerfile
     container_name: langchain
     depends_on:
-      - vllm           # ollama → vllm로 변경
+      - vllm_eeve           # ollama → vllm로 변경
+      # - vllm_gemma
     ports:
       - "8001:8001"
     volumes:
@@ -31,32 +32,36 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [gpu]
+  
 
-
-  vllm:
+  vllm_eeve:
       build:
-        context: ./vllm
+        context: ./vllm_eeve
         dockerfile: Dockerfile
+      container_name: vllm_eeve
       environment:
-        - VLLM_GPU_MEMORY_UTILIZATION=1.0
+        # - VLLM_GPU_MEMORY_UTILIZATION=1.0
         - CUDA_VISIBLE_DEVICES=0
         - VLLM_NO_FALLBACK=True
-        - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+        - NVIDIA_VISIBLE_DEVICES=0
       restart: always
-      shm_size: '50gb'
+      shm_size: '72gb'
       ports:
         - "8002:8002"
       volumes:
-        - ./vllm:/app/models  # 경로 일치
+        - ./vllm_eeve:/app/models  # 경로 일치
       networks:
         - service_network
-      # NOTE_250311 : run_server.py 사용을 위한 테스트
-      #               이렇게 자세하게 적어서 api_server를 열어놓기.
-      #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
-      # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
-      command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --max-num-batched-tokens 8192 --max-num-seqs 50 --tensor-parallel-size 1 --guided-decoding-backend outlines
-      # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
-      # command: python3 /app/models/src/run_server.py
+
+      command: >
+        --model /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0
+        --host 0.0.0.0
+        --port 8002
+        --dtype float16
+        --max-model-len 4096
+        --gpu-memory-utilization 0.9
+        --guided-decoding-backend outlines
+
       healthcheck:
         test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
         interval: 30s
@@ -69,7 +74,50 @@ services:
               - driver: nvidia
                 count: 1
                 capabilities: [gpu]
-  
+
+
+  # vllm_gemma:
+  #     build:
+  #       context: ./vllm_gemma
+  #       dockerfile: Dockerfile
+  #     container_name: vllm_gemma
+  #     environment:
+  #       # - VLLM_GPU_MEMORY_UTILIZATION=1.0      
+  #       - CUDA_VISIBLE_DEVICES=0
+  #       - VLLM_NO_FALLBACK=True
+  #       - NVIDIA_VISIBLE_DEVICES=0
+  #     restart: always
+  #     # restart: no
+  #     shm_size: '72gb'
+  #     ports:
+  #       - "8022:8022"
+  #     volumes:
+  #       - ./vllm_gemma:/app/models  # 경로 일치
+  #     networks:
+  #       - service_network
+
+  #     command: >
+  #       --model /usr/local/bin/models/gemma-3-4b-it
+  #       --host 0.0.0.0
+  #       --port 8022
+  #       --dtype float16
+  #       --max-model-len 8192
+  #       --gpu-memory-utilization 0.9
+  #       --guided-decoding-backend outlines
+        
+  #     healthcheck:
+  #       test: ["CMD", "curl", "-f", "http://0.0.0.0:8022/v1/models"]
+  #       interval: 30s
+  #       timeout: 5s
+  #       retries: 20
+  #     deploy:
+  #       resources:
+  #         reservations:
+  #           devices:
+  #             - driver: nvidia
+  #               count: 1
+  #               capabilities: [gpu]
+
   redis:
     image: redis:latest
     container_name: redis
@@ -84,6 +132,9 @@ networks:
     ipam:
       config:
         - subnet: 172.19.0.0/16
+
+
+
 
 # volumes:
 #   etcd-data:
@@ -208,3 +259,41 @@ networks:
   #         - driver: nvidia
   #           count: 1
   #           capabilities: [gpu]
+
+
+  # vllm:
+  #     build:
+  #       context: ./vllm
+  #       dockerfile: Dockerfile
+  #     environment:
+  #       - VLLM_GPU_MEMORY_UTILIZATION=1.0
+  #       - CUDA_VISIBLE_DEVICES=0
+  #       - VLLM_NO_FALLBACK=True
+  #       - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+  #     restart: always
+  #     shm_size: '50gb'
+  #     ports:
+  #       - "8002:8002"
+  #     volumes:
+  #       - ./vllm:/app/models  # 경로 일치
+  #     networks:
+  #       - service_network
+  #     # NOTE_250311 : run_server.py 사용을 위한 테스트
+  #     #               이렇게 자세하게 적어서 api_server를 열어놓기.
+  #     #               여러개의 모델을 사용하려면 port를 나눠서 열어야 함.
+  #     # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --guided-decoding-backend outlines
+  #     command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096 --max-num-batched-tokens 8192 --max-num-seqs 50 --tensor-parallel-size 1 --guided-decoding-backend outlines
+  #     # command: python3 -m vllm.entrypoints.openai.api_server --port 8002 --host 0.0.0.0 --model "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0" --dtype float16 --gpu-memory-utilization 1.0 --max-model-len 4096
+  #     # command: python3 /app/models/src/run_server.py
+  #     healthcheck:
+  #       test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
+  #       interval: 30s
+  #       timeout: 5s
+  #       retries: 20
+  #     deploy:
+  #       resources:
+  #         reservations:
+  #           devices:
+  #             - driver: nvidia
+  #               count: 1
+  #               capabilities: [gpu]
