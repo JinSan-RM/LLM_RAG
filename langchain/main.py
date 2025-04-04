@@ -474,6 +474,7 @@ async def openai_input_data_process(requests: List[Completions]):
         tasks = [inputDataProcess(req, idx) for idx, req in enumerate(requests)]
         processed_results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        
         results = []
         for result in processed_results:
             if isinstance(result, Exception):
@@ -532,6 +533,7 @@ async def inputDataProcess(req, req_idx):
     results = []
     try:
         # PDF 데이터 준비
+        keywordclient = OpenAIKeywordClient(batch_handler)
         pdf_data_list = [req.pdf_data1 or "", req.pdf_data2 or "", req.pdf_data3 or ""]
         pdf_data_list = [pdf for pdf in pdf_data_list if pdf.strip()]
         usr_msg = req.usr_msg if hasattr(req, 'usr_msg') else ""
@@ -579,6 +581,9 @@ async def inputDataProcess(req, req_idx):
                     comp_client = OpenAIComprehensiveProposalClient(usr_proposal, pdf_proposals, batch_handler)
                     comp_result = await comp_client.generate_comprehensive_proposal()
 
+            print(f"comp_result : {comp_result['generations'][0][0]['text'] }")
+            site_keyword = await keywordclient.section_keyword_create_logic(context=comp_result['generations'][0][0]['text'] , max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
+            print(f"site_keyword : {site_keyword}")
             # 종합 Proposal 결과 추가
             if "error" not in comp_result:
                 results.append({
@@ -600,7 +605,7 @@ async def inputDataProcess(req, req_idx):
                         "error_details": None
                     }
                 })
-
+                
         # 개별 결과 추가
         if usr_proposal:
             results.append({
@@ -612,7 +617,11 @@ async def inputDataProcess(req, req_idx):
                 "type": f"pdf_{i+1}_proposal",
                 "result": {"success": isinstance(pr, dict) and "error" not in pr, "data": pr}
             })
-
+        if site_keyword:
+            results.append({
+                "type": "site_keyword",
+                "result": {"success": True, "data": site_keyword}
+            })
         return results
     except Exception as e:
         logger.error(f"요청 {req_idx} 처리 오류: {str(e)}")
