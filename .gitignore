@@ -57,3 +57,5 @@ vllm/src/pydantic_test.py
 vllm_eeve/
 vllm_gemma/
 locust/
+vllm_eeve/models
+vllm_gemma/models

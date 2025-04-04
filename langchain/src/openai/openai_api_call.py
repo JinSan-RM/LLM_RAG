@@ -47,14 +47,6 @@ class OpenAIService:
         
         print("openai_config.openai_api_base : ", openai_config.openai_api_base)
         
-        self.llm = OpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-            openai_api_key=openai_config.openai_api_key,
-            openai_api_base=openai_config.openai_api_base,
-            streaming=streaming,
-            callback_manager=callback_manager,
-            max_tokens=2000
-        )
         
         self.chat = ChatOpenAI(
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
@@ -65,34 +57,14 @@ class OpenAIService:
             max_tokens=2000
         )
 
-        self.chatmsg = ChatOpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
+        self.chat_gemma_3_4b = ChatOpenAI(
+            model="/usr/local/bin/models/gemma-3-4b-it",
             openai_api_key=openai_config.openai_api_key,
-            openai_api_base=openai_config.openai_api_base,
+            openai_api_base="http://vllm_gemma:8022/v1",
             streaming=streaming,
-            max_tokens=2000
-        )
-        self.chatguided = ChatOpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-            openai_api_key=openai_config.openai_api_key,
-            openai_api_base="http://vllm:8002/v1",
-            extra_body={"guided_json": {
-                "type": "object",
-                "properties": {"question": {"type": "string"}, "answer": {"type": "string"}},
-                "required": ["question", "answer"]
-            }}
+            max_tokens=500
         )
         
-        self.chatguided = ChatOpenAI(
-            model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
-            openai_api_key=openai_config.openai_api_key,
-            openai_api_base="http://vllm:8002/v1",
-            extra_body={"guided_json": {
-                "type": "object",
-                "properties": {"question": {"type": "string"}, "answer": {"type": "string"}},
-                "required": ["question", "answer"]
-            }}
-        )
 
     async def completions(self, **kwargs):
         max_tokens = kwargs.get("max_tokens", self.llm.max_tokens)

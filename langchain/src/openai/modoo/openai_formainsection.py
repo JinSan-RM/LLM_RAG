@@ -52,8 +52,6 @@ class OpenAISectionStructureSelector:
         2. THE ORDER OF TAGS MEAN THE POSITION ON THE WEBSITE.
         3. IN THE "usr_prompt", THERE IS NO LIST STRUCTURE. BUT IF YOU THINK IT INCLUDES LIST STRUCTURE, YOU CAN CHOOSE THE ONE HAVE LIST STRUCTURE.
         
-        Example Output 1:
-        {{"selected_tag": "h5_h2_p_img*3"}}
         """
         
         usr_prompt = f"""
@@ -393,7 +391,8 @@ class OpenAIhtmltosectioncontents:
     async def converting_html_tag(self, section_html: str):
         
         # 정규 표현식으로 태그 추출
-        tags = re.findall(r'<(img|h4|p)[^>]*>', section_html)
+        # NOTE 250331 : Modoo에서 다른 tag가 나오면 여기 추가해줘야 함
+        tags = re.findall(r'<(img|h2|h3|h4|h5|p)[^>]*>', section_html)
         
         result = []
         
@@ -404,13 +403,14 @@ class OpenAIhtmltosectioncontents:
             
             if tag == 'img':
                 result.append(f"{tag}*{count}")
-            elif tag in ['h4', 'p']:
+            elif tag in ['h2','h3','h4','h5', 'p']:
                 result.append(tag)
             else:
                 result.append(tag)
         
         return '_'.join(result)
         
+
         
     async def extracting_context(self, section_html: str):
         

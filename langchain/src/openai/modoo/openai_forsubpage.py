@@ -52,6 +52,7 @@ class OpenAISectionSlicer:
         1. THE BASIC RULE IS FOLLOW SYMENTIC TAG. SO "h" tags mean heading and "p" tag means description.
         2. THE ORDER OF TAGS MEAN THE POSITION ON THE WEBSITE.
         3. IN THE "usr_prompt", THERE IS NO LIST STRUCTURE. BUT IF YOU THINK IT INCLUDES LIST STRUCTURE, YOU CAN CHOOSE THE ONE HAVE LIST STRUCTURE.
+        4. IF THERE IS SAME PATTERNS IN THE INPUT, THAT WOULD BE LIST STRUCTURE. IT 
         
         #### Example ####
         HumanMessage = "img*1_h4_p_h4_p_h4_p
@@ -148,8 +149,6 @@ class OpenAISectionStructureSelector:
         2. THE ORDER OF TAGS MEAN THE POSITION ON THE WEBSITE.
         3. IN THE "usr_prompt", THERE IS NO LIST STRUCTURE. BUT IF YOU THINK IT INCLUDES LIST STRUCTURE, YOU CAN CHOOSE THE ONE HAVE LIST STRUCTURE.
         
-        Example Output 1:
-        {{"selected_tag": "h5_h2_p_img*3"}}
         """
         
         usr_prompt = f"""
@@ -479,15 +478,21 @@ class OpenAIhtmltopagecontents:
         
         self.structure_selector.set_extra_body(extra_body)
         converted_html_tag = await self.converting_html_tag(req)
+        print("TEST_converted_html_tag : ", converted_html_tag)
         extracted_context = await self.extracting_context(req)
-        
+        print("TEST_extracted_context : ", extracted_context)
         sliced_sections = await self.section_slicer.slice_sub_page_to_sections(converted_html_tag)
-
+        
         sliced_sections_dict = json.loads(sliced_sections.data['generations'][0][0]['text'].strip())            
+        print("TEST_sliced_sections_dict : ", sliced_sections_dict)
         
+        # NOTE : 애초에 Section 별로 이상하게 잘림
         splited_section_context = await self.split_html_by_tags(extracted_context, sliced_sections_dict)
+        print("TEST_splited_section_context : ", splited_section_context)
         
+        # NOTE : 끝에가 먼저 나오는 케이스 발견 0,1,2로 나와야 하는데 2,0,1로 나옴
         sumed_section_dict = await self.sum_section_dict(sliced_sections_dict, splited_section_context)
+        print("TEST_sumed_section_dict : ", sumed_section_dict)
         
         tasks = [await self.generate_sub_page(converted_html_tag, extracted_context, max_tokens) for converted_html_tag, extracted_context in sumed_section_dict.items()]
         for task in tasks:
@@ -503,7 +508,7 @@ class OpenAIhtmltopagecontents:
         
         # 정규 표현식으로 태그 추출
         # NOTE 250331 : Modoo에서 다른 tag가 나오면 여기 추가해줘야 함
-        tags = re.findall(r'<(img|h4|p)[^>]*>', section_html)
+        tags = re.findall(r'<(img|h2|h3|h4|h5|p)[^>]*>', section_html)
         
         result = []
         
@@ -514,7 +519,7 @@ class OpenAIhtmltopagecontents:
             
             if tag == 'img':
                 result.append(f"{tag}*{count}")
-            elif tag in ['h4', 'p']:
+            elif tag in ['h2','h3','h4','h5', 'p']:
                 result.append(tag)
             else:
                 result.append(tag)
@@ -543,7 +548,10 @@ class OpenAIhtmltopagecontents:
         # 태그 패턴 정의
         tag_patterns = {
             'img': r'<img>',
+            'h2': r'<h2>.*?</h2>',
+            'h3': r'<h3>.*?</h3>',
             'h4': r'<h4>.*?</h4>',
+            'h5': r'<h5>.*?</h5>',
             'p': r'<p>.*?</p>'
         }
         
