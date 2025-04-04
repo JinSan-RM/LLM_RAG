@@ -56,3 +56,4 @@ vllm/models/EEVE-Korean-Instruct-10.8B-v1.0
 vllm/src/pydantic_test.py
 vllm_eeve/
 vllm_gemma/
+locust/
