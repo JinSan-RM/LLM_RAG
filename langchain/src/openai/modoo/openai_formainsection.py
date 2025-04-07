@@ -44,13 +44,13 @@ class OpenAISectionStructureSelector:
     
         sys_prompt = f"""
         You are a professional designer who creates website.
-        Choose the best fit html tag in the candidate list.
+        Choose the best fit html tag in the "guided_json".
         
         #### INSTRUCTIONS ####
         
-        1. THE BASIC RULE IS FOLLOW SYMENTIC TAG. SO "h" tags mean heading and "p" tag means description.
+        1. THE BASIC RULE IS FOLLOW SYMENTIC TAG. SO "h" tags mean heading, "p" tag means description and "li" tag means list structure. 
         2. THE ORDER OF TAGS MEAN THE POSITION ON THE WEBSITE.
-        3. IN THE "usr_prompt", THERE IS NO LIST STRUCTURE. BUT IF YOU THINK IT INCLUDES LIST STRUCTURE, YOU CAN CHOOSE THE ONE HAVE LIST STRUCTURE.
+        3. IF THERE IS "li" tag in the usr_prompt, MUST CHOOSE THE ONE THAT CONTAIN "li".
         
         """
         
@@ -65,7 +65,10 @@ class OpenAISectionStructureSelector:
             max_tokens=max_tokens,
             extra_body=self.extra_body
             )
-
+        
+        print("Test_converted_html_tag : ", converted_html_tag)
+        print("Test_section_html_tag_LLM_result : ", result)
+        
         if result.success:
             response = result
             return response
@@ -384,16 +387,21 @@ class OpenAIhtmltosectioncontents:
         
         converted_html_tag = await self.converting_html_tag(req)
         extracted_context = await self.extracting_context(req)
+        print("Test_extracted_context : ", extracted_context)
+        convert_to_contain_li_tag = await self.convert_to_wanted_output(converted_html_tag)
+        print("Test_convert_to_contain_li_tag : ", convert_to_contain_li_tag)
         
-        result = await self.generate_section(converted_html_tag, extracted_context, max_tokens)
+        result = await self.generate_section(convert_to_contain_li_tag, extracted_context, max_tokens)
         return result
 
     async def converting_html_tag(self, section_html: str):
         
         # 정규 표현식으로 태그 추출
         # NOTE 250331 : Modoo에서 다른 tag가 나오면 여기 추가해줘야 함
-        tags = re.findall(r'<(img|h2|h3|h4|h5|p)[^>]*>', section_html)
         
+        print("Test_section_html : ", section_html)
+        tags = re.findall(r'<(img|h2|h3|h4|h5|p)[^>]*>', section_html)
+        print("Test_tags : ", tags)
         result = []
         
         # groupby를 사용하여 연속된 같은 태그를 그룹화
@@ -407,11 +415,47 @@ class OpenAIhtmltosectioncontents:
                 result.append(tag)
             else:
                 result.append(tag)
+        print("Test_'_'.join(result) : ", '_'.join(result))
         
         return '_'.join(result)
         
 
+    async def convert_to_wanted_output(self, input_str: str) -> str:
+        # 언더바(_) 기준으로 토큰 분리
+        tokens = input_str.split('_')
+        # 첫 번째 토큰은 메인 헤더 (예: h3)
+        header = tokens[0]
+        # 나머지 토큰들은 li 그룹으로 묶을 대상
+        li_tokens = tokens[1:]
+        n = len(li_tokens)
         
+        # li 그룹의 패턴(반복되는 최소 단위)을 찾기 위한 변수
+        group = None
+        group_count = 1
+        # 가능한 그룹 길이 i를 1부터 n까지 시도하며 전체 li_tokens가 동일한 그룹으로 반복되는지 확인
+        for i in range(1, n + 1):
+            if n % i == 0:
+                groups = [li_tokens[j:j+i] for j in range(0, n, i)]
+                if all(g == groups[0] for g in groups):
+                    group = groups[0]
+                    group_count = len(groups)
+                    break
+        # 만약 반복되는 그룹을 찾지 못하면 전체 토큰을 하나의 그룹으로 처리
+        if group is None:
+            group = li_tokens
+            group_count = 1
+        
+        # 그룹 내 토큰은 '+'로 연결 (예: img*1+h3+p)
+        group_str = "+".join(group)
+        # li 그룹이 여러개면 뒤에 *반복횟수를 붙임 (예: h3_li(img*1+h3+p)*2)
+        if group_count > 1:
+            second_output = f"{header}_li({group_str})*{group_count}"
+        else:
+            second_output = f"{header}_li({group_str})"
+        
+        return second_output
+
+
     async def extracting_context(self, section_html: str):
         
         # 모든 <img> 태그를 제거하는 정규표현식

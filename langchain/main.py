@@ -582,8 +582,8 @@ async def inputDataProcess(req, req_idx):
                     comp_result = await comp_client.generate_comprehensive_proposal()
 
             print(f"comp_result : {comp_result['generations'][0][0]['text'] }")
-            site_keyword = await keywordclient.section_keyword_create_logic(context=comp_result['generations'][0][0]['text'] , max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
-            print(f"site_keyword : {site_keyword}")
+            # site_keyword = await keywordclient.section_keyword_create_logic(context=comp_result['generations'][0][0]['text'] , max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
+            # print(f"site_keyword : {site_keyword}")
             # 종합 Proposal 결과 추가
             if "error" not in comp_result:
                 results.append({
@@ -617,11 +617,11 @@ async def inputDataProcess(req, req_idx):
                 "type": f"pdf_{i+1}_proposal",
                 "result": {"success": isinstance(pr, dict) and "error" not in pr, "data": pr}
             })
-        if site_keyword:
-            results.append({
-                "type": "site_keyword",
-                "result": {"success": True, "data": site_keyword}
-            })
+        # if site_keyword:
+        #     results.append({
+        #         "type": "site_keyword",
+        #         "result": {"success": True, "data": site_keyword}
+        #     })
         return results
     except Exception as e:
         logger.error(f"요청 {req_idx} 처리 오류: {str(e)}")

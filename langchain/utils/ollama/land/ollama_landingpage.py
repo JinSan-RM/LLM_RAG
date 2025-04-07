@@ -20,9 +20,10 @@ class Section(BaseSection):
     description: Optional[str] = Field(None, alias="description")
     features: Optional[List[FeatureItem]] = Field(None, alias="features")
 
+    # NOTE 250407_pydantic V1 -> V2로 update 됨에 따라 변수 사라짐. 추후 사용 시 참고
     class Config:
-        allow_population_by_field_name = True
-        orm_mode = True
+        # allow_population_by_field_name = True
+        # orm_mode = True
         json_encoders = {
             type(None): lambda v: v  # 기본적으로 None은 제외됨
         }
