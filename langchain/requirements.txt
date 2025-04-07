@@ -1,5 +1,10 @@
+openai
 langchain
-langchain_community  
+langchain_community
+langchain_ollama
+langgraph
+langchain_openai
+langchain-milvus
 transformers
 torch
 sentencepiece
@@ -10,12 +15,7 @@ requests
 gunicorn
 protobuf==3.20.1
 pymilvus
-langchain-milvus
 PyMuPDF
 tiktoken
-langchain_ollama
-langgraph
-langchain_openai
-openai == 1.68.2
 redis
 openpyxl

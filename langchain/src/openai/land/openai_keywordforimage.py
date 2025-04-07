@@ -47,7 +47,7 @@ class OpenAIKeywordClient:
             Section_context = "KG이니시스는 결제 서비스와 기술 분야의 선도 기업으로, 통합 간편 결제 솔루션을 제공합니다. 1998년에 설립되어 16만 가맹점을 보유하며, 연간 48억 건의 결제를 처리합니다."
 
             [ASSISTANT_EXAMPLE]
-            {{"keyword": ["payment solutions", "KG Inisys", "e-commerce"]}}
+            {{"keyword": ["payment solutions", "convenient", "e-commerce"]}}
         """
         
         usr_prompt = f"""

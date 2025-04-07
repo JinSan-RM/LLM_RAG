@@ -59,7 +59,7 @@ services:
         --port 8002
         --dtype float16
         --max-model-len 4096
-        --gpu-memory-utilization 0.9
+        --gpu-memory-utilization 1.0
         --guided-decoding-backend outlines
 
       healthcheck:

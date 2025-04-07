@@ -1,6 +1,7 @@
 """This module handles openai requests."""
-from langchain_openai import OpenAI
-from langchain.chat_models import ChatOpenAI
+# from langchain_openai import OpenAI
+# from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langchain.callbacks.manager import AsyncCallbackManager, CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
@@ -52,7 +53,7 @@ class OpenAIService:
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             openai_api_key=openai_config.openai_api_key,
             # openai_api_base=openai_config.openai_api_base,
-            openai_api_base="http://vllm:8002/v1",
+            openai_api_base="http://vllm_eeve:8002/v1",
             streaming=streaming,
             max_tokens=2000
         )
@@ -123,7 +124,9 @@ class OpenAIService:
             # if repetition_penalty:
             #     invoke_params["repetition_penalty"] = repetition_penalty
             # 단일 비동기 호출
-            return await self.chat.ainvoke(**invoke_params)
+            result = await self.chat.ainvoke(**invoke_params)
+            
+            return result
             
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
