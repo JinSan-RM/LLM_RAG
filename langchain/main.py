@@ -31,6 +31,7 @@ from src.openai.land.openai_sectiongenerator import OpenAISectionGenerator
 from src.openai.land.openai_blockrecommend import OpenAIBlockSelector
 from src.openai.land.openai_blockcontentgenerator import OpenAIBlockContentGenerator
 from src.openai.land.openai_keywordforimage import OpenAIKeywordClient
+from src.openai.land.openai_text_regenerate import OpenAITextRegenerator
 
 from src.openai.modoo.openai_formainsection import OpenAIhtmltosectioncontents
 from src.openai.modoo.openai_forsubpage import OpenAIhtmltopagecontents
@@ -752,6 +753,31 @@ async def openai_block_content_generate(requests: List[Completions]):
                 processed_results.append(result)
         
         decrement_users()  # 사용자 수 감소
+        
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": processed_results,
+            "current_users": get_current_users()
+        }
+        return response
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/api/text_regenerate")
+async def openai_text_regenerate(requests: List[Completions]):
+    try:
+        start = time.time()
+
         
         end = time.time()
         processing_time = end - start
