@@ -117,6 +117,18 @@ class OpenAIService:
                 HumanMessage(content=usr_prompt)
             ]
             
+            message_gemma = f"""
+                <bos>
+						<start_of_turn>
+								system\n\n           {sys_prompt} 
+								
+						<end_of_turn>\n
+                        <start_of_turn>
+                                user\n\n            {usr_prompt}
+                        <end_of_turn>
+						<start_of_turn>model\n", 
+            """
+            
             # 단일 ainvoke 호출로 최적화
             invoke_params = {"input": messages}
             if max_tokens: invoke_params["max_tokens"] = max_tokens

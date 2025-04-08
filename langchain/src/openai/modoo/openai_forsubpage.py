@@ -477,24 +477,25 @@ class OpenAIhtmltopagecontents:
         }
         
         self.structure_selector.set_extra_body(extra_body)
+        
         converted_html_tag = await self.converting_html_tag(req)
         print("TEST_converted_html_tag : ", converted_html_tag)
-        extracted_context = await self.extracting_context(req)
-        print("TEST_extracted_context : ", extracted_context)
-        sliced_sections = await self.section_slicer.slice_sub_page_to_sections(converted_html_tag)
+        extracted_page_context = await self.extracting_page_context(req)
+        print("TEST_extracted_page_context : ", extracted_page_context)
         
+        sliced_sections = await self.section_slicer.slice_sub_page_to_sections(converted_html_tag)
         sliced_sections_dict = json.loads(sliced_sections.data['generations'][0][0]['text'].strip())            
         print("TEST_sliced_sections_dict : ", sliced_sections_dict)
         
         # NOTE : 애초에 Section 별로 이상하게 잘림
-        splited_section_context = await self.split_html_by_tags(extracted_context, sliced_sections_dict)
+        splited_section_context = await self.split_html_by_tags(extracted_page_context, sliced_sections_dict)
         print("TEST_splited_section_context : ", splited_section_context)
         
         # NOTE : 끝에가 먼저 나오는 케이스 발견 0,1,2로 나와야 하는데 2,0,1로 나옴
         sumed_section_dict = await self.sum_section_dict(sliced_sections_dict, splited_section_context)
         print("TEST_sumed_section_dict : ", sumed_section_dict)
         
-        tasks = [await self.generate_sub_page(converted_html_tag, extracted_context, max_tokens) for converted_html_tag, extracted_context in sumed_section_dict.items()]
+        tasks = [await self.generate_sub_page(converted_section_html_tag, extracted_section_context, max_tokens) for converted_section_html_tag, extracted_section_context in sumed_section_dict.items()]
         for task in tasks:
             try:
                 result = task
@@ -561,8 +562,9 @@ class OpenAIhtmltopagecontents:
         
         return second_output
 
-        
-    async def extracting_context(self, section_html: str):
+
+    # NOTE 250408 : [방식 1] 내용에서 중복태그 병합 : while로 순차적으로 돌아야해서 느림
+    async def extracting_page_context(self, section_html: str):
         
         # 모든 <img> 태그를 제거하는 정규표현식
         # pattern_img = r'<img[^>]*>'
@@ -573,9 +575,48 @@ class OpenAIhtmltopagecontents:
         # 정규표현식을 사용하여 img 태그 제거
         # remove_img = re.sub(pattern_img, '', section_html)
         remove_nbsp = re.sub(pattern_nbsp, '', section_html)
-        result = re.sub(pattern_enter, '', remove_nbsp)
+        remove_enter = re.sub(pattern_enter, '', remove_nbsp)
         
-        return result
+        # 동일 태그들 사이의 </tag>와 <tag> 패턴을 개행문자로 치환
+        pattern_tags = r'</(p|h2|h3|h4|h5)>\s*<\1>'
+        while re.search(pattern_tags, remove_enter):
+            remove_enter = re.sub(pattern_tags, ' ', remove_enter)
+        return remove_enter
+    
+    # NOTE 250408 : [방식 2] 내용에서 중복태그 병합 : 선택적으로 돌려서 최적화 한 것이나, [방식 1] 보다 속도가 더 느림
+    #               [방식 3] 문득 생각난 건데, 동일한 태그에서 닫힘태그와 열림태그 사이 값이 5
+    # def merge_tag_block(self, tag, html):
+    #     # 주어진 태그의 연속된 블록을 찾기 위한 정규식
+    #     pattern = re.compile(rf'(<{tag}>.*?</{tag}>\s*)+', re.DOTALL)
+        
+    #     def replacer(match):
+    #         # 연속된 태그 블록의 내용을 병합
+    #         contents = match.group(0)
+    #         # 태그 내 내용만 추출
+    #         inner_pattern = re.compile(rf'<{tag}>(.*?)</{tag}>', re.DOTALL)
+    #         contents = inner_pattern.findall(contents)
+    #         # 내용들을 공백으로 합침
+    #         merged_content = " ".join(content.strip() for content in contents)
+    #         return f"<{tag}>{merged_content}</{tag}>"
+        
+    #     # 정규식으로 연속된 블록을 찾아 병합
+    #     return re.sub(pattern, replacer, html)
+
+
+    # async def merge_conditional_tags(self, html: str) -> str:
+    #     """
+    #     입력된 HTML 문자열에서 대상 태그가 존재하는 경우에만 그 태그 블록을 병합합니다.
+        
+    #     대상 태그: <p>, <h2>, <h3>, <h4>, <h5>
+    #     """
+    #     target_tags = ['p', 'h2', 'h3', 'h4', 'h5']
+        
+    #     for tag in target_tags:
+    #         # 해당 태그가 존재하는지 확인 (예: "<p>"가 HTML 내에 있으면)
+    #         if re.search(rf'<{tag}>', html):
+    #             html = self.merge_tag_block(tag, html)
+    #     return html
+    # ===========================================================================
 
     async def split_html_by_tags(self, extracted_context: str, sliced_html_tags: dict):
         result = {}
@@ -665,10 +706,10 @@ class OpenAIhtmltopagecontents:
 
 
     # NOTE : merged된 데이터가 들어오면서 기존 2개를 합치던 방식이 1개로 바뀜
-    async def generate_sub_page(self, converted_html_tag: str, extracted_context: str, max_tokens: int = 200):
+    async def generate_sub_page(self, converted_section_html_tag: str, extracted_section_context: str, max_tokens: int = 200):
 
         try:
-            section_html_tag_LLM_result = await self.structure_selector.select_section_structure(converted_html_tag, max_tokens)
+            section_html_tag_LLM_result = await self.structure_selector.select_section_structure(converted_section_html_tag, max_tokens)
             # print(f"\n section_html_tag_LLM_result before : {section_html_tag_LLM_result} \n")
             
             # 결과 타입 확인 및 처리
@@ -697,7 +738,7 @@ class OpenAIhtmltopagecontents:
 
         dict_choiced_section_tag_length = json.loads(choiced_section_tag_length)
         
-        kv_extracted_context = {"Content" : extracted_context}
+        kv_extracted_context = {"Content" : extracted_section_context}
         
         
         tag_text_generator_result = await self.tag_text_generator.generate_tag_text_process(dict_choiced_section_tag_length, kv_extracted_context)
