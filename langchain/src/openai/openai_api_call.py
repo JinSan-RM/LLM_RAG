@@ -49,7 +49,7 @@ class OpenAIService:
         print("openai_config.openai_api_base : ", openai_config.openai_api_base)
         
         
-        self.chat = ChatOpenAI(
+        self.chat_EEVE = ChatOpenAI(
             model="/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0",
             openai_api_key=openai_config.openai_api_key,
             # openai_api_base=openai_config.openai_api_base,
@@ -95,10 +95,14 @@ class OpenAIService:
             usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
             temperature = kwargs.get('temperature')
-            # repetition_penalty = kwargs.get('repetition_penalty')
-            
+            model = kwargs.get('model', "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0")
             # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
+            # =====================================
+            # 추가적인 파라미터들
+            repetition_penalty = kwargs.get('repetition_penalty')
+            top_p = kwargs.get('top_p')
+            n = kwargs.get('n')
             
             # usr_prompt 처리 최적화
             if not usr_prompt and 'messages' in kwargs and kwargs['messages']:
@@ -121,11 +125,25 @@ class OpenAIService:
                 invoke_params["extra_body"] = extra_body
             if temperature:
                 invoke_params["temperature"] = temperature
-            # if repetition_penalty:
-            #     invoke_params["repetition_penalty"] = repetition_penalty
-            # 단일 비동기 호출
-            result = await self.chat.ainvoke(**invoke_params)
+            if model:
+                invoke_params["model"] = model
             
+            # 추가적인 파라미터들 처리
+            if repetition_penalty:
+                invoke_params["repetition_penalty"] = repetition_penalty
+            if top_p:
+                invoke_params["top_p"] = top_p
+            if n:
+                invoke_params["n"] = n
+            
+            print(f"**invoke_params : {invoke_params}**")
+            # 단일 비동기 호출
+            if model == "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0":
+                result = await self.chat_EEVE.ainvoke(**invoke_params)
+            elif model == "/usr/local/bin/models/gemma-3-4b-it":
+                result = await self.chat_gemma_3_4b.ainvoke(**invoke_params)
+            else:
+                result = await self.chat_EEVE.ainvoke(**invoke_params)
             return result
             
         except Exception as e:
