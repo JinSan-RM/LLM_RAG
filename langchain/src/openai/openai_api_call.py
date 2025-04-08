@@ -119,33 +119,29 @@ class OpenAIService:
             
             # 단일 ainvoke 호출로 최적화
             invoke_params = {"input": messages}
-            if max_tokens:
-                invoke_params["max_tokens"] = max_tokens
-            if extra_body:
-                invoke_params["extra_body"] = extra_body
-            if temperature:
-                invoke_params["temperature"] = temperature
-            if model:
-                invoke_params["model"] = model
-            
-            # 추가적인 파라미터들 처리
-            if repetition_penalty:
-                invoke_params["repetition_penalty"] = repetition_penalty
-            if top_p:
-                invoke_params["top_p"] = top_p
-            if n:
-                invoke_params["n"] = n
-            
-            print(f"**invoke_params : {invoke_params}**")
-            # 단일 비동기 호출
+            if max_tokens: invoke_params["max_tokens"] = max_tokens
+            if extra_body: invoke_params["extra_body"] = extra_body
+            if temperature: invoke_params["temperature"] = temperature
+            if repetition_penalty: invoke_params["repetition_penalty"] = repetition_penalty
+            if top_p: invoke_params["top_p"] = top_p
+            if n: invoke_params["n"] = n
             if model == "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0":
-                result = await self.chat_EEVE.ainvoke(**invoke_params)
+                model_key = "eeve"
             elif model == "/usr/local/bin/models/gemma-3-4b-it":
-                result = await self.chat_gemma_3_4b.ainvoke(**invoke_params)
+                model_key = "gemma"
             else:
-                result = await self.chat_EEVE.ainvoke(**invoke_params)
+                model_key = "eeve"
+            invoke_params["model"] = model_key
+
+
+            print(f"**invoke_params : {invoke_params}**")
+            model_router = {
+                "eeve": self.chat_EEVE,
+                "gemma": self.chat_gemma_3_4b
+            }
+            result = await model_router[model_key].ainvoke(**invoke_params)
             return result
-            
+                            
         except Exception as e:
             print(f"OpenAI API call failed: {str(e)}")
             raise
