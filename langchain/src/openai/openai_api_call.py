@@ -95,7 +95,7 @@ class OpenAIService:
             usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
             temperature = kwargs.get('temperature')
-            model = kwargs.get('model', "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0")
+            model = kwargs.get('model', "/usr/local/bin/models/gemma-3-4b-it")
             # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
             # =====================================
@@ -117,17 +117,17 @@ class OpenAIService:
                 HumanMessage(content=usr_prompt)
             ]
             
-            message_gemma = f"""
-                <bos>
-						<start_of_turn>
-								system\n\n           {sys_prompt} 
+            # message_gemma = f"""
+            #     <bos>
+			# 			<start_of_turn>
+			# 					system\n\n           {sys_prompt} 
 								
-						<end_of_turn>\n
-                        <start_of_turn>
-                                user\n\n            {usr_prompt}
-                        <end_of_turn>
-						<start_of_turn>model\n", 
-            """
+			# 			<end_of_turn>\n
+            #             <start_of_turn>
+            #                     user\n\n            {usr_prompt}
+            #             <end_of_turn>
+			# 			<start_of_turn>model\n", 
+            # """
             
             # 단일 ainvoke 호출로 최적화
             invoke_params = {"input": messages}
@@ -142,8 +142,8 @@ class OpenAIService:
             elif model == "/usr/local/bin/models/gemma-3-4b-it":
                 model_key = "gemma"
             else:
-                model_key = "eeve"
-            invoke_params["model"] = model_key
+                model_key = "gemma"
+            # invoke_params["model"] = model_key
 
 
             print(f"**invoke_params : {invoke_params}**")
@@ -151,7 +151,10 @@ class OpenAIService:
                 "eeve": self.chat_EEVE,
                 "gemma": self.chat_gemma_3_4b
             }
+            
             result = await model_router[model_key].ainvoke(**invoke_params)
+            
+            print("Test_result : ", result)
             return result
                             
         except Exception as e:
