@@ -8,7 +8,7 @@ WORKDIR /app
 # 로컬에서 모델을 미리 다운로드한 경우에만 사용
 # COPY /models/gemma-3-1b-it /usr/local/bin/models/gemma-3-1b-it
 COPY /models/gemma-3-4b-it /usr/local/bin/models/gemma-3-4b-it
-COPY /models/gemma-3-12b-it /usr/local/bin/models/gemma-3-12b-it
+# COPY /models/gemma-3-12b-it /usr/local/bin/models/gemma-3-12b-it
 
 # 추가적인 Python 패키지 설치 (필요 시)
 # 예: RUN pip install some-package

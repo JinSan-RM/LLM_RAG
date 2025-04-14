@@ -1,5 +1,5 @@
 # vLLM 공식 이미지 사용 (최신 버전 기준)
-FROM vllm/vllm-openai:latest
+FROM vllm/vllm-openai:0.8.2
 
 # 작업 디렉토리 설정
 WORKDIR /app

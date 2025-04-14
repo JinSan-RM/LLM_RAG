@@ -95,15 +95,19 @@ class OpenAIService:
             usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
             temperature = kwargs.get('temperature')
-            model = kwargs.get('model', "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0")
+            model = kwargs.get('model')
             # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
             # =====================================
             # 추가적인 파라미터들
-            repetition_penalty = kwargs.get('repetition_penalty')
+            # repetition_penalty = kwargs.get('repetition_penalty', 1.0)
             top_p = kwargs.get('top_p')
             n = kwargs.get('n')
             
+            if model == '/usr/local/bin/models/gemma-3-4b-it':
+                model_key = "gemma"
+            else:
+                model_key = "eeve"
             # usr_prompt 처리 최적화
             if not usr_prompt and 'messages' in kwargs and kwargs['messages']:
                 usr_prompt = kwargs['messages'][-1]['content']
@@ -111,41 +115,40 @@ class OpenAIService:
             if not usr_prompt:
                 raise ValueError("No user prompt provided in 'usr_prompt' or 'messages'")
                 
-            # 메시지 생성을 최적화
-            messages = [
-                SystemMessage(content=sys_prompt),
-                HumanMessage(content=usr_prompt)
-            ]
-            
-            message_gemma = f"""
+                # format_prompt가 없는 경우, sys_prompt와 usr_prompt를 모델에 맞게 처리
+            if model_key == "gemma":
+                # Gemma의 경우 시스템과 유저를 하나의 user 턴으로 합침
+                messages = f"""
                 <bos>
-						<start_of_turn>
-								system\n\n           {sys_prompt} 
-								
-						<end_of_turn>\n
-                        <start_of_turn>
-                                user\n\n            {usr_prompt}
-                        <end_of_turn>
-						<start_of_turn>model\n", 
-            """
+                <start_of_turn>user\n\n{sys_prompt}\n\n{usr_prompt}\n\n<end_of_turn>
+                <start_of_turn>model
+                """
+            else:
+                # EEVE의 경우 기본 메시지 형식 유지
+                messages = [
+                    SystemMessage(content=sys_prompt),
+                    HumanMessage(content=usr_prompt)
+                ]
+            # messages = [
+            #         SystemMessage(content=sys_prompt),
+            #         HumanMessage(content=usr_prompt)
+            #     ]
+            
             
             # 단일 ainvoke 호출로 최적화
             invoke_params = {"input": messages}
-            if max_tokens: invoke_params["max_tokens"] = max_tokens
-            if extra_body: invoke_params["extra_body"] = extra_body
-            if temperature: invoke_params["temperature"] = temperature
-            if repetition_penalty: invoke_params["repetition_penalty"] = repetition_penalty
-            if top_p: invoke_params["top_p"] = top_p
-            if n: invoke_params["n"] = n
-            if model == "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0":
-                model_key = "eeve"
-            elif model == "/usr/local/bin/models/gemma-3-4b-it":
-                model_key = "gemma"
-            else:
-                model_key = "eeve"
-            invoke_params["model"] = model_key
-
-
+            if max_tokens:
+                invoke_params["max_tokens"] = max_tokens
+            if extra_body:
+                invoke_params["extra_body"] = extra_body
+            if temperature:
+                invoke_params["temperature"] = temperature
+            # if repetition_penalty: invoke_params["repetition_penalty"] = repetition_penalty
+            if top_p:
+                invoke_params["top_p"] = top_p
+            if n:
+                invoke_params["n"] = n
+            # invoke_params["model"] = model_key
             print(f"**invoke_params : {invoke_params}**")
             model_router = {
                 "eeve": self.chat_EEVE,

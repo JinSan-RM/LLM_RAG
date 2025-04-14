@@ -1,11 +1,11 @@
 import asyncio
 import json
 import re
-class OpenAITextRegenerator:
-    
+
+class OpenAIBlockRefresh:
     def __init__(self, batch_handler):
         self.batch_handler = batch_handler
-    
+
     async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 100, extra_body: dict = None) -> str:
         model = "/usr/local/bin/models/gemma-3-4b-it"
         response = await asyncio.wait_for(
@@ -25,7 +25,7 @@ class OpenAITextRegenerator:
         )
         return response
 
-    async def regenerate(self, text_box: str, context: dict, text_length: int, tag: str):
+    async def block_refresh(self, section: str, content: str, block):
         try:
             # 태그 이름과 기존 콘텐츠 추출
             

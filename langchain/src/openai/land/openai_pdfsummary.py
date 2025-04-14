@@ -86,6 +86,7 @@ class OpenAIProposalClient:
             usr_prompt = "\n".join([f"Proposal_{i+1}: {p}" for i, p in enumerate(proposals)])
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
+                    "model":"/usr/local/bin/models/gemma-3-4b-it",
                     "sys_prompt": sys_prompt,
                     "usr_prompt": usr_prompt,
                     "max_tokens": 800,  # 800~1000자에 적합
