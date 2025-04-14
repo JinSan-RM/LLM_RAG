@@ -34,36 +34,78 @@ services:
     #           capabilities: [gpu]
   
 
-  vllm_eeve:
+  # vllm_eeve:
+  #     build:
+  #       context: ./vllm_eeve
+  #       dockerfile: Dockerfile
+  #     container_name: vllm_eeve
+  #     environment:
+  #       # - VLLM_GPU_MEMORY_UTILIZATION=1.0
+  #       - CUDA_VISIBLE_DEVICES=0
+  #       - VLLM_NO_FALLBACK=True
+  #       - NVIDIA_VISIBLE_DEVICES=0
+  #     restart: always
+  #     shm_size: '72gb'
+  #     ports:
+  #       - "8002:8002"
+  #     volumes:
+  #       - ./vllm_eeve:/app/models  # 경로 일치
+  #     networks:
+  #       - service_network
+
+  #     command: >
+  #       --model /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0
+  #       --host 0.0.0.0
+  #       --port 8002
+  #       --dtype float16
+  #       --max-model-len 4096
+  #       --gpu-memory-utilization 1.0
+  #       --guided-decoding-backend outlines
+
+  #     healthcheck:
+  #       test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
+  #       interval: 30s
+  #       timeout: 5s
+  #       retries: 20
+  #     deploy:
+  #       resources:
+  #         reservations:
+  #           devices:
+  #             - driver: nvidia
+  #               count: 1
+  #               capabilities: [gpu]
+
+
+  vllm_gemma:
       build:
-        context: ./vllm_eeve
+        context: ./vllm_gemma
         dockerfile: Dockerfile
-      container_name: vllm_eeve
+      container_name: vllm_gemma
       environment:
-        # - VLLM_GPU_MEMORY_UTILIZATION=1.0
+        # - VLLM_GPU_MEMORY_UTILIZATION=1.0      
         - CUDA_VISIBLE_DEVICES=0
         - VLLM_NO_FALLBACK=True
         - NVIDIA_VISIBLE_DEVICES=0
       restart: always
-      shm_size: '24gb'
+      shm_size: '72gb'
       ports:
-        - "8002:8002"
+        - "8022:8022"
       volumes:
-        - ./vllm_eeve:/app/models  # 경로 일치
+        - ./vllm_gemma:/app/models  # 경로 일치
       networks:
         - service_network
 
       command: >
-        --model /usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0
+        --model /usr/local/bin/models/gemma-3-4b-it
         --host 0.0.0.0
-        --port 8002
-        --dtype float16
-        --max-model-len 4096
+        --port 8022
+        --dtype bfloat16
+        --max-model-len 8192
         --gpu-memory-utilization 1.0
         --guided-decoding-backend outlines
-
+        
       healthcheck:
-        test: ["CMD", "curl", "-f", "http://0.0.0.0:8002/v1/models"]
+        test: ["CMD", "curl", "-f", "http://0.0.0.0:8022/v1/models"]
         interval: 30s
         timeout: 5s
         retries: 20
@@ -88,7 +130,7 @@ services:
   #       - NVIDIA_VISIBLE_DEVICES=0
   #     restart: always
   #     # restart: no
-  #     shm_size: '24gb'
+  #     shm_size: '72gb'
   #     ports:
   #       - "8022:8022"
   #     volumes:
@@ -102,7 +144,7 @@ services:
   #       --port 8022
   #       --dtype float16
   #       --max-model-len 8192
-  #       --gpu-memory-utilization 1.0
+  #       --gpu-memory-utilization 0.9
   #       --guided-decoding-backend outlines
         
   #     healthcheck:
