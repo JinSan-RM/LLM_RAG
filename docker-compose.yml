@@ -5,8 +5,8 @@ services:
       context: ./langchain  # 현재 디렉토리를 컨텍스트로 사용
       dockerfile: Dockerfile
     container_name: langchain
-    depends_on:
-      - vllm_eeve           # ollama → vllm로 변경
+    # depends_on:
+      # - vllm_eeve           # ollama → vllm로 변경
       # - vllm_gemma
     ports:
       - "8001:8001"
@@ -45,7 +45,7 @@ services:
         - VLLM_NO_FALLBACK=True
         - NVIDIA_VISIBLE_DEVICES=0
       restart: always
-      shm_size: '72gb'
+      shm_size: '24gb'
       ports:
         - "8002:8002"
       volumes:
@@ -88,7 +88,7 @@ services:
   #       - NVIDIA_VISIBLE_DEVICES=0
   #     restart: always
   #     # restart: no
-  #     shm_size: '72gb'
+  #     shm_size: '24gb'
   #     ports:
   #       - "8022:8022"
   #     volumes:
@@ -102,7 +102,7 @@ services:
   #       --port 8022
   #       --dtype float16
   #       --max-model-len 8192
-  #       --gpu-memory-utilization 0.9
+  #       --gpu-memory-utilization 1.0
   #       --guided-decoding-backend outlines
         
   #     healthcheck:
