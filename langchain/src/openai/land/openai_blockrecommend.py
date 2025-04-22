@@ -9,33 +9,42 @@ class OpenAIBlockSelector:
     def __init__(self, batch_handler):
         self.batch_handler = batch_handler
 
-    # async def send_request(self, prompt: str, max_tokens: int = 50) -> str:
     async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 50, extra_body: dict = None) -> str:
-        response = await asyncio.wait_for(
-            self.batch_handler.process_single_request({
-                # "prompt": prompt,
-                "sys_prompt": sys_prompt,
-                "usr_prompt": usr_prompt,
-                "extra_body": extra_body,
-                "max_tokens": max_tokens,
-                "temperature": 0.1,
-                "top_p": 0.1,
-                "n": 1,
-                "stream": False,
-                "logprobs": None
-            }, request_id=0),
-            timeout=300  # 적절한 타임아웃 값 설정
-        )
-        return response
+        model = "/usr/local/bin/models/gemma-3-4b-it"
+        try:
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                    # "prompt": prompt,\
+                    "model": model,
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    "extra_body": extra_body,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.1,
+                    "top_p": 0.1,
+                    "n": 1,
+                    "stream": False,
+                    "logprobs": None
+                }, request_id=0),
+                timeout=300  # 적절한 타임아웃 값 설정
+            )
+            return response
+        except asyncio.TimeoutError:
+            print("[ERROR] Request timed out")
+            return "Error: Request timed out after 300 seconds"
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {str(e)}")
+            return f"Error: {str(e)}"
 
     async def select_block(self,
-        section_context: str,
+        section_context: Dict[str, str],
         block_list: Dict[str, str],
         max_tokens: int = 50) -> Dict[str, Any]:
 
         only_section_context = section_context[1]
         tag_slice = list(block_list[1].values())
 
+        
         for attempt in range(3):  # 최대 3번 시도
             try:
                 sys_prompt = f"""
@@ -75,8 +84,16 @@ class OpenAIBlockSelector:
                         "required": ["selected_tag"]
                     }
                 }
-                result = await self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens, extra_body=extra_body)
+                
+                result = await self.send_request(
+                    sys_prompt=sys_prompt, 
+                    usr_prompt=usr_prompt, 
+                    max_tokens=max_tokens, 
+                    extra_body=extra_body
+                    )
+                
                 selected_Html_tag_json = self.extract_json(result.data['generations'][0][0]['text'])
+                
                 if selected_Html_tag_json and 'selected_tag' in selected_Html_tag_json:
                     selected_Html_tag_str = selected_Html_tag_json['selected_tag']
 
@@ -103,16 +120,6 @@ class OpenAIBlockSelector:
                         'Block_id': selected_block_id,
                         'HTML_Tag': selected_html_tag
                     }
-        random_index = random.randint(0, len(block_list[1].keys()) - 1)
-        block_keys = list(block_list[1].keys())
-        selected_block_id = block_keys[random_index]
-        selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
-
-        return {
-            'Section_name': section_context[0],
-            'Block_id': selected_block_id,
-            'HTML_Tag': selected_html_tag
-        }
 
     async def select_block_batch(
         self,
@@ -120,8 +127,14 @@ class OpenAIBlockSelector:
         section_names_n_block_lists: List[Dict[str, str]],
         max_tokens: int = 50) -> List[Dict[str, Any]]:
 
+        # print("section_names_n_contents : ", section_names_n_contents)
+        # print("section_names_n_block_lists : ", section_names_n_block_lists)
+
         select_block_results = []
         for section_name, block_list in zip(section_names_n_contents, section_names_n_block_lists):
+
+            # print("section_name : ", section_name)
+            # print("block_list : ", block_list)
 
             # NOTE 250219 : 데이터가 들어오는 만큼 뭉텅이로 보낼 수 있게 설계
             temp_section_list = list(section_name.items())
@@ -132,9 +145,66 @@ class OpenAIBlockSelector:
                 select_block_result = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
                 select_block_results.append(select_block_result)
 
-        # NOTE 250220: batch 방식은 추후 적용        
+        # NOTE 250220: batch 방식은 추후 적용
         return select_block_results
             
+    async def select_block_randomly(self, block_list: Dict[str, str]) -> Dict[str, Any]:
+
+        section_name = block_list[0]
+        block_pool = list(block_list[1].items())
+        tag_slice = list(block_list[1].values())
+        
+        try:
+
+            randomly_selected_id_n_tag = random.choice(block_pool)
+            
+            print("randomly_selected_id_n_tag : ", randomly_selected_id_n_tag)
+            
+            block_id = randomly_selected_id_n_tag.keys()
+            html_tag = randomly_selected_id_n_tag.values()
+
+            print("block_id : ", block_id)
+            print("html_tag : ", html_tag)
+
+            return {
+                'Section_name': section_name,
+                'Block_id': block_id,
+                'HTML_Tag': html_tag
+            }
+
+        # NOTE 250422 : 같은 방식이지만 혹시를 대비하여 
+        except Exception as e:
+            
+            print("[DEBUG] random.choice() was not working.")
+
+            random_index = random.randint(0, len(block_list[1].keys()) - 1)
+            block_keys = list(block_list[1].keys())
+            selected_block_id = block_keys[random_index]
+            selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+
+            return {
+                'Section_name': section_name,
+                'Block_id': selected_block_id,
+                'HTML_Tag': selected_html_tag
+            }
+
+
+    async def select_block_batch_randomly(
+        self,
+        section_names_n_block_lists: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+
+        select_block_results = []
+        for block_list in section_names_n_block_lists:
+
+            temp_block_list = list(block_list.items())
+
+            for n_temp_block_list in temp_block_list:
+                
+                select_block_result = await self.select_block_randomly(n_temp_block_list)
+                select_block_results.append(select_block_result)
+
+        # NOTE 250220: batch 방식은 추후 적용        
+        return select_block_results
 
 
     def extract_emmet_tag(self, text: str) -> str:
@@ -207,3 +277,8 @@ class OpenAIBlockSelector:
                 return json.loads(json_str.replace("'", '"'))
             except json.JSONDecodeError:
                 return None
+
+
+# class OpenAIBlockSelector:
+#     def __init__(self, batch_handler):
+#         self.batch_handler = batch_handler

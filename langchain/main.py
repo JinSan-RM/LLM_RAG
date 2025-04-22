@@ -538,7 +538,7 @@ async def inputDataProcess(req, req_idx):
         pdf_data_list = [req.pdf_data1 or "", req.pdf_data2 or "", req.pdf_data3 or ""]
         pdf_data_list = [pdf for pdf in pdf_data_list if pdf.strip()]
         usr_msg = req.usr_msg if hasattr(req, 'usr_msg') else ""
-
+        
         # 유저 Proposal 생성 (PDF와 독립)
         usr_client = OpenAIUsrMsgClient(usr_msg, batch_handler)
         usr_task = usr_client.usr_msg_proposal() if usr_msg else None
@@ -666,8 +666,9 @@ async def openai_section_select(requests: List[Completions]):
 async def openai_block_select(requests: List[Completions]):
     try:
         start = time.time()
+        
         blockselect_client = OpenAIBlockSelector(batch_handler=batch_handler)
-        BATCH_SIZE = 10 
+        BATCH_SIZE = 10
         batched_requests = [requests[i:i + BATCH_SIZE] for i in range(0, len(requests), BATCH_SIZE)]
         
         final_results = []
@@ -677,11 +678,18 @@ async def openai_block_select(requests: List[Completions]):
         for batch in batched_requests:
             block_lists = [req.block for req in batch]
             contexts = [req.section_context for req in batch]
+            block_select_mode = [req.block_select_mode for req in batch][0]
             
             # 비동기
-            task = blockselect_client.select_block_batch(contexts, block_lists, max_tokens=MAX_TOKENS_SELECT_BLOCK)
-            tasks.append(task)
-        
+            print("block_select_mode : ", block_select_mode)
+            if block_select_mode == "AI":
+                task = blockselect_client.select_block_batch(contexts, block_lists, max_tokens=MAX_TOKENS_SELECT_BLOCK)
+                tasks.append(task)
+                
+            elif block_select_mode == "RANDOM":
+                task = blockselect_client.select_block_batch_randomly(block_lists)
+                tasks.append(task)
+                
         # 모든 배치 작업을 병렬로 실행
         batch_results = await asyncio.gather(*tasks)
 
@@ -703,6 +711,7 @@ async def openai_block_select(requests: List[Completions]):
             "current_users": get_current_users()
         }
         
+                
         return response
 
     except Exception as e:
@@ -725,7 +734,7 @@ async def openai_block_content_generate(requests: List[Completions]):
         async def content_batch_process(req, blockcontentclient, keywordclient):
             try:
                 # 각 요청 내에서도 content와 keyword 생성을 병렬로 처리
-                content_task = blockcontentclient.generate_content(req.tag_length, req.section_context, max_tokens=1000)
+                content_task = blockcontentclient.generate_content(req.usr_msg, req.tag_length, req.section_context, max_tokens=1000)
                 keyword_task = keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
 
                 # 두 작업을 동시에 실행

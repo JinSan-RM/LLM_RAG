@@ -7,24 +7,28 @@ class OpenAIKeywordClient:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
 
-    async def send_request(self, prompt: str, max_tokens: int = 100) -> 'RequestResult':
+    async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 100) -> str:
+        model = "/usr/local/bin/models/gemma-3-4b-it"
         try:
             response = await asyncio.wait_for(
                 self.batch_handler.process_single_request({
-                    "prompt": prompt,
-                    "max_tokens": max_tokens,  # 키워드 3개에 적합한 짧은 출력
-                    "temperature": 0.7,  # 자연스러운 생성
-                    "top_p": 0.9,       # 다양성 확보
+                    "model": model,
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    "extra_body": extra_body,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.7,  # 안정성 우선
+                    "top_p": 0.9,
                     "n": 1,
                     "stream": False,
-                    "logprobs": None
+                    "logprobs": None,
                 }, request_id=0),
-                timeout=120
+                timeout=120  # 타임아웃 설정
             )
             return response
         except asyncio.TimeoutError:
             print("[ERROR] Request timed out")
-            return "Error: Request timed out after 60 seconds"
+            return "Error: Request timed out after 120 seconds"
         except Exception as e:
             print(f"[ERROR] Unexpected error: {str(e)}")
             return f"Error: {str(e)}"
@@ -72,20 +76,12 @@ class OpenAIKeywordClient:
             }
         }
 
-        result = await asyncio.wait_for(
-            self.batch_handler.process_single_request({
-                "sys_prompt": sys_prompt,
-                "usr_prompt": usr_prompt,
-                "extra_body": extra_body,
-                "max_tokens": max_tokens,  # 키워드 3개에 적합한 짧은 출력
-                "temperature": 0.7,  # 자연스러운 생성
-                "top_p": 0.9,       # 다양성 확보
-                "n": 1,
-                "stream": False,
-                "logprobs": None
-            }, request_id=0),
-            timeout=120
-        )
+        result = await self.send_request(
+            sys_prompt=sys_prompt, 
+            usr_prompt=usr_prompt, 
+            max_tokens=max_tokens, 
+            extra_body=extra_body
+            )
 
         temp_result = result.data['generations'][0][0]['text']
 

@@ -20,7 +20,7 @@ services:
       - OPENAI_API_KEY=KIMJINSAN
       - REDIS_HOST=redis  # Redis 호스트명
       - REDIS_PORT=6379
-      - MAX_USERS=20      # 최대 사용자 수
+      - MAX_USERS=100      # 최대 사용자 수
       - TTL_SECONDS=3600  # TTL 1시간
     networks:
       - service_network   # 공통 네트워크 사용

@@ -17,7 +17,7 @@ redis_client = redis.Redis(
 def get_current_users() -> int:
     current = redis_client.get("flow:1:current_users")
     current_value = int(current) if current else 0
-    print(f"[DEBUG] get_current_users: current_users = {current_value}")
+    print(f"[DEBUG] get_current_users: current_users = {current_value}/{MAX_USERS}")
     return current_value
 
 def increment_users() -> str:
@@ -36,7 +36,7 @@ def increment_users() -> str:
     redis_client.setex(user_key, TTL_SECONDS, "active")
     
     new_count = get_current_users()
-    print(f"[DEBUG] increment_users: Incremented count, new_count = {new_count}, TTL set to {TTL_SECONDS}s")
+    print(f"[DEBUG] increment_users: Incremented count, new_count = {new_count}/{MAX_USERS}, TTL set to {TTL_SECONDS}s")
     return request_id
 
 def decrement_users():

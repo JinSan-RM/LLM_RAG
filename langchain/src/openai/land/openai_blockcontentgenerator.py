@@ -11,6 +11,32 @@ class OpenAIBlockContentGenerator:
         self.batch_handler = batch_handler
         self.emmet_parser = EmmetParser()
 
+    async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 1000) -> str:
+        model = "/usr/local/bin/models/gemma-3-4b-it"
+        try:
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                    "model": model,
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    "extra_body": extra_body,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.2,  # 안정성 우선
+                    "top_p": 0.4,
+                    "n": 1,
+                    "stream": False,
+                    "logprobs": None,
+                }, request_id=0),
+                timeout=120  # 타임아웃 설정
+            )
+            return response
+        except asyncio.TimeoutError:
+            print("[ERROR] Request timed out")
+            return "Error: Request timed out after 120 seconds"
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {str(e)}")
+            return f"Error: {str(e)}"
+        
     def convert_tag_length_to_schema(self, tag_length):
         properties = {}
         required = []
@@ -83,60 +109,19 @@ class OpenAIBlockContentGenerator:
                 "required": schema["required"]
             }
         }
-    def extract_json(self, text):
-        # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
-        text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
-        json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-        else:
-            # Handle case where only opening brace is found
-            json_str = re.search(r'\{.*', text, re.DOTALL)
-            if json_str:
-                json_str = json_str.group() + '}'
-            else:
-                return None
 
-        # Balance braces if necessary
-        open_braces = json_str.count('{')
-        close_braces = json_str.count('}')
-        if open_braces > close_braces:
-            json_str += '}' * (open_braces - close_braces)
-
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError:
-            # Try a more lenient parsing approach
-            try:
-                return json.loads(json_str.replace("'", '"'))
-            except json.JSONDecodeError:
-                return None
-
-    # async def send_request(self, prompt: str, max_tokens: int = 250) -> str:
-    async def send_request(self, sys_prompt: str, usr_prompt: str, extra_body, max_tokens: int = 500) -> str:
-        
-        response = await asyncio.wait_for(
-            self.batch_handler.process_single_request({
-                "sys_prompt": sys_prompt,
-                "usr_prompt": usr_prompt,
-                "extra_body": extra_body,
-                "max_tokens": max_tokens,
-                "temperature": 0.5,  # 안정성 우선
-                "top_p": 0.5,
-                "n": 1,
-                "stream": False,
-                "logprobs": None,
-            }, request_id=0),
-            timeout=120  # 타임아웃 설정
-        )
-        return response
-
-    async def generate_tag_structure(self, tag_length: dict, extra_body: str, section_context: dict, max_tokens: int = 1000):
+    async def generate_tag_structure(self, 
+                                     usr_msg:str, 
+                                     tag_length: dict, 
+                                     extra_body: str, 
+                                     section_context: dict, 
+                                     max_tokens: int = 1000):
         sys_prompt = f"""
         
             You are an AI assistant that generates content for semantic tags based on the provided Section_context. 
             When given Section_context and json_type_tag_list, read the Section_context first, then create content for each semantic tag key in the json_type_tag_list and replace its value with generated content. 
             Ensure each tag's content aligns with its purpose while strictly adhering to the maximum character length specified in json_type_tag_list.
+            If user add additional information by "usr_msg", MUST INTEGRATE THAT INFORMATION WITH SECTION_CONTEXT.
             
             #### Semantic Tag Definitions ####
             - h1: The primary title of the web page, summarizing its main topic or purpose (typically one per page).
@@ -148,6 +133,7 @@ class OpenAIBlockContentGenerator:
             - li: List items are separated into li_0, li_1, li_2, etc., but share a context.        
             
             #### Input Format ####
+            - usr_msg= {{usr_msg}}
             - Section_context= {{section_context}}
             - json_type_tag_list = {{"tag" : "max_length_CHARACTERS"}}
             
@@ -200,9 +186,6 @@ class OpenAIBlockContentGenerator:
 
         """
 
-
-
-
         # Test용 ==========
         # #### Instructions ####
         # - 리스트 항목은 li_0_0, li_1_0 등으로 분리됩니다.
@@ -247,26 +230,27 @@ class OpenAIBlockContentGenerator:
         section_context_value = section_context.values()
         str_section_context_value = str(section_context_value)
         
+        if usr_msg == "":
+            usr_msg = "NONE"
+        
+        print("[DEBUG] usr_msg : ", usr_msg)
         usr_prompt = f"""
-            Section_context= {section_context.keys()}, {str_section_context_value[:300]}
+
+            usr_msg= {usr_msg}
+            
+            Section_context= {section_context.keys()}, {str_section_context_value[:500]}
             json_type_tag_list= {tag_length}
         """
+        
         extra_body = self.create_extra_body(tag_length)
 
-        result = await asyncio.wait_for(
-            self.batch_handler.process_single_request({
-                "sys_prompt": sys_prompt,
-                "usr_prompt": usr_prompt,
-                "extra_body": extra_body,
-                "max_tokens": max_tokens,
-                "temperature": 0.2,
-                "top_p": 0.4,
-                "n": 1,
-                "stream": False,
-                "logprobs": None
-            }, request_id=0),
-            timeout=120  # 적절한 타임아웃 값 설정
-        )
+        result = await self.send_request(
+            sys_prompt=sys_prompt, 
+            usr_prompt=usr_prompt, 
+            max_tokens=max_tokens, 
+            extra_body=extra_body
+            )
+        
         return result
 
 #     async def limited_generate(self, coro, semaphore):
@@ -275,6 +259,7 @@ class OpenAIBlockContentGenerator:
 
     async def generate_content(
         self,
+        usr_msg:str,
         tag_length: Dict[str, Any],
         section_context: Dict[str, Any],
         max_tokens: int = 1000
@@ -285,6 +270,7 @@ class OpenAIBlockContentGenerator:
         # print("extra_body를 보자아 : ", extra_body)
         
         response = await self.generate_tag_structure(
+            usr_msg=usr_msg,
             tag_length=tag_length,
             extra_body=extra_body,
             section_context=section_context,
@@ -347,8 +333,53 @@ class OpenAIBlockContentGenerator:
             }
         except Exception as e:
             return {'gen_content': {'error': f"Unexpected error: {str(e)}"}}
+        
+    def assign_content(self, result: Dict[str, Any], content: str, key_path: str):
+        """
+        key_path를 기반으로 생성된 텍스트를 결과 구조 내에 할당합니다.
+        """
+        keys = key_path.split('.')
+        current = result
+        for k in keys[:-1]:
+            if k.isdigit():
+                current = current[int(k)]
+            else:
+                current = current[k]
+        last_key = keys[-1]
+        current[last_key] = content
 
-        # NOTE : JSON 형식 보정 전 ===================
+
+    # def extract_json(self, text):
+    #     # 가장 바깥쪽의 중괄호 쌍을 찾습니다.
+    #     text = re.sub(r'[\n\r\\\\/]', '', text, flags=re.DOTALL)
+    #     json_match = re.search(r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\})*)*\}))*\}', text, re.DOTALL)
+    #     if json_match:
+    #         json_str = json_match.group()
+    #     else:
+    #         # Handle case where only opening brace is found
+    #         json_str = re.search(r'\{.*', text, re.DOTALL)
+    #         if json_str:
+    #             json_str = json_str.group() + '}'
+    #         else:
+    #             return None
+
+    #     # Balance braces if necessary
+    #     open_braces = json_str.count('{')
+    #     close_braces = json_str.count('}')
+    #     if open_braces > close_braces:
+    #         json_str += '}' * (open_braces - close_braces)
+
+    #     try:
+    #         return json.loads(json_str)
+    #     except json.JSONDecodeError:
+    #         # Try a more lenient parsing approach
+    #         try:
+    #             return json.loads(json_str.replace("'", '"'))
+    #         except json.JSONDecodeError:
+    #             return None
+    
+    
+            # NOTE : JSON 형식 보정 전 ===================
         # json_string = response.data['generations'][0][0]['text']
         # # JSON 문자열 파싱
         # print("json 잘 만들어졌는지 보자아 : ", json_string)
@@ -377,17 +408,3 @@ class OpenAIBlockContentGenerator:
         # # print("바뀐 response를 보자아 : ", response)
         # return {'gen_content': {'data': {'generations': [[{'text': response.data['generations'][0][0]['text']}]]}}}
         # ============================================
-        
-    def assign_content(self, result: Dict[str, Any], content: str, key_path: str):
-        """
-        key_path를 기반으로 생성된 텍스트를 결과 구조 내에 할당합니다.
-        """
-        keys = key_path.split('.')
-        current = result
-        for k in keys[:-1]:
-            if k.isdigit():
-                current = current[int(k)]
-            else:
-                current = current[k]
-        last_key = keys[-1]
-        current[last_key] = content

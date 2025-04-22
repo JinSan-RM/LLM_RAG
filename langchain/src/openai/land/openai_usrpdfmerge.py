@@ -10,7 +10,34 @@ class OpenAIComprehensiveProposalClient:
         self.pdf_proposals = pdf_proposals or []  # 빈 리스트로 초기화
         self.batch_handler = batch_handler
 
-    async def generate_comprehensive_proposal(self) -> dict:
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 100) -> str:
+        model = "/usr/local/bin/models/gemma-3-4b-it"
+        try:
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                    "model": model,
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    # "extra_body": extra_body,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.3,  # 안정성 우선
+                    "top_p": 0.9,
+                    "n": 1,
+                    "stream": False,
+                    "logprobs": None,
+                }, request_id=0),
+                timeout=120  # 타임아웃 설정
+            )
+            return response
+        except asyncio.TimeoutError:
+            print("[ERROR] Request timed out")
+            return "Error: Request timed out after 120 seconds"
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {str(e)}")
+            return f"Error: {str(e)}"
+            
+
+    async def generate_comprehensive_proposal(self, max_tokens: int = 800) -> dict:
         try:
             # 입력 상황에 따라 프롬프트 동적 설정
             if self.usr_proposal and self.pdf_proposals:  # 둘 다 있는 경우
@@ -40,23 +67,17 @@ class OpenAIComprehensiveProposalClient:
             else:  # 둘 다 없는 경우
                 return {"error": "usr_proposal과 pdf_proposals 모두 비어 있음"}
 
-            # API 호출
-            response = await asyncio.wait_for(
-                self.batch_handler.process_single_request({
-                    "sys_prompt": sys_prompt,
-                    "usr_prompt": usr_prompt,
-                    "max_tokens": 800,
-                    "temperature": 0.3,
-                    "top_p": 0.9
-                }, request_id=0),
-                timeout=120
-            )
-            
+            result = await self.send_request(
+                sys_prompt=sys_prompt, 
+                usr_prompt=usr_prompt, 
+                max_tokens=max_tokens
+                )
+
             # 응답 처리
-            if response and hasattr(response, 'data') and 'generations' in response.data:
-                text = response.data['generations'][0][0]['text'].replace("\n", " ")
-                response.data['generations'][0][0]['text'] = text
-                return response.data
+            if result and hasattr(result, 'data') and 'generations' in result.data:
+                text = result.data['generations'][0][0]['text'].replace("\n", " ")
+                result.data['generations'][0][0]['text'] = text
+                return result.data
             return {"error": "종합 Proposal 생성 오류"}
         
         except Exception as e:

@@ -6,6 +6,34 @@ class OpenAIUsrMsgClient:
         self.batch_handler = batch_handler
         self.usr_msg = str(usr_msg) if usr_msg else "입력 내용 없음"
 
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 500) -> str:
+        model = "/usr/local/bin/models/gemma-3-4b-it"
+        try:
+            response = await asyncio.wait_for(
+                self.batch_handler.process_single_request({
+                    "model": model,
+                    "sys_prompt": sys_prompt,
+                    "usr_prompt": usr_prompt,
+                    # "extra_body": extra_body,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.5,  # 안정성 우선
+                    "top_p": 0.8,
+                    "repetition_penalty": 1.1,
+                    "n": 1,
+                    "stream": False,
+                    "logprobs": None,
+                }, request_id=0),
+                timeout=120  # 타임아웃 설정
+            )
+            return response
+        except asyncio.TimeoutError:
+            print("[ERROR] Request timed out")
+            return "Error: Request timed out after 120 seconds"
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {str(e)}")
+            return f"Error: {str(e)}"
+
+
     async def usr_msg_proposal(self, max_tokens: int = 500) -> dict:
         try:
             # 프롬프트 템플릿 정의 (간결하게)
@@ -33,29 +61,20 @@ class OpenAIUsrMsgClient:
 
             usr_prompt = f"user_input : {self.usr_msg}"
 
-            # API 호출
-            response = await asyncio.wait_for(
-                self.batch_handler.process_single_request({
-                    "sys_prompt": sys_prompt,
-                    "usr_prompt": usr_prompt,
-                    "max_tokens": max_tokens,  # 500~700자에 맞게 조정
-                    "temperature": 0.5,  # 자연스러움과 정확성 균형
-                    "top_p": 0.8,
-                    "repetition_penalty": 1.1,  # 반복 감소
-                    "n": 1,
-                    "stream": False
-                }, request_id=0),
-                timeout=120  # 타임아웃 줄여 효율성 증가
-            )
+            result = await self.send_request(
+                sys_prompt=sys_prompt, 
+                usr_prompt=usr_prompt, 
+                max_tokens=max_tokens
+                )
 
             # 응답 검증 및 처리
-            if response is None or not hasattr(response, 'data') or 'generations' not in response.data:
+            if result is None or not hasattr(result, 'data') or 'generations' not in result.data:
                 print("API 응답 오류: 유효한 데이터 없음")
                 return {"error": "API 응답 오류"}
 
-            text = response.data['generations'][0][0]['text'].replace("\n", " ").strip()
-            response.data['generations'][0][0]['text'] = text
-            return response.data  # 딕셔너리 반환
+            text = result.data['generations'][0][0]['text'].replace("\n", " ").strip()
+            result.data['generations'][0][0]['text'] = text
+            return result.data  # 딕셔너리 반환
         except asyncio.TimeoutError:
             print("오류 사용자 메시지 처리 타임아웃")
             return {"error": "요청 타임아웃"}

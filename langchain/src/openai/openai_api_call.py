@@ -95,7 +95,7 @@ class OpenAIService:
             usr_prompt = kwargs.get('usr_prompt', None)
             max_tokens = kwargs.get('max_tokens')
             temperature = kwargs.get('temperature')
-            model = kwargs.get('model', "/usr/local/bin/models/gemma-3-4b-it")
+            model = kwargs.get('model')
             # extra_body를 명시적으로 초기화
             extra_body = kwargs.get('extra_body')
             # =====================================
@@ -138,7 +138,7 @@ class OpenAIService:
             if max_tokens: invoke_params["max_tokens"] = max_tokens
             if extra_body: invoke_params["extra_body"] = extra_body
             if temperature: invoke_params["temperature"] = temperature
-            if repetition_penalty: invoke_params["repetition_penalty"] = repetition_penalty
+            # if repetition_penalty: invoke_params["repetition_penalty"] = repetition_penalty
             if top_p: invoke_params["top_p"] = top_p
             if n: invoke_params["n"] = n
             if model == "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0":
@@ -147,7 +147,7 @@ class OpenAIService:
                 model_key = "gemma"
             else:
                 model_key = "eeve"
-            invoke_params["model"] = model_key
+            # invoke_params["model"] = model_key
 
 
             print(f"**invoke_params : {invoke_params}**")

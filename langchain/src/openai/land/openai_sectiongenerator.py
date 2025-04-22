@@ -18,10 +18,11 @@ class OpenAISectionStructureGenerator:
     async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 200, extra_body: dict = None) -> str:
         if extra_body is None:
             extra_body = self.extra_body
-            
+        model = "/usr/local/bin/models/gemma-3-4b-it"
         response = await asyncio.wait_for(
             self.batch_handler.process_single_request({
                 # "prompt": prompt,
+                "model": model,
                 "sys_prompt": sys_prompt,
                 "usr_prompt": usr_prompt,
                 "extra_body": extra_body,
@@ -37,51 +38,7 @@ class OpenAISectionStructureGenerator:
         return response
     
     async def create_section_structure(self, final_summary_data: str, max_tokens: int = 200):
-        # prompt = f"""
-        # [System]
-        # You are a professional designer who creates website landing page.
-        # Combine the sections according to the Section style list, Instructions and User input.
-        
-        # #### Section style list ####
-        
-        # - 1 section: ["Hero"]
-        # - 2 section: ["Feature", "Content"]
-        # - 3 section: ["CTA", "Feature", "Content", "Comparison"]
-        # - 4 section: ["Comparison", "Statistics", "Countdown", "CTA"]
-        # - 5 section: ["Testimonial", "Statistics", "Pricing", "FAQ"]
-        # - 6 section: ["FAQ", "Team", "Testimonial", "Pricing"]
-        
-        # #### INSTRUCTIONS ####
-        
-        # 1. READ THE final summary data FROM USER.
-        # 2. THINK ABOUT WHAT KIND OF COMBINATION IS BEST FIT WITH THE final summary data.
-        # 3. THE NUMBER OF SECTIONS **MUST BE BETWEEN 4 AND 6**. IF YOU'RE IDEA WAS MORE THEN 6, THEN REDUCE IT.
-        # 4. TAKING INTO ACCOUNT THE final summary data CHOOSE ONLY ONE SECTION STYLE FOR EACH SECTION IN THE LIST.
-        # 5. BE CAREFUL ABOUT TYPOS.
-        # 6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
-        
-        # [/System]
 
-        # [User_Example]
-        # final summary data = "final summary data"
-        # [/User_Example]
-
-        # [Assistant_Example]
-        # "menu_structure": {{
-        # "section_1": "Hero",
-        # "section_2": "section style",
-        # "section_3": "section style",
-        # "section_4": "section style",
-        # "section_5": "section style",
-        # "section_6": "section style"
-        # }}
-
-        # [/Assistant_Example]
-        
-        # [User]
-        # final summary data = {final_summary_data}
-        # [/User]
-        # """
         sys_prompt = f"""
         You are a professional designer who creates website landing page.
         Combine the sections according to the Section style list, Instructions and User input.
@@ -107,7 +64,7 @@ class OpenAISectionStructureGenerator:
         usr_prompt = f"""
         {final_summary_data}
         """
-        # result = await self.send_request(prompt, max_tokens)
+
         result = await self.send_request(
             sys_prompt=sys_prompt,
             usr_prompt=usr_prompt,
@@ -125,7 +82,83 @@ class OpenAISectionStructureGenerator:
 class OpenAISectionContentGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
         self.batch_handler = batch_handler
+    
+    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 300) -> str:
+    # async def send_request(self, prompt: str, max_tokens: int = 300) -> str:
+        model = "/usr/local/bin/models/gemma-3-4b-it"
+        response = await asyncio.wait_for(
+            self.batch_handler.process_single_request({
+                # "prompt": prompt,
+                "model": model,
+                "sys_prompt": sys_prompt,
+                "usr_prompt": usr_prompt,
+                "max_tokens": max_tokens,
+                "temperature": 0.1,
+                "top_p": 0.1,
+                "n": 1,
+                "stream": False,
+                "logprobs": None
+            }, request_id=0),
+            timeout=120  # 적절한 타임아웃 값 설정
+        )
+        return response
+    
+    # 이부분 코쳐야함
+    def create_section_prompt(self, section_name, combined_data):
+        # # 입력 언어 감지
+        # is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in combined_data)
+        # language_instruction = "한국어로 작성하세요." if is_korean else "Write in English."
+
+        sys_prompt = f"""
+        [System]
+        You are a professional content generator for sections in the website landing pages.
+        You know what should be included in the composition of each section.
+        Your task is to generate concise, unique content based on combined_data.
+
+        #### INSTRUCTIONS ####
+        1. WRITE PLAIN TEXT CONTENT FOR THE 'section_name' SECTION.
+        2. WRITE BETWEEN 200 AND 300 CHARACTERS IN FOR THE OUTPUT.
+        3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
+        4. AVOID REPEATING CONTENT.
+        5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
+        6. 출력은 반드시 **한국어**로 해.
+        """
+        usr_prompt = f"""
+        Section_name = {section_name}
+        all_usr_data = {combined_data}
+        """
+        return sys_prompt, usr_prompt
+    
+    async def generate_section_contents_individually(self, section_structure, combined_data, max_tokens=300):
+        # 모든 섹션에 대한 태스크 생성
+        tasks = []
+        for section_key, section_name in section_structure.items():
+            sys_prompt, usr_prompt = self.create_section_prompt(section_name, combined_data)
+            tasks.append(self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens))
         
+        # 모든 태스크를 병렬로 실행
+        results = {}
+        responses = await asyncio.gather(*tasks)
+        
+        # 결과 처리
+        for section_key, response in zip(section_structure.keys(), responses):
+            section_name = section_structure[section_key]
+            if response.success and hasattr(response, 'data'):
+                # content = response.data.generations[0][0].text
+                content = response.data['generations'][0][0]['text']
+                # 콘텐츠 정제
+                content = self.clean_content(content)
+                results[section_name] = content
+        
+        return results
+
+    def clean_content(self, content):
+        # 불필요한 태그, 형식, 메타데이터 제거
+        content = re.sub(r'\[.*?\]|\#\#\#|\n|\t|Output:|Example|\*\*.*?\*\*|Response:|`|Title:|Description:|Content:', '', content).strip()
+        content = re.sub(r'.*?content for.*?from the context\.', '', content, flags=re.IGNORECASE)
+        content = ' '.join(content.split())
+        return content
+
     # async def generate_section_contents_individually(
     #     self,
     #     create_section: dict,
@@ -179,98 +212,7 @@ class OpenAISectionContentGenerator:
     #             clean_content = clean_content[:300] if len(clean_content) > 300 else clean_content
     #             results[section_name] = clean_content  # append 대신 딕셔너리에 추가
     #     return results
-    
-    async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 300) -> str:
-    # async def send_request(self, prompt: str, max_tokens: int = 300) -> str:
-        response = await asyncio.wait_for(
-            self.batch_handler.process_single_request({
-                # "prompt": prompt,
-                "sys_prompt": sys_prompt,
-                "usr_prompt": usr_prompt,
-                "max_tokens": max_tokens,
-                "temperature": 0.1,
-                "top_p": 0.1,
-                "n": 1,
-                "stream": False,
-                "logprobs": None
-            }, request_id=0),
-            timeout=120  # 적절한 타임아웃 값 설정
-        )
-        return response
-    
-    # 이부분 코쳐야함
-    def create_section_prompt(self, section_name, combined_data):
-        # 입력 언어 감지
-        is_korean = any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in combined_data)
-        language_instruction = "한국어로 작성하세요." if is_korean else "Write in English."
-        # 6. {language_instruction}
-        # prompt = f"""
-        # [System]
-        # You are a professional content generator for sections in the website landing pages.
-        # You know what should be included in the composition of each section.
-        # Your task is to generate concise, unique content based on combined_data.
 
-        # #### INSTRUCTIONS ####
-        # 1. WRITE PLAIN TEXT CONTENT FOR THE 'section_name' SECTION.
-        # 2. WRITE BETWEEN 200 AND 300 CHARACTERS IN FOR THE OUTPUT.
-        # 3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
-        # 4. AVOID REPEATING CONTENT.
-        # 5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-        # 6. 출력은 반드시 **한국어**로 해.
-        
-        # [User]
-        # Section_name = {section_name}
-        # all_usr_data = {combined_data}
-        # """
-        sys_prompt = f"""
-        [System]
-        You are a professional content generator for sections in the website landing pages.
-        You know what should be included in the composition of each section.
-        Your task is to generate concise, unique content based on combined_data.
-
-        #### INSTRUCTIONS ####
-        1. WRITE PLAIN TEXT CONTENT FOR THE 'section_name' SECTION.
-        2. WRITE BETWEEN 200 AND 300 CHARACTERS IN FOR THE OUTPUT.
-        3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
-        4. AVOID REPEATING CONTENT.
-        5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-        6. 출력은 반드시 **한국어**로 해.
-        """
-        usr_prompt = f"""
-        Section_name = {section_name}
-        all_usr_data = {combined_data}
-        """
-        return sys_prompt, usr_prompt
-    
-    async def generate_section_contents_individually(self, section_structure, combined_data, max_tokens=300):
-        # 모든 섹션에 대한 태스크 생성
-        tasks = []
-        for section_key, section_name in section_structure.items():
-            sys_prompt, usr_prompt = self.create_section_prompt(section_name, combined_data)
-            tasks.append(self.send_request(sys_prompt=sys_prompt, usr_prompt=usr_prompt, max_tokens=max_tokens))
-        
-        # 모든 태스크를 병렬로 실행
-        results = {}
-        responses = await asyncio.gather(*tasks)
-        
-        # 결과 처리
-        for section_key, response in zip(section_structure.keys(), responses):
-            section_name = section_structure[section_key]
-            if response.success and hasattr(response, 'data'):
-                # content = response.data.generations[0][0].text
-                content = response.data['generations'][0][0]['text']
-                # 콘텐츠 정제
-                content = self.clean_content(content)
-                results[section_name] = content
-        
-        return results
-
-    def clean_content(self, content):
-        # 불필요한 태그, 형식, 메타데이터 제거
-        content = re.sub(r'\[.*?\]|\#\#\#|\n|\t|Output:|Example|\*\*.*?\*\*|Response:|`|Title:|Description:|Content:', '', content).strip()
-        content = re.sub(r'.*?content for.*?from the context\.', '', content, flags=re.IGNORECASE)
-        content = ' '.join(content.split())
-        return content
 
 class OpenAISectionGenerator:
     def __init__(self, batch_handler: BatchRequestHandler):
