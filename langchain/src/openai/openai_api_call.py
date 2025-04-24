@@ -158,7 +158,7 @@ class OpenAIService:
             
             result = await model_router[model_key].ainvoke(**invoke_params)
             
-            print("Test_result : ", result)
+            print("[DEBUG] openapi_call_result : ", result)
             return result
                             
         except Exception as e:

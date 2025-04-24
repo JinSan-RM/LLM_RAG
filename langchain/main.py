@@ -680,6 +680,9 @@ async def openai_block_select(requests: List[Completions]):
             contexts = [req.section_context for req in batch]
             block_select_mode = [req.block_select_mode for req in batch][0]
             
+            if block_select_mode == None:
+                block_select_mode = "AI"
+            
             # 비동기
             print("block_select_mode : ", block_select_mode)
             if block_select_mode == "AI":

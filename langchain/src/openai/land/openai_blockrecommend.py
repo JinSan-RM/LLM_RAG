@@ -76,9 +76,14 @@ class OpenAIBlockSelector:
                     "guided_json": {
                         "type": "object",
                         "properties": {
-                            "selected_tag": {
-                                "type": "string",
-                                "enum": tag_slice
+                            "selected_tags": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": tag_slice    
+                                },
+                                "minItems": 2,
+                                "maxItems": 2
                             }
                         },
                         "required": ["selected_tag"]
@@ -93,33 +98,42 @@ class OpenAIBlockSelector:
                     )
                 
                 selected_Html_tag_json = self.extract_json(result.data['generations'][0][0]['text'])
-                
-                if selected_Html_tag_json and 'selected_tag' in selected_Html_tag_json:
-                    selected_Html_tag_str = selected_Html_tag_json['selected_tag']
 
-                    if selected_Html_tag_str in tag_slice:
-                        section_name = section_context[0]
-                        reversed_block_dict = {value: key for key, value in block_list[1].items()}
+                if selected_Html_tag_json and 'selected_tags' in selected_Html_tag_json:
+                    selected_Html_tag_list = selected_Html_tag_json['selected_tags']
 
-                        return {
-                            'Section_name': section_name,
-                            'Block_id': reversed_block_dict[selected_Html_tag_str],
-                            'HTML_Tag': selected_Html_tag_str
-                        }
+                    
+                    LLM_selected_results = []
+                    for selected_Html_tag_str in selected_Html_tag_list:
+                        if selected_Html_tag_str in tag_slice:
+                            section_name = section_context[0]
+                            reversed_block_dict = {value: key for key, value in block_list[1].items()}
+                            
+                            LLM_selected_dict = {
+                                'Section_name': section_name,
+                                'Block_id': reversed_block_dict[selected_Html_tag_str],
+                                'HTML_Tag': selected_Html_tag_str
+                            }
+                            
+                            LLM_selected_results.append(LLM_selected_dict)
+                            
+                    return LLM_selected_results
 
             except Exception as e:
-                if (attempt + 1) == 3:
+                
+                print(f"[DEBUG] LLM.select() was not working. Maybe the block recommendation is just 1.{e}")
 
-                    random_index = random.randint(0, len(block_list[1].keys()) - 1)
-                    block_keys = list(block_list[1].keys())
-                    selected_block_id = block_keys[random_index]
-                    selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+                random_index = random.randint(0, len(block_list[1].keys()) - 1)
 
-                    return {
-                        'Section_name': section_context[0],
-                        'Block_id': selected_block_id,
-                        'HTML_Tag': selected_html_tag
-                    }
+                block_keys = list(block_list[1].keys())
+                selected_block_id = block_keys[random_index]
+                selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
+
+                return [{
+                    'Section_name': section_name,
+                    'Block_id': selected_block_id,
+                    'HTML_Tag': selected_html_tag
+                }]
 
     async def select_block_batch(
         self,
@@ -127,10 +141,9 @@ class OpenAIBlockSelector:
         section_names_n_block_lists: List[Dict[str, str]],
         max_tokens: int = 50) -> List[Dict[str, Any]]:
 
-        # print("section_names_n_contents : ", section_names_n_contents)
-        # print("section_names_n_block_lists : ", section_names_n_block_lists)
 
-        select_block_results = []
+        # NOTE 250424 : 우선 한 번 더 감싸는거 배제함. 추후 batch에서 문제 생기면 복원 예정
+        # select_block_results = []
         for section_name, block_list in zip(section_names_n_contents, section_names_n_block_lists):
 
             # print("section_name : ", section_name)
@@ -142,8 +155,8 @@ class OpenAIBlockSelector:
 
             for n_temp_list, n_temp_block_list in zip(temp_section_list, temp_block_list):
                 
-                select_block_result = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
-                select_block_results.append(select_block_result)
+                select_block_results = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
+                # select_block_results.append(select_block_result)
 
         # NOTE 250220: batch 방식은 추후 적용
         return select_block_results
@@ -153,55 +166,59 @@ class OpenAIBlockSelector:
         section_name = block_list[0]
         block_pool = list(block_list[1].items())
         tag_slice = list(block_list[1].values())
-        
+
         try:
 
-            randomly_selected_id_n_tag = random.choice(block_pool)
+            randomly_selected_id_n_tags = random.sample(block_pool, k=2)
             
-            print("randomly_selected_id_n_tag : ", randomly_selected_id_n_tag)
-            
-            block_id = randomly_selected_id_n_tag.keys()
-            html_tag = randomly_selected_id_n_tag.values()
+            random_selected_results = []
 
-            print("block_id : ", block_id)
-            print("html_tag : ", html_tag)
+            for randomly_selected_id_n_tag in randomly_selected_id_n_tags:
 
-            return {
-                'Section_name': section_name,
-                'Block_id': block_id,
-                'HTML_Tag': html_tag
-            }
+                block_id = randomly_selected_id_n_tag[0]
+                html_tag = randomly_selected_id_n_tag[1]
+ 
 
+                random_selected_dict = {
+                    'Section_name': section_name,
+                    'Block_id': block_id,
+                    'HTML_Tag': html_tag
+                }
+                random_selected_results.append(random_selected_dict)
+                
+            return random_selected_results
         # NOTE 250422 : 같은 방식이지만 혹시를 대비하여 
         except Exception as e:
             
-            print("[DEBUG] random.choice() was not working.")
+            print(f"[DEBUG] random.sample() was not working. Maybe the block recommendation is just 1. {e}")
 
             random_index = random.randint(0, len(block_list[1].keys()) - 1)
+            
             block_keys = list(block_list[1].keys())
             selected_block_id = block_keys[random_index]
             selected_html_tag = tag_slice[random_index] if len(tag_slice) > random_index else tag_slice[0]  # tag_slice 길이 확인
 
-            return {
+            return [{
                 'Section_name': section_name,
                 'Block_id': selected_block_id,
                 'HTML_Tag': selected_html_tag
-            }
+            }]
 
 
     async def select_block_batch_randomly(
         self,
         section_names_n_block_lists: List[Dict[str, str]]) -> List[Dict[str, Any]]:
 
-        select_block_results = []
+        # NOTE 250424 : 우선 한 번 더 감싸는거 배제함. 추후 batch에서 문제 생기면 복원 예정
+        # select_block_results = []
         for block_list in section_names_n_block_lists:
 
             temp_block_list = list(block_list.items())
 
             for n_temp_block_list in temp_block_list:
                 
-                select_block_result = await self.select_block_randomly(n_temp_block_list)
-                select_block_results.append(select_block_result)
+                select_block_results = await self.select_block_randomly(n_temp_block_list)
+                # select_block_results.append(select_block_result)
 
         # NOTE 250220: batch 방식은 추후 적용        
         return select_block_results
