@@ -143,7 +143,7 @@ class OpenAIBlockSelector:
 
 
         # NOTE 250424 : 우선 한 번 더 감싸는거 배제함. 추후 batch에서 문제 생기면 복원 예정
-        # select_block_results = []
+        select_block_results = []
         for section_name, block_list in zip(section_names_n_contents, section_names_n_block_lists):
 
             # print("section_name : ", section_name)
@@ -155,8 +155,8 @@ class OpenAIBlockSelector:
 
             for n_temp_list, n_temp_block_list in zip(temp_section_list, temp_block_list):
                 
-                select_block_results = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
-                # select_block_results.append(select_block_result)
+                select_block_result = await self.select_block(n_temp_list, n_temp_block_list, max_tokens)
+                select_block_results.append(select_block_result)
 
         # NOTE 250220: batch 방식은 추후 적용
         return select_block_results
@@ -210,15 +210,15 @@ class OpenAIBlockSelector:
         section_names_n_block_lists: List[Dict[str, str]]) -> List[Dict[str, Any]]:
 
         # NOTE 250424 : 우선 한 번 더 감싸는거 배제함. 추후 batch에서 문제 생기면 복원 예정
-        # select_block_results = []
+        select_block_results = []
         for block_list in section_names_n_block_lists:
 
             temp_block_list = list(block_list.items())
 
             for n_temp_block_list in temp_block_list:
                 
-                select_block_results = await self.select_block_randomly(n_temp_block_list)
-                # select_block_results.append(select_block_result)
+                select_block_result = await self.select_block_randomly(n_temp_block_list)
+                select_block_results.append(select_block_result)
 
         # NOTE 250220: batch 방식은 추후 적용        
         return select_block_results
