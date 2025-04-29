@@ -25,25 +25,19 @@ class OpenAITextRegenerator:
         )
         return response
 
-    async def regenerate(self, text_box: str, context: dict, text_length: int, tag: str):
+    # NOTE 250428 : request를 받고 거기서 풀어내기
+    async def regenerate(self, text_box: str, section_context: dict, tag_length: dict):
         try:
             # 태그 이름과 기존 콘텐츠 추출
             
-            section = list(context.keys())[0]
-            content = list(context.values())[0]
-            length = int(list(text_length)[0])
-            tag = list(tag)[0]
+            section = list(section_context.keys())[0]
+            context = list(section_context.values())[0]
+            tag = list(tag_length.keys())[0]
+            length = int(list(tag_length.values())[0])
+        
             # 시스템 프롬프트와 사용자 프롬프트 작성
-            sys_prompt = "자연스럽고 문맥에 맞는 텍스트를 생성해주세요."
-            usr_prompt = f"""
-            다음 문맥과 기존 텍스트를 고려하여 자연스러운 텍스트를 생성해주세요:
-            
-            [섹션 : {section}]
-            
-            [문맥: {content}]
-            
-            
-            [기존 텍스트 (HTML {tag} 내): {text_box}]
+            sys_prompt = f"""
+            자연스럽고 문맥에 맞는 텍스트를 생성해주세요.
             
             위 정보를 바탕으로 약 {length}자 분량의 텍스트를 생성해주세요.
             
@@ -54,7 +48,18 @@ class OpenAITextRegenerator:
             - 너무 짧거나 너무 길지 않게 균형 있는 분량으로 작성하세요
             - 해당 텍스트는 HTML {tag} 내에 삽입될 예정입니다
             
-            위 가이드라인에 맞춰 자연스럽고 유동적인 텍스트를 생성해주세요.
+            위 가이드라인에 맞춰 자연스럽고 유동적인 텍스트를 생성해주세요.            
+            """
+            
+            usr_prompt = f"""
+            다음 문맥과 기존 텍스트를 고려하여 자연스러운 텍스트를 생성해주세요:
+            
+            [섹션 : {section}]
+            
+            [문맥: {context}]
+            
+            [기존 텍스트 (HTML {tag} 내): {text_box}]
+            
             """
 
             # extra_body에 태그 이름 설정
@@ -77,6 +82,8 @@ class OpenAITextRegenerator:
                 max_tokens=200,
                 extra_body=extra_body
             )
+            
+            # print("Test_result in Class : ", result)
             result.data['generations'][0][0]['text'] = self.extract_json(result.data['generations'][0][0]['text'])  # JSON 추출
             # 결과는 {tag_name: generated_text} 형식으로 구성}
 

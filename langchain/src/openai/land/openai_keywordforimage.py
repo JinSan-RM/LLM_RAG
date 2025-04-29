@@ -36,18 +36,19 @@ class OpenAIKeywordClient:
     async def section_keyword_recommend(self, context: str, max_tokens: int = 100) -> 'RequestResult':
         
         sys_prompt = f"""
-            You are a professional designer tasked with creating search terms to find images that fit each section of a website landing page. Based on the provided Section_context, generate specific and relevant search terms.
+            You are a professional designer tasked with creating search terms to find images that fit a website landing page. 
+            Based on the provided {{Section_context}}, generate universal and relevant search terms.
 
             #### INSTRUCTIONS ####
             1. Review the Section_context to understand its content and purpose.
-            2. Create search terms that are highly specific, capturing the semantic essence of the content and suitable for image searches on a website.
-            3. Focus the search terms on the industry theme (e.g., IT, Health Care, Food, Education) identified in Section_context; infer the industry if not explicitly stated.
-            4. Generate exactly 3 keywords in English that reflect key concepts, entities, or themes from the content.
-            5. Ensure all terms are in English, relevant to the industry, and visually descriptive (e.g., objects, actions, or settings).
+            2. Create search terms that are highly universal, capturing the semantic essence of the content and suitable for image searches on a website.
+            3. Focus the search terms on the industry theme (e.g., IT, Health Care, Food, Education) identified in Section_context. Infer the industry if not explicitly stated.
+            4. Generate exactly 3 keywords in English that reflect "industry, key concepts, themes" from the Section_context.
+            5. Ensure all terms are in English, relevant to the industry, and visually descriptive for using by image searching terms.
             6. If Section_context is empty, use generic terms like "industry concept" while maintaining the structure.
-            7. Output only a JSON object with one key: "keyword" (list of exactly 3 strings), without additional text, metadata, or other keys.
+            7. Output is follow the extra_body.
 
-            [USER_EXAMPLE]
+            [Section_context_EXAMPLE]
             Section_context = "KG이니시스는 결제 서비스와 기술 분야의 선도 기업으로, 통합 간편 결제 솔루션을 제공합니다. 1998년에 설립되어 16만 가맹점을 보유하며, 연간 48억 건의 결제를 처리합니다."
 
             [ASSISTANT_EXAMPLE]

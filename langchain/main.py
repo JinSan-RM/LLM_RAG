@@ -435,6 +435,7 @@ MAX_TOKENS_USR_MSG_PROPOSAL = 500
 MAX_TOKENS_SUMMARIZE_TEXT = 1000
 MAX_TOKENS_CONTENTS_MERGE = 1500
 MAX_TOKENS_CREATE_SECTION_STRUCTURE = 200
+MAX_TOKENS_CREATE_TEXT_REGENERATE = 300
 MAX_TOKENS_CREATE_SECTION_CONTENTS = 1800
 MAX_TOKENS_SELECT_BLOCK = 50
 MAX_TOKENS_GENERATE_CONTENTS = 250
@@ -473,13 +474,13 @@ async def openai_input_data_process(requests: List[Completions]):
             raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
         start = time.time()
         tasks = [inputDataProcess(req, idx) for idx, req in enumerate(requests)]
-        processed_results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         
-        results = []
-        for result in processed_results:
+        processed_results = []
+        for result in results:
             if isinstance(result, Exception):
-                results.append({
+                processed_results.append({
                     "type": "error",
                     "result": {
                         "success": False,
@@ -489,15 +490,15 @@ async def openai_input_data_process(requests: List[Completions]):
                     }
                 })
             else:
-                results.extend(result)
+                processed_results.extend(result)
 
         end = time.time()
         return {
             "timestamp": end - start,
             "total_requests": len(requests),
-            "successful_requests": sum(1 for r in results if r["result"]["success"]),
-            "failed_requests": sum(1 for r in results if not r["result"]["success"]),
-            "results": results,
+            "successful_requests": sum(1 for r in processed_results if r["result"]["success"]),
+            "failed_requests": sum(1 for r in processed_results if not r["result"]["success"]),
+            "results": processed_results,
             "current_users": get_current_users()
         }
     except Exception as e:
@@ -785,22 +786,78 @@ async def openai_block_content_generate(requests: List[Completions]):
         raise HTTPException(status_code=500, detail=str(e))
     
 
+#====================================
+#
+# AI landing 내부, 단위 API
+# 
+#====================================
+
 @app.post("/api/text_regenerate")
 async def openai_text_regenerate(requests: List[Completions]):
     try:
         start = time.time()
-
+        textregenerateclient = OpenAITextRegenerator(batch_handler=batch_handler)
+        
+        tasks = [textregenerateclient.regenerate(req.text_box, req.section_context, req.tag_length) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # # 예외 처리
+        # processed_results = []
+        # for result in results:
+        #     if isinstance(result, Exception):
+        #         processed_results.append({"error": str(result)})
+        #     else:
+        #         processed_results.append(result)
+        
         
         end = time.time()
         processing_time = end - start
         response = {
             "timestamp": processing_time,
             "total_requests": len(requests),
-            "successful_requests": sum(1 for r in processed_results if "error" not in r),
-            "failed_requests": sum(1 for r in processed_results if "error" in r),
-            "results": processed_results,
-            "current_users": get_current_users()
+            # "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            # "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": results
+            # "current_users": get_current_users()
         }
+        
+        return response
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/keyword_generate")
+async def openai_keyword_generate(requests: List[Completions]):
+    try:
+        start = time.time()
+        keywordgenerateclient = OpenAIKeywordClient(batch_handler=batch_handler)
+        
+        tasks = [keywordgenerateclient.section_keyword_recommend(req.usr_msg) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # # 예외 처리
+        # processed_results = []
+        # for result in results:
+        #     if isinstance(result, Exception):
+        #         processed_results.append({"error": str(result)})
+        #     else:
+        #         processed_results.append(result)
+        
+        
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            # "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            # "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": results
+            # "current_users": get_current_users()
+        }
+        
         return response
     except ValueError as ve:
         logger.error(f"Validation error: {str(ve)}")
