@@ -35,30 +35,33 @@ class OpenAITextRegenerator:
             tag = list(tag_length.keys())[0]
             length = int(list(tag_length.values())[0])
         
-            # 시스템 프롬프트와 사용자 프롬프트 작성
+            # NOTE 250429 : 좀 더 자유도 부분에서 체크가 필요. hyperparameter 수정 필요
             sys_prompt = f"""
-            자연스럽고 문맥에 맞는 텍스트를 생성해주세요.
+            You are an expert at making sentences flow smoothly.
+            Please create natural and contextual text.
+
+            Based on the information above, create a text of approximately {length} characters.
+
+            Important guidelines:
+
+            - It does not have to be exactly {length} characters.
+            - Write naturally within the range of -15% to 0% of {length}.
+            - Prioritize completeness and context of content.
+            - Write in a balanced amount, not too short or too long.
+            - The text will be inserted within an HTML {tag}. But don't need to add tags like <p>.
+            - 출력은 반드시 extra_body 형식을 맞추고, 언어는 **한국어**로 해줘.
             
-            위 정보를 바탕으로 약 {length}자 분량의 텍스트를 생성해주세요.
-            
-            중요 가이드라인:
-            - 정확히 {length}자일 필요는 없습니다
-            - {length}의 -15%~0% 범위 내에서 자연스럽게 작성하세요
-            - 내용의 완결성과 文맥 유지를 우선시하세요
-            - 너무 짧거나 너무 길지 않게 균형 있는 분량으로 작성하세요
-            - 해당 텍스트는 HTML {tag} 내에 삽입될 예정입니다
-            
-            위 가이드라인에 맞춰 자연스럽고 유동적인 텍스트를 생성해주세요.            
+            Please create natural and fluid text that follows the guidelines above.
             """
             
             usr_prompt = f"""
-            다음 문맥과 기존 텍스트를 고려하여 자연스러운 텍스트를 생성해주세요:
+            Please generate natural text considering the following context and existing text.
             
-            [섹션 : {section}]
+            Section = {section}
             
-            [문맥: {context}]
+            Context = {context}
             
-            [기존 텍스트 (HTML {tag} 내): {text_box}]
+            previous text = "HTML {tag}: {text_box}"
             
             """
 
