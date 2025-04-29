@@ -17,7 +17,7 @@ from models.models_conf import ModelParam
 # from utils.ollama.ollama_chat import OllamaChatClient
 
 from src.configs.call_config import Completions
-from src.configs.openai_config import OpenAIConfig
+from src.configs.openai_config import OpenAIConfig, OpenAIConfig_Language
 from src.openai.openai_api_call import OpenAIService
 from src.utils.batch_handler import BatchRequestHandler
 
@@ -428,6 +428,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize services
 openai_config = OpenAIConfig()
+openai_config_language = OpenAIConfig_Language()
 openai_service = OpenAIService(openai_config)
 batch_handler = BatchRequestHandler(openai_service)
 
@@ -532,6 +533,15 @@ async def openai_input_data_process(requests: List[Completions]):
 # usr_msg: "삼쩜삼은 세무를 간단히..." (500~700자)
 # final_result: 동일 내용 (API 호출 없이 바로 사용)"""
 async def inputDataProcess(req, req_idx):
+    
+    output_language = ""
+    if req.standard_country_code == "KR":
+        output_language = openai_config_language.Language_KR
+    elif req.standard_country_code == "JP":
+        output_language = openai_config_language.Language_JP
+    elif req.standard_country_code == "US":
+        output_language = openai_config_language.Language_US
+    
     results = []
     try:
         # PDF 데이터 준비
@@ -541,11 +551,15 @@ async def inputDataProcess(req, req_idx):
         usr_msg = req.usr_msg if hasattr(req, 'usr_msg') else ""
         
         # 유저 Proposal 생성 (PDF와 독립)
-        usr_client = OpenAIUsrMsgClient(usr_msg, batch_handler)
+        usr_client = OpenAIUsrMsgClient(output_language=output_language,
+                                        usr_msg=usr_msg, 
+                                        batch_handler=batch_handler)
         usr_task = usr_client.usr_msg_proposal() if usr_msg else None
 
         # PDF별 Proposal 생성 병렬 처리
-        proposal_clients = [OpenAIProposalClient(pdf, batch_handler) for pdf in pdf_data_list]
+        proposal_clients = [OpenAIProposalClient(output_language=output_language,
+                                                 pdf_content=pdf, 
+                                                 batch_handler=batch_handler) for pdf in pdf_data_list]
         proposal_tasks = [client.generate_proposal() for client in proposal_clients]
 
         # 유저 Proposal과 PDF Proposal 동시 처리
@@ -576,11 +590,16 @@ async def inputDataProcess(req, req_idx):
                     "generations": [[{"text": pdf_proposals[0]}]]  # PDF Proposal 그대로 사용
                 }
             else:  # PDF 2개 이상이거나 usr_proposal과 PDF가 함께 있는 경우
-                proposal_client = OpenAIProposalClient("", batch_handler)  # 빈 pdf_content로 인스턴스 생성
+                proposal_client = OpenAIProposalClient(output_language=output_language,
+                                                       pdf_content="", 
+                                                       batch_handler=batch_handler)  # 빈 pdf_content로 인스턴스 생성
                 if len(pdf_proposals) >= 2 and not usr_proposal:  # PDF 2개 이상, usr_msg 없음
                     comp_result = await proposal_client.consolidate_proposals(pdf_proposals)
                 else:  # usr_proposal과 PDF가 함께 있거나 PDF 1개 + usr_proposal
-                    comp_client = OpenAIComprehensiveProposalClient(usr_proposal, pdf_proposals, batch_handler)
+                    comp_client = OpenAIComprehensiveProposalClient(output_language=output_language,
+                                                                    usr_proposal=usr_proposal,
+                                                                    pdf_proposals=pdf_proposals,
+                                                                    batch_handler=batch_handler)
                     comp_result = await comp_client.generate_comprehensive_proposal()
 
             print(f"comp_result : {comp_result['generations'][0][0]['text'] }")
@@ -638,8 +657,17 @@ async def openai_section_select(requests: List[Completions]):
     try:
         start = time.time()
         # logger.info(f"Received section generation request: {requests}")
-        
-        generator = OpenAISectionGenerator(batch_handler)
+
+        output_language = ""
+        if requests[0].standard_country_code == "KR":
+            output_language = openai_config_language.Language_KR
+        elif requests[0].standard_country_code == "JP":
+            output_language = openai_config_language.Language_JP
+        elif requests[0].standard_country_code == "US":
+            output_language = openai_config_language.Language_US
+
+        generator = OpenAISectionGenerator(output_language=output_language,
+                                           batch_handler=batch_handler)
 
         results = await generator.generate_landing_page(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
         
@@ -733,7 +761,17 @@ async def openai_block_select(requests: List[Completions]):
 async def openai_block_content_generate(requests: List[Completions]):
     try:
         start = time.time()
-        blockcontentclient = OpenAIBlockContentGenerator(batch_handler=batch_handler)
+        
+        output_language = ""
+        if requests[0].standard_country_code == "KR":
+            output_language = openai_config_language.Language_KR
+        elif requests[0].standard_country_code == "JP":
+            output_language = openai_config_language.Language_JP
+        elif requests[0].standard_country_code == "US":
+            output_language = openai_config_language.Language_US
+        
+        blockcontentclient = OpenAIBlockContentGenerator(output_language = output_language, 
+                                                         batch_handler=batch_handler)
         keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
         async def content_batch_process(req, blockcontentclient, keywordclient):
             try:

@@ -7,7 +7,8 @@ from src.utils.emmet_parser import EmmetParser
 from collections import defaultdict
 
 class OpenAIBlockContentGenerator:
-    def __init__(self, batch_handler):
+    def __init__(self, output_language, batch_handler):
+        self.output_language = output_language
         self.batch_handler = batch_handler
         self.emmet_parser = EmmetParser()
 
@@ -138,7 +139,6 @@ class OpenAIBlockContentGenerator:
             - json_type_tag_list = {{"tag" : "max_length_CHARACTERS"}}
             
             #### Instructions ####
-            0. 출력은 반드시 **한국어**로 해.
             1. The results of each tag should be within each max_length_CHARACTERS. The maximum output of each tag must be within 250 characters. If you follow this well, I will give you a tip.
             2. Format all headings (h tags) as concise phrases rather than complete sentences. For example, use 'Effective Marketing Strategies' instead of 'These are effective marketing strategies.'
             3. p tag must express with narrative sentence. For example, use '위븐은 누구나 직관적으로 웹사이트를 만들 수 있게하며, 전문가도 활용가능한 기능을 제공합니다.' instead of '1. 위븐에선 직관적 웹사이트 제작 가능 2. 전문가도 활용가능한 기능 제공'
@@ -150,6 +150,9 @@ class OpenAIBlockContentGenerator:
             9. DO NOT REPEAT THE SAME SENTENCES OR PATTERNS, AND WRITE WITH UNIQUE CONTENT.
             10. DO NOT INCLUDE MARKDOWN SYMBOLS, ICON and SECTION KEY.
             11. After drafting your response, verify whether it exceeds the max_length_CHARACTERS constraint. If it does, modify your output to conclude with a natural, complete sentence that falls within the token limit. Avoid truncating mid-sentence or leaving thoughts incomplete.
+
+            #### Output Language ####
+            **{self.output_language}**
 
             #### Input Example ####
             Section_context = "재밋은 AI 솔루션을 기반으로 사용자들에게 간단하고 편리하게 웹 사이트를 만들 수 있도록 도와주는 선도 서비스입니다. 기업 '위븐'은 AI 솔루션을 통해 일반인들도 쉽게 접근할 수 있으며, 전문가가 사용해도 무방한 에디터와 스튜디오 서비스를 보유하고 있어서 다방면에 능한 서비스를 갖고 있는 기업입니다."

@@ -9,7 +9,8 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class OpenAIProposalClient:
-    def __init__(self, pdf_content: str, batch_handler):
+    def __init__(self, output_language: str, pdf_content: str, batch_handler):
+        self.output_language = output_language
         self.pdf_content = pdf_content or ""
         self.batch_handler = batch_handler
 
@@ -42,7 +43,7 @@ class OpenAIProposalClient:
 
     async def generate_proposal(self, max_tokens: int = 500, temperature = 0.7, top_p = 0.9) -> dict:
         try:
-            sys_prompt = """
+            sys_prompt = f"""
  
             You are an expert at crafting business plan. 
             Create a concise business plan by using the pdf_content.
@@ -61,7 +62,9 @@ class OpenAIProposalClient:
                 - Marketing Strategy (how we reach customers)
             3. Write a paragraph of 500 to 800 characters to ensure the content is detailed and informative.
             4. Include all the key information (numbers, examples, etc.) without missing anything.
-            5. 반드시 **한국어**로 작성해.
+            
+            #### Output Language ####
+            **{self.output_language}**
             """
     
             usr_prompt = f" pdf_content:{self.pdf_content}"
@@ -88,7 +91,7 @@ class OpenAIProposalClient:
     async def consolidate_proposals(self, proposals: List[str], max_tokens: int = 800, temperature = 0.3, top_p = 0.3) -> dict:
         """PDF가 2개 이상일 때 Proposal을 통합"""
         try:
-            sys_prompt = """
+            sys_prompt = f"""
             You are an expert at crafting business plans. 
             Consolidate proposals generated from multiple PDFs. The number of Proposals can be between 1 and 3.
             Mix inputed Proposals and proceed with the below.
@@ -107,7 +110,9 @@ class OpenAIProposalClient:
                 - Marketing Strategy (how we reach customers)
             4. Write a paragraph of 800 to 1000 characters to ensure the content is detailed and informative.
             5. Include all the key information (numbers, examples, etc.) without missing anything.
-            6. 반드시 **한국어**로 작성해.
+            
+            #### Output Language ####
+            **{self.output_language}**            
             """
             usr_prompt = "\n".join([f"Proposal_{i+1}: {p}" for i, p in enumerate(proposals)])
             

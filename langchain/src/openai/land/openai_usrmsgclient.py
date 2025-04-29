@@ -2,7 +2,8 @@ import asyncio
 from langchain.prompts import PromptTemplate
 
 class OpenAIUsrMsgClient:
-    def __init__(self, usr_msg, batch_handler):
+    def __init__(self, output_language, usr_msg, batch_handler):
+        self.output_language = output_language
         self.batch_handler = batch_handler
         self.usr_msg = str(usr_msg) if usr_msg else "입력 내용 없음"
 
@@ -37,7 +38,7 @@ class OpenAIUsrMsgClient:
     async def usr_msg_proposal(self, max_tokens: int = 500) -> dict:
         try:
             # 프롬프트 템플릿 정의 (간결하게)
-            sys_prompt = """
+            sys_prompt = f"""
             You are a professional in business plan writing. 
             You are provided with user input in the form of a sentence or paragraph. 
             Your task is to write a narrative paragraph to assist in creating a business plan based on this input. 
@@ -56,7 +57,9 @@ class OpenAIUsrMsgClient:
             3. Develop the business plan narrative step-by-step using only the keywords and details from the user input.
             4. Write a paragraph of 800 to 1000 characters to ensure the content is detailed and informative.
             5. Avoid repeating the same content to meet the character limit. Use varied expressions and vocabulary to enrich the narrative.
-            6. 출력은 반드시 **한국어**로 해.
+            
+            #### Output Language ####
+            **{self.output_language}**            
             """
 
             usr_prompt = f"user_input : {self.usr_msg}"

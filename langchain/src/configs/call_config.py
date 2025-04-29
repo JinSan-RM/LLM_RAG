@@ -32,7 +32,8 @@ class Completions(BaseModel):
     all_usr_data: Optional[str] = None
     section_html: Optional[str] = None
     text_box: Optional[str] = None
-
+    standard_country_code: Optional[str] = None
+    
 class ChatCompletions(BaseModel):
     """Custom class for Chat Completions data"""
     model: str = "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0"

@@ -5,7 +5,8 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class OpenAIComprehensiveProposalClient:
-    def __init__(self, usr_proposal: str, pdf_proposals: List[str], batch_handler):
+    def __init__(self, output_language: str, usr_proposal: str, pdf_proposals: List[str], batch_handler):
+        self.output_language = output_language
         self.usr_proposal = usr_proposal or ""  # 빈 문자열로 초기화
         self.pdf_proposals = pdf_proposals or []  # 빈 리스트로 초기화
         self.batch_handler = batch_handler
@@ -41,7 +42,7 @@ class OpenAIComprehensiveProposalClient:
         try:
             # 입력 상황에 따라 프롬프트 동적 설정
             if self.usr_proposal and self.pdf_proposals:  # 둘 다 있는 경우
-                sys_prompt = """
+                sys_prompt = f"""
                 You are an expert at crafting business plan.
                 Create a concise business plan by using the user_proposal as the main focus. 
                 Mix in the Summary_of_all_pdfs only to add supporting details where it fits. 
@@ -60,8 +61,12 @@ class OpenAIComprehensiveProposalClient:
                 4. Write a paragraph of 800 to 1200 characters to ensure the content is detailed and informative.
                 5. Include all the key information (numbers, examples, etc.) without missing anything.
                 6. If user_proposal and Summary_of_all_pdfs conflict, stick to the user_proposal.
-                7. 반드시 **한국어**로 작성해.
+                
+                #### Output Language ####
+                **{self.output_language}**                
+                
                 """
+                
                 usr_prompt = f"user_proposal: {self.usr_proposal}\n" + "\n".join([f"Summary_of_all_pdfs {i+1}: {p}" for i, p in enumerate(self.pdf_proposals)])
             
             else:  # 둘 다 없는 경우

@@ -5,9 +5,9 @@ from src.utils.batch_handler import BatchRequestHandler
 
 
 class OpenAISectionStructureGenerator:
-    def __init__(self, batch_handler, model="gpt-3.5-turbo"):
+    def __init__(self, batch_handler): # , model="gpt-3.5-turbo"
         self.batch_handler = batch_handler
-        self.model = model
+        # self.model = model
         self.extra_body = {}  # 기본값으로 초기화
     
     def set_extra_body(self, extra_body):
@@ -61,6 +61,7 @@ class OpenAISectionStructureGenerator:
         5. BE CAREFUL ABOUT TYPOS.
         6. ENSURE THAT THE OUTPUT MATHCES THE JSON OUTPUT EXAMPLE BELOW.
         """
+        
         usr_prompt = f"""
         {final_summary_data}
         """
@@ -80,7 +81,8 @@ class OpenAISectionStructureGenerator:
             return ""
         
 class OpenAISectionContentGenerator:
-    def __init__(self, batch_handler: BatchRequestHandler):
+    def __init__(self, output_language, batch_handler: BatchRequestHandler):
+        self.output_language = output_language
         self.batch_handler = batch_handler
     
     async def send_request(self, sys_prompt: str, usr_prompt: str, max_tokens: int = 300) -> str:
@@ -121,8 +123,11 @@ class OpenAISectionContentGenerator:
         3. USE ONLY RELEVANT PARTS OF THE USER'S DATA: 'combined_data'.
         4. AVOID REPEATING CONTENT.
         5. DO NOT include ANY structure, tags, headers (e.g., ###, [System], [Response]), or metadata. Output ONLY the raw text.
-        6. 출력은 반드시 **한국어**로 해.
+        
+        #### Output Language ####
+        **{self.output_language}**
         """
+        
         usr_prompt = f"""
         Section_name = {section_name}
         all_usr_data = {combined_data}
@@ -215,10 +220,11 @@ class OpenAISectionContentGenerator:
 
 
 class OpenAISectionGenerator:
-    def __init__(self, batch_handler: BatchRequestHandler):
+    def __init__(self, output_language, batch_handler: BatchRequestHandler):
+        output_language=output_language
         self.batch_handler = batch_handler
         self.structure_generator = OpenAISectionStructureGenerator(batch_handler)
-        self.content_generator = OpenAISectionContentGenerator(batch_handler)
+        self.content_generator = OpenAISectionContentGenerator(output_language, batch_handler)
         
     async def generate_landing_page(self, requests, max_tokens: int = 200):
         results = []
