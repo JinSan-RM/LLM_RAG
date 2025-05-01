@@ -38,6 +38,16 @@ from src.openai.modoo.openai_forsubpage import OpenAIhtmltopagecontents
 
 from common.redis_client import get_current_users, increment_users, decrement_users
 
+from src.configs.call_config import SubpageArgs
+from src.openai.subpage.openai_subpage_usrmsgsummarize import OpenAIUsrMsgProposalGenerator
+from src.openai.subpage.openai_subpage_pdfsummarize import OpenAIPdfProposalGenerator
+from src.openai.subpage.openai_subpage_usrpdfmerge import OpenAIComprehensiveProposalGenerator
+from src.openai.subpage.openai_subpage_sectiongenerate import OpenAISectionGenerator
+from src.openai.subpage.openai_subpage_blockrecommend import OpenAIBlockSelector
+from src.openai.subpage.openai_subpage_blockcontentgenerate import OpenAIBlockContentGenerator
+from src.openai.subpage.openai_subpage_keywordrecommend import OpenAIKeywordRecommender
+from src.openai.subpage.openai_subpage_text_regenerate import OpenAITextRegenerator
+
 
 # local lib
 # ------------------------------------------------------------------------ #
@@ -421,7 +431,12 @@ def search_db():
         print(result)
 
 
-# =================================================================================================== Landing Page
+# ================================================================================== 
+#
+# AI 랜딩_API 1~4
+#
+# ================================================================================== 
+
 # 로깅 설정
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -467,6 +482,9 @@ async def batch_completions(requests: List[Completions]):
         ) from e
 
 # 상위 호출 코드
+#====================================
+# 1번 API : usr_msg 및 pdf 입력 받아서 proposal 생성 및 병합
+#====================================
 @app.post("/api/input_data_process")
 async def openai_input_data_process(requests: List[Completions]):
     try:
@@ -532,9 +550,13 @@ async def openai_input_data_process(requests: List[Completions]):
 # 출력:
 # usr_msg: "삼쩜삼은 세무를 간단히..." (500~700자)
 # final_result: 동일 내용 (API 호출 없이 바로 사용)"""
+
+#====================================
+# 1번 API 내부 함수 : 다른 API들처럼 1개로 합치기 진행
+#====================================
 async def inputDataProcess(req, req_idx):
     
-    output_language = ""
+    output_language = openai_config_language.Language_KR
     if req.standard_country_code == "KR":
         output_language = openai_config_language.Language_KR
     elif req.standard_country_code == "JP":
@@ -649,7 +671,9 @@ async def inputDataProcess(req, req_idx):
         return [{"type": "error", "result": {"success": False, "data": None, "error": str(e)}}]
         
 
-
+#====================================
+# 2번 API : 섹션 생성 및 section_context
+#====================================
 # NOTE 250219: API 이름 바꾸기 논의
 @app.post("/api/section_select")
 async def openai_section_select(requests: List[Completions]):
@@ -658,7 +682,7 @@ async def openai_section_select(requests: List[Completions]):
         start = time.time()
         # logger.info(f"Received section generation request: {requests}")
 
-        output_language = ""
+        output_language = openai_config_language.Language_KR
         if requests[0].standard_country_code == "KR":
             output_language = openai_config_language.Language_KR
         elif requests[0].standard_country_code == "JP":
@@ -690,7 +714,9 @@ async def openai_section_select(requests: List[Completions]):
         logger.error(f"Error in section generation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
+#====================================
+# 3번 API : 블록 선택, (※ LLM & RANDOM)
+#====================================
 @app.post("/api/block_select")
 async def openai_block_select(requests: List[Completions]):
     try:
@@ -754,15 +780,15 @@ async def openai_block_select(requests: List[Completions]):
         ) from e
 
 
-# 이거 랜딩페이지 만들 수 있게 작업해야함.
-# FastAPI 엔드포인트
-
+#====================================
+# 4번 API : 블록 컨텐츠 및 키워드 생성
+#====================================
 @app.post("/api/block_content_generate")
 async def openai_block_content_generate(requests: List[Completions]):
     try:
         start = time.time()
         
-        output_language = ""
+        output_language = openai_config_language.Language_KR
         if requests[0].standard_country_code == "KR":
             output_language = openai_config_language.Language_KR
         elif requests[0].standard_country_code == "JP":
@@ -825,11 +851,8 @@ async def openai_block_content_generate(requests: List[Completions]):
     
 
 #====================================
-#
-# AI landing 내부, 단위 API
-# 
+# 단위 API_1 : 텍스트 재생성
 #====================================
-
 @app.post("/api/text_regenerate")
 async def openai_text_regenerate(requests: List[Completions]):
     try:
@@ -867,6 +890,9 @@ async def openai_text_regenerate(requests: List[Completions]):
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+#====================================
+# 단위 API_2 : 키워드 생성
+#====================================
 @app.post("/api/keyword_generate")
 async def openai_keyword_generate(requests: List[Completions]):
     try:
@@ -903,10 +929,16 @@ async def openai_keyword_generate(requests: List[Completions]):
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+# ==================================================================================
+# ==================================================================================
+# ==================================================================================
 
 
-# ================================================== Modoo 관련
-
+# ================================================================================== 
+#
+# Modoo 관련
+#
+# ================================================================================== 
 
 @app.post("/api/formainsection")
 async def openai_for_main_section(requests: List[Completions]):
@@ -958,4 +990,448 @@ async def openai_for_sub_page(requests: List[Completions]):
 
     except Exception as e:
         logger.error(f"Error in section generation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# ==================================================================================
+# ==================================================================================
+# ==================================================================================
+
+
+
+# ================================================================================== 
+#
+# AI 서브페이지_API 1~4
+#
+# ================================================================================== 
+
+# 로깅 설정
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Initialize services
+openai_config = OpenAIConfig()
+openai_config_language = OpenAIConfig_Language()
+openai_service = OpenAIService(openai_config)
+batch_handler = BatchRequestHandler(openai_service)
+
+MAX_TOKENS_USR_MSG_PROPOSAL = 500
+MAX_TOKENS_SUMMARIZE_TEXT = 1000
+MAX_TOKENS_CONTENTS_MERGE = 1500
+MAX_TOKENS_CREATE_SECTION_STRUCTURE = 200
+MAX_TOKENS_CREATE_TEXT_REGENERATE = 300
+MAX_TOKENS_CREATE_SECTION_CONTENTS = 1800
+MAX_TOKENS_SELECT_BLOCK = 50
+MAX_TOKENS_GENERATE_CONTENTS = 250
+MAX_TOKENS_SECTION_KEYWORD_RECOMMEND = 100
+
+@app.post("/batch_completions")
+async def batch_completions(requests: List[SubpageArgs]):
+    try:
+        # Convert Pydantic models to dictionaries
+        request_dicts = [req.dict() for req in requests]
+
+        # Process batch requests
+        response = await batch_handler.process_batch(request_dicts)
+
+        # Check if all requests failed
+        if response.get("successful_requests", 0) == 0:
+            raise HTTPException(
+                status_code=500,
+                detail="All batch requests failed"
+            )
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        ) from e
+
+# 상위 호출 코드
+#====================================
+# 1번 API : usr_msg 및 pdf 입력 받아서 proposal 생성 및 병합
+#====================================
+@app.post("/api/subpage/input_data_process")
+async def openai_subpage_input_data_process(requests: List[SubpageArgs]):
+    try:
+        request_id = increment_users()
+        if not request_id:
+            raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        start = time.time()
+        tasks = [inputDataProcess(req, idx) for idx, req in enumerate(requests)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        
+        processed_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                processed_results.append({
+                    "type": "error",
+                    "result": {
+                        "success": False,
+                        "data": None,
+                        "error": str(result),
+                        "error_details": str(result.__traceback__)
+                    }
+                })
+            else:
+                processed_results.extend(result)
+
+        end = time.time()
+        return {
+            "timestamp": end - start,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in processed_results if r["result"]["success"]),
+            "failed_requests": sum(1 for r in processed_results if not r["result"]["success"]),
+            "results": processed_results,
+            "current_users": get_current_users()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+# 동작 설명
+# """
+# 경우 1: PDF 1개, usr_msg 없음
+# 입력: req.pdf_data1 = "퓨처플레이 5000자", req.usr_msg = ""
+# 출력:
+# pdf_1_proposal: "퓨처플레이는 193개 스타트업에 투자하며 5.7조원 가치를..." (700~1000자)
+# final_result: 동일 내용 (API 호출 없이 바로 사용)
+
+# 경우 2: PDF 2개, usr_msg 없음
+# 입력: req.pdf_data1 = "PDF1", req.pdf_data2 = "PDF2", req.usr_msg = ""
+# 출력:
+# pdf_1_proposal: "PDF1 내용..." (700~1000자)
+# pdf_2_proposal: "PDF2 내용..." (700~1000자)
+# final_result: "PDF1과 PDF2를 합쳐서..." (1000~1500자, 통합 생성)
+
+# 경우 3: PDF 1개, usr_msg 있음
+# 입력: req.pdf_data1 = "PDF1", req.usr_msg = "삼쩜삼은 세무 서비스야"
+# 출력:
+# usr_msg: "삼쩜삼은 세무를 간단히..." (500~700자)
+# pdf_1_proposal: "PDF1 내용..." (700~1000자)
+# final_result: "삼쩜삼은 세무를 편리하게 하고, PDF1에서 영감을 받아..." (1000~1500자)
+
+# 경우 4: usr_msg만 있음, PDF 없음
+# 입력: req.pdf_data1 = "", req.usr_msg = "삼쩜삼은 세무 서비스야"
+# 출력:
+# usr_msg: "삼쩜삼은 세무를 간단히..." (500~700자)
+# final_result: 동일 내용 (API 호출 없이 바로 사용)"""
+
+#====================================
+# 1번 API 내부 함수 : 다른 API들처럼 1개로 합치기 진행
+#====================================
+async def inputDataProcess(req, req_idx):
+    
+    output_language = openai_config_language.Language_KR
+    if req.standard_country_code == "KR":
+        output_language = openai_config_language.Language_KR
+    elif req.standard_country_code == "JP":
+        output_language = openai_config_language.Language_JP
+    elif req.standard_country_code == "US":
+        output_language = openai_config_language.Language_US
+    
+    results = []
+    try:
+        # PDF 데이터 준비
+        keywordclient = OpenAIKeywordRecommender(batch_handler)
+        subpage_n_prompt = req.subpage_n_prompt if hasattr(req, 'subpage_n_prompt') else ""
+        main_context = req.main_context if hasattr(req, 'main_context') else ""
+        
+        tasks = []
+        print("subpage_n_prompt : ", subpage_n_prompt)
+        print("subpage_n_prompt.keys() : ", subpage_n_prompt.keys())
+        print("subpage_n_prompt.values() : ", subpage_n_prompt.values())
+        # 유저 Proposal 생성 (PDF와 독립)
+        usr_client = OpenAIUsrMsgProposalGenerator(output_language=output_language,
+                                        batch_handler=batch_handler)
+        
+        usr_task = usr_client.usr_msg_proposal(subpage_n_prompt=subpage_n_prompt,
+                                               main_context=main_context)
+        tasks.append(usr_task)
+
+        if not tasks:  # tasks가 없는 경우
+            return [{"type": "error", "result": {"success": False, "data": None, "error": "입력 데이터 없음"}}]
+        
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        usr_result = results_list[0]
+
+        # 결과 추출
+        usr_proposal = usr_result['generations'][0][0]['text'] if isinstance(usr_result, dict) and "error" not in usr_result else ""
+        
+        # 개별 결과 추가
+        if usr_proposal:
+            results.append({
+                "type": "usr_msg",
+                "result": {"success": isinstance(usr_result, dict) and "error" not in usr_result, "data": usr_result}
+            })
+
+        # if site_keyword:
+        #     results.append({
+        #         "type": "site_keyword",
+        #         "result": {"success": True, "data": site_keyword}
+        #     })
+        return results
+    except Exception as e:
+        logger.error(f"요청 {req_idx} 처리 오류: {str(e)}")
+        return [{"type": "error", "result": {"success": False, "data": None, "error": str(e)}}]
+        
+
+#====================================
+# 2번 API : 섹션 생성 및 section_context
+#====================================
+
+@app.post("/api/subpage/section_n_context_generate")
+async def openai_subpage_section_n_context_generate(requests: List[SubpageArgs]):
+    """Landing page section generation API"""
+    try:
+        start = time.time()
+        # logger.info(f"Received section generation request: {requests}")
+
+        output_language = openai_config_language.Language_KR
+        if requests[0].standard_country_code == "KR":
+            output_language = openai_config_language.Language_KR
+        elif requests[0].standard_country_code == "JP":
+            output_language = openai_config_language.Language_JP
+        elif requests[0].standard_country_code == "US":
+            output_language = openai_config_language.Language_US
+
+        generator = OpenAISectionGenerator(output_language=output_language,
+                                           batch_handler=batch_handler)
+
+        results = await generator.generate_subpage(requests, max_tokens=MAX_TOKENS_CREATE_SECTION_STRUCTURE)
+        
+        end = time.time()
+        processing_time = end - start
+        # logger.info(f"Processing time: {processing_time} seconds")s
+        
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in results if all(r.values())),
+            "failed_requests": sum(1 for r in results if not all(r.values())),
+            "results": results,
+            "current_users": get_current_users()
+        }
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in section generation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+#====================================
+# 3번 API : 블록 선택, (※ LLM & RANDOM)
+#====================================
+@app.post("/api/subpage/block_select")
+async def openai_subpage_block_select(requests: List[SubpageArgs]):
+    try:
+        start = time.time()
+        
+        blockselect_client = OpenAIBlockSelector(batch_handler=batch_handler)
+        BATCH_SIZE = 10
+        batched_requests = [requests[i:i + BATCH_SIZE] for i in range(0, len(requests), BATCH_SIZE)]
+        
+        final_results = []
+        tasks = []
+        
+        # 각 배치에 대한 비동기
+        for batch in batched_requests:
+            block_lists = [req.block for req in batch]
+            contexts = [req.section_context for req in batch]
+            block_select_mode = [req.block_select_mode for req in batch][0]
+            
+            if block_select_mode == None:
+                block_select_mode = "AI"
+            
+            # 비동기
+            print("block_select_mode : ", block_select_mode)
+            if block_select_mode == "AI":
+                task = blockselect_client.select_block_batch(contexts, block_lists, max_tokens=MAX_TOKENS_SELECT_BLOCK)
+                tasks.append(task)
+                
+            elif block_select_mode == "RANDOM":
+                task = blockselect_client.select_block_batch_randomly(block_lists)
+                tasks.append(task)
+                
+        # 모든 배치 작업을 병렬로 실행
+        batch_results = await asyncio.gather(*tasks)
+
+        for result in batch_results:
+            final_results.append(result)
+
+        end = time.time()
+        processing_time = end - start
+
+        # 성공/실패 요청 수 계산
+        flat_results = [item for sublist in final_results for item in sublist]
+
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": len(flat_results),
+            "failed_requests": len(requests) - len(flat_results),
+            "results": final_results,
+            "current_users": get_current_users()
+        }
+        
+                
+        return response
+
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        ) from e
+
+
+#====================================
+# 4번 API : 블록 컨텐츠 및 키워드 생성
+#====================================
+@app.post("/api/subpage/block_content_generate")
+async def openai_subpage_block_content_generate(requests: List[SubpageArgs]):
+    try:
+        start = time.time()
+        
+        output_language = openai_config_language.Language_KR
+        if requests[0].standard_country_code == "KR":
+            output_language = openai_config_language.Language_KR
+        elif requests[0].standard_country_code == "JP":
+            output_language = openai_config_language.Language_JP
+        elif requests[0].standard_country_code == "US":
+            output_language = openai_config_language.Language_US
+        
+        blockcontentclient = OpenAIBlockContentGenerator(output_language = output_language, 
+                                                         batch_handler=batch_handler)
+        keywordclient = OpenAIKeywordClient(batch_handler=batch_handler)
+        async def content_batch_process(req, blockcontentclient, keywordclient):
+            try:
+                # 각 요청 내에서도 content와 keyword 생성을 병렬로 처리
+                content_task = blockcontentclient.generate_content(req.usr_msg, req.tag_length, req.section_context, max_tokens=1000)
+                keyword_task = keywordclient.section_keyword_create_logic(context=next(iter(req.section_context.values())), max_tokens=MAX_TOKENS_SECTION_KEYWORD_RECOMMEND)
+
+                # 두 작업을 동시에 실행
+                content_result, keyword_result = await asyncio.gather(content_task, keyword_task, return_exceptions=True)
+
+                return {
+                    "content": content_result,
+                    "keywords": keyword_result
+                }
+            except Exception as e:
+                return e  # 예외를 반환하여 상위 레벨에서 처리
+
+        # 각 요청에 대한 처리 작업 생성
+        tasks = [content_batch_process(req, blockcontentclient, keywordclient) for req in requests]
+        
+        # 모든 섹션 데이터를 한번 병렬처리로 실행
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 예외 처리
+        processed_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                processed_results.append({"error": str(result)})
+            else:
+                processed_results.append(result)
+        
+        decrement_users()  # 사용자 수 감소
+        
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": processed_results,
+            "current_users": get_current_users()
+        }
+        return response
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+#====================================
+# 단위 API_1 : 텍스트 재생성
+#====================================
+@app.post("/api/subpage/text_regenerate")
+async def openai_subpage_text_regenerate(requests: List[SubpageArgs]):
+    try:
+        start = time.time()
+        textregenerateclient = OpenAITextRegenerator(batch_handler=batch_handler)
+        
+        tasks = [textregenerateclient.regenerate(req.text_box, req.section_context, req.tag_length) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # # 예외 처리
+        # processed_results = []
+        # for result in results:
+        #     if isinstance(result, Exception):
+        #         processed_results.append({"error": str(result)})
+        #     else:
+        #         processed_results.append(result)
+        
+        
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            # "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            # "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": results
+            # "current_users": get_current_users()
+        }
+        
+        return response
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+#====================================
+# 단위 API_2 : 키워드 생성
+#====================================
+@app.post("/api/subpage/keyword_generate")
+async def openai_subpage_keyword_generate(requests: List[SubpageArgs]):
+    try:
+        start = time.time()
+        keywordgenerateclient = OpenAIKeywordClient(batch_handler=batch_handler)
+        
+        tasks = [keywordgenerateclient.section_keyword_recommend(req.usr_msg) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # # 예외 처리
+        # processed_results = []
+        # for result in results:
+        #     if isinstance(result, Exception):
+        #         processed_results.append({"error": str(result)})
+        #     else:
+        #         processed_results.append(result)
+        
+        
+        end = time.time()
+        processing_time = end - start
+        response = {
+            "timestamp": processing_time,
+            "total_requests": len(requests),
+            # "successful_requests": sum(1 for r in processed_results if "error" not in r),
+            # "failed_requests": sum(1 for r in processed_results if "error" in r),
+            "results": results
+            # "current_users": get_current_users()
+        }
+        
+        return response
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

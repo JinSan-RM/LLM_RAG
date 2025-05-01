@@ -34,6 +34,8 @@ class Completions(BaseModel):
     text_box: Optional[str] = None
     standard_country_code: Optional[str] = None
     
+    
+    
 class ChatCompletions(BaseModel):
     """Custom class for Chat Completions data"""
     model: str = "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0"
@@ -71,3 +73,27 @@ class ChatCompletions(BaseModel):
 #     classification_positive_class: Optional[str] = None
 #     classification_betas: Optional[list] = None
 #     suffix: Optional[str] = None
+
+
+# ================================================================================== 
+#
+# AI 랜딩_API 1~4
+#
+# ================================================================================== 
+
+class SubpageArgs(BaseModel):
+    """Custom class for Completions data"""
+    # model: str = "/usr/local/bin/models/EEVE-Korean-Instruct-10.8B-v1.0"
+    # user: Optional[str] = None
+    subpage_n_prompt: Optional[Dict[str, str]] = Field(default_factory=dict)
+    main_context: Optional[str] = None
+    sub_context: Optional[str] = None
+    
+    block: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    block_select_mode: Optional[str] = None
+    tag_length: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    section_context: Optional[Dict[str, str]] = Field(default_factory=dict)
+    all_usr_data: Optional[str] = None
+    # section_html: Optional[str] = None
+    # text_box: Optional[str] = None
+    standard_country_code: Optional[str] = None
